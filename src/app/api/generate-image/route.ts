@@ -27,12 +27,20 @@ function normalizeImageError(message: string) {
 export async function POST(request: Request) {
   const body = (await request.json()) as ImageRequest;
   const prompt = body.prompt?.trim();
+  const imageEnabled = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true";
 
   const apiKey = process.env.VOLCENGINE_ARK_API_KEY;
   const baseUrl =
     process.env.VOLCENGINE_ARK_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/v3";
   const model =
     process.env.VOLCENGINE_ARK_IMAGE_MODEL ?? "doubao-seedream-3-0-t2i-250415";
+
+  if (!imageEnabled) {
+    return NextResponse.json(
+      { error: "当前对外稳定版已暂时关闭 AI 出图功能，避免影响聊天和小游戏体验。" },
+      { status: 400 },
+    );
+  }
 
   if (!apiKey || !prompt) {
     return NextResponse.json(

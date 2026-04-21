@@ -11,6 +11,7 @@ export async function GET() {
       deepseekConfigured: Boolean(process.env.OPENAI_API_KEY),
       volcImageConfigured: Boolean(process.env.VOLCENGINE_ARK_API_KEY),
       siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL),
+      imageFeatureEnabled: process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true",
     },
   });
 }

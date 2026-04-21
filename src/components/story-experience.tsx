@@ -229,6 +229,7 @@ function KindWordsGame() {
 }
 
 export function StoryExperience() {
+  const imageFeatureEnabled = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true";
   const [themeId, setThemeId] = useState<ThemeId>("habit");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -461,7 +462,8 @@ export function StoryExperience() {
                 </span>
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-                {activeTheme.subtitle} 这一版已经支持 AI 对话、浏览器语音输入、语音播报、章节插图按钮和 3 个轻量小游戏。
+                {activeTheme.subtitle} 这一版已经支持 AI 对话、浏览器语音输入、语音播报和 3 个轻量小游戏。
+                {imageFeatureEnabled ? " 图片生成功能已开启。" : " 为了保证对外稳定体验，图片生成功能当前先关闭。"}
               </p>
             </div>
 
@@ -485,12 +487,18 @@ export function StoryExperience() {
                 )}
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  onClick={generateImage}
-                  className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
-                >
-                  {isPainting ? "插图生成中..." : "生成本章插图"}
-                </button>
+                {imageFeatureEnabled ? (
+                  <button
+                    onClick={generateImage}
+                    className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                  >
+                    {isPainting ? "插图生成中..." : "生成本章插图"}
+                  </button>
+                ) : (
+                  <span className="rounded-full bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">
+                    稳定版暂不出图
+                  </span>
+                )}
                 <button
                   onClick={() => setAutoSpeak((current) => !current)}
                   className="rounded-full bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-800 transition hover:-translate-y-0.5"
@@ -525,10 +533,21 @@ export function StoryExperience() {
               />
             ) : (
               <div className="flex h-[320px] flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-teal-200 bg-white/70 text-center">
-                <p className="text-lg font-semibold text-slate-700">点击“生成本章插图”</p>
-                <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
-                  我会使用火山方舟文生图接口，给当前故事章节画一张绘本风插图。
-                </p>
+                {imageFeatureEnabled ? (
+                  <>
+                    <p className="text-lg font-semibold text-slate-700">点击“生成本章插图”</p>
+                    <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
+                      我会使用火山方舟文生图接口，给当前故事章节画一张绘本风插图。
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-semibold text-slate-700">当前为对外稳定版</p>
+                    <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
+                      为了避免图片接口波动影响孩子体验，公开版本先关闭 AI 出图，保留聊天、语音和小游戏主流程。
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -621,7 +640,9 @@ export function StoryExperience() {
             <li>1. 先选一个故事主题线，再发一句话给 AI。</li>
             <li>2. 可以直接点快捷选项，也可以自己输入内容。</li>
             <li>3. 想让孩子开口说话时，点击语音按钮开始听写。</li>
-            <li>4. 到一个新章节后，点击右上角按钮生成绘本插图。</li>
+            <li>
+              4. {imageFeatureEnabled ? "到一个新章节后，点击右上角按钮生成绘本插图。" : "当前公开稳定版先关闭 AI 出图，避免接口波动影响使用。"}
+            </li>
             <li>5. 底部还有 3 个小游戏，可以一起配合课堂或家里练习。</li>
           </ul>
         </div>
