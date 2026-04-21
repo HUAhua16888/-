@@ -6,6 +6,24 @@ type ImageRequest = {
   prompt?: string;
 };
 
+function normalizeImageError(message: string) {
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes("does not exist") ||
+    lower.includes("do not have access") ||
+    lower.includes("model")
+  ) {
+    return "图片生成功能暂时还没有配置好，请先体验聊天和小游戏。后面把火山图像模型开通后，这里就能正常出图。";
+  }
+
+  if (lower.includes("timeout")) {
+    return "图片生成有点慢，刚才超时了，请稍后再试。";
+  }
+
+  return "图片接口暂时不可用，请稍后再试。";
+}
+
 export async function POST(request: Request) {
   const body = (await request.json()) as ImageRequest;
   const prompt = body.prompt?.trim();
@@ -67,6 +85,6 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "图片接口暂时不可用";
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: normalizeImageError(message) }, { status: 500 });
   }
 }
