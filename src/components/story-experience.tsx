@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
+import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import {
   kindPhrases,
   mealTrayOptions,
@@ -733,6 +734,10 @@ export function StoryExperience() {
                 </button>
               </div>
             </div>
+          </div>
+
+          <div className="mt-6 max-w-xl">
+            <AmbientMusicToggle scene={themeId} />
           </div>
         </div>
 

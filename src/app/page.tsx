@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import {
   demoRouteSteps,
   judgeFocusCards,
@@ -64,6 +65,10 @@ export default function Home() {
                 <p className="mt-3 text-sm leading-7 text-slate-600">{item.description}</p>
               </article>
             ))}
+          </div>
+
+          <div className="mt-8 max-w-md">
+            <AmbientMusicToggle scene="home" />
           </div>
         </div>
 

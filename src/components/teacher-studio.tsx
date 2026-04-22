@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import { teacherPitchCards, teacherTasks, themes, type ThemeId } from "@/lib/site-data";
 
 type TeacherResponse = {
@@ -105,6 +106,10 @@ export function TeacherStudio() {
                 <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
               </div>
             ))}
+          </div>
+
+          <div className="mt-6 max-w-xl">
+            <AmbientMusicToggle scene="teacher" />
           </div>
         </div>
 
