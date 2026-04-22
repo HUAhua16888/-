@@ -4,6 +4,8 @@ import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
+import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
+import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
   kindPhrases,
   mealTrayOptions,
@@ -25,7 +27,6 @@ type StoryApiResponse = {
   badge: string;
   error?: string;
 };
-
 type BrowserSpeechRecognition = {
   lang: string;
   interimResults: boolean;
@@ -324,6 +325,8 @@ function MealTrayGame() {
 
 export function StoryExperience() {
   const imageFeatureEnabled = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true";
+  const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
+  const premiumVoiceLabel = process.env.NEXT_PUBLIC_TTS_VOICE_LABEL ?? defaultPremiumVoiceLabel;
   const [themeId, setThemeId] = useState<ThemeId>("habit");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -339,9 +342,14 @@ export function StoryExperience() {
   const [lastImagePrompt, setLastImagePrompt] = useState("");
   const [status, setStatus] = useState("准备出发啦。");
   const [autoSpeak, setAutoSpeak] = useState(true);
+  const [usePremiumVoice, setUsePremiumVoice] = useState(premiumTtsEnabled);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [badges, setBadges] = useState<string[]>([]);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const speechAbortRef = useRef<AbortController | null>(null);
 
   const activeTheme = themes[themeId];
   const activeMissions = storyMissionMap[themeId];
@@ -357,8 +365,65 @@ export function StoryExperience() {
     [messages],
   );
 
-  const speakReply = useEffectEvent((text: string) => {
-    if (!autoSpeak || typeof window === "undefined" || !("speechSynthesis" in window)) {
+  function cleanupAudioPlayback() {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  }
+
+  function stopSpeaking() {
+    speechAbortRef.current?.abort();
+    speechAbortRef.current = null;
+    cleanupAudioPlayback();
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    setIsSpeaking(false);
+  }
+
+  async function playPremiumSpeech(text: string) {
+    const controller = new AbortController();
+    speechAbortRef.current = controller;
+    const blob = await fetchPremiumSpeechAudio(text, "child");
+
+    if (controller.signal.aborted) {
+      return;
+    }
+
+    cleanupAudioPlayback();
+    const nextUrl = URL.createObjectURL(blob);
+    const audio = new Audio(nextUrl);
+
+    audioUrlRef.current = nextUrl;
+    audioRef.current = audio;
+
+    audio.onended = () => {
+      speechAbortRef.current = null;
+      cleanupAudioPlayback();
+      setIsSpeaking(false);
+    };
+
+    audio.onerror = () => {
+      speechAbortRef.current = null;
+      cleanupAudioPlayback();
+      setIsSpeaking(false);
+    };
+
+    setIsSpeaking(true);
+    await audio.play();
+  }
+
+  function playBrowserSpeech(text: string) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       return;
     }
 
@@ -366,15 +431,61 @@ export function StoryExperience() {
     utterance.lang = "zh-CN";
     utterance.rate = 0.95;
     utterance.pitch = 1.05;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
+  }
+
+  async function startSpeechPlayback(text: string) {
+    if (!text) {
+      return;
+    }
+
+    stopSpeaking();
+
+    if (usePremiumVoice && premiumTtsEnabled) {
+      try {
+        setStatus(`正在用 ${premiumVoiceLabel} 播报故事...`);
+        await playPremiumSpeech(text);
+        return;
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message ? error.message : "高质量播报暂时没接通，当前先用浏览器播报。";
+        setStatus(message);
+      }
+    }
+
+    playBrowserSpeech(text);
+  }
+
+  const playAutoReply = useEffectEvent(async (text: string) => {
+    await startSpeechPlayback(text);
   });
 
   useEffect(() => {
-    if (lastAssistantMessage) {
-      speakReply(lastAssistantMessage);
+    if (!lastAssistantMessage || !autoSpeak) {
+      return;
     }
-  }, [lastAssistantMessage]);
+
+    const playbackHandle = window.setTimeout(() => {
+      void playAutoReply(lastAssistantMessage);
+    }, 0);
+
+    return () => window.clearTimeout(playbackHandle);
+  }, [autoSpeak, lastAssistantMessage]);
+
+  useEffect(() => {
+    return () => {
+      speechAbortRef.current?.abort();
+      cleanupAudioPlayback();
+
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -480,12 +591,10 @@ export function StoryExperience() {
     setLastImagePrompt("");
     setStatus("准备出发啦。");
     setBadges([]);
+    stopSpeaking();
 
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(storyStateStorageKey);
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
     }
   }
 
@@ -669,8 +778,9 @@ export function StoryExperience() {
                 </span>
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-                {activeTheme.subtitle} 这一版已经支持 AI 对话、浏览器语音输入、语音播报和 3 个轻量小游戏。
+                {activeTheme.subtitle} 这一版已经支持 AI 对话、浏览器语音输入、语音播报和 4 个轻量小游戏。
                 {imageFeatureEnabled ? " 图片生成功能已开启。" : " 为了保证对外稳定体验，图片生成功能当前先关闭。"}
+                {premiumTtsEnabled ? ` 当前默认幼儿播报音色是 ${premiumVoiceLabel}。` : ""}
               </p>
             </div>
 
@@ -721,10 +831,41 @@ export function StoryExperience() {
                   </span>
                 )}
                 <button
-                  onClick={() => setAutoSpeak((current) => !current)}
+                  onClick={() => {
+                    setAutoSpeak((current) => {
+                      const next = !current;
+                      if (!next) {
+                        stopSpeaking();
+                      }
+
+                      return next;
+                    });
+                  }}
                   className="rounded-full bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-800 transition hover:-translate-y-0.5"
                 >
                   {autoSpeak ? "关闭播报" : "开启播报"}
+                </button>
+                {premiumTtsEnabled ? (
+                  <button
+                    onClick={() => {
+                      stopSpeaking();
+                      setUsePremiumVoice((current) => !current);
+                    }}
+                    className={`rounded-full px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                      usePremiumVoice
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {usePremiumVoice ? `${premiumVoiceLabel} 已启用` : "切回浏览器播报"}
+                  </button>
+                ) : null}
+                <button
+                  onClick={() => void startSpeechPlayback(lastAssistantMessage)}
+                  className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!lastAssistantMessage}
+                >
+                  {isSpeaking ? "正在播报..." : "重听上一句"}
                 </button>
                 <button
                   onClick={resetStoryProgress}
@@ -870,11 +1011,11 @@ export function StoryExperience() {
           <ul className="mt-5 space-y-3 text-sm leading-7 text-slate-700">
             <li>1. 先选一个故事主题线，再发一句话给 AI。</li>
             <li>2. 可以直接点快捷选项，也可以自己输入内容。</li>
-            <li>3. 想让孩子开口说话时，点击语音按钮开始听写。</li>
+            <li>3. 想让孩子开口说话时，点击语音按钮开始听写，或者直接点“重听上一句”。</li>
             <li>
               4. {imageFeatureEnabled ? "到一个新章节后，点击右上角按钮生成绘本插图。" : "当前公开稳定版先关闭 AI 出图，避免接口波动影响使用。"}
             </li>
-            <li>5. 底部还有 3 个小游戏，可以一起配合课堂或家里练习。</li>
+            <li>5. 底部还有 4 个小游戏，可以一起配合课堂或家里练习。</li>
           </ul>
 
           <div className="mt-6 rounded-[1.8rem] bg-white/80 p-4">

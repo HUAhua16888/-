@@ -10,8 +10,14 @@ export async function GET() {
     env: {
       deepseekConfigured: Boolean(process.env.OPENAI_API_KEY),
       volcImageConfigured: Boolean(process.env.VOLCENGINE_ARK_API_KEY),
+      volcSpeechConfigured: Boolean(
+        process.env.VOLCENGINE_SPEECH_APP_ID &&
+          process.env.VOLCENGINE_SPEECH_ACCESS_TOKEN &&
+          process.env.VOLCENGINE_SPEECH_SECRET_KEY,
+      ),
       siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL),
       imageFeatureEnabled: process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true",
+      premiumTtsEnabled: process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true",
     },
   });
 }

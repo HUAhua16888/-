@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
+import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
+import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import { teacherPitchCards, teacherTasks, themes, type ThemeId } from "@/lib/site-data";
 
 type TeacherResponse = {
@@ -14,6 +16,8 @@ type TeacherResponse = {
 };
 
 export function TeacherStudio() {
+  const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
+  const premiumVoiceLabel = process.env.NEXT_PUBLIC_TTS_VOICE_LABEL ?? defaultPremiumVoiceLabel;
   const [themeId, setThemeId] = useState<ThemeId>("habit");
   const [task, setTask] = useState(teacherTasks[0].label);
   const [scenario, setScenario] = useState(
@@ -22,6 +26,31 @@ export function TeacherStudio() {
   const [result, setResult] = useState<TeacherResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
+  const [voiceStatus, setVoiceStatus] = useState("");
+  const [isPreviewSpeaking, setIsPreviewSpeaking] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+
+  function cleanupAudio() {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    setIsPreviewSpeaking(false);
+  }
+
+  useEffect(() => () => cleanupAudio(), []);
 
   async function generate() {
     if (!scenario.trim()) {
@@ -66,6 +95,55 @@ export function TeacherStudio() {
     }
   }
 
+  async function previewResultVoice() {
+    const text = result?.content?.trim();
+
+    if (!text) {
+      return;
+    }
+
+    cleanupAudio();
+
+    if (premiumTtsEnabled) {
+      try {
+        setVoiceStatus(`正在用 ${premiumVoiceLabel} 试播老师引导语...`);
+        const blob = await fetchPremiumSpeechAudio(text, "teacher");
+        const nextUrl = URL.createObjectURL(blob);
+        const audio = new Audio(nextUrl);
+
+        audioUrlRef.current = nextUrl;
+        audioRef.current = audio;
+        audio.onended = cleanupAudio;
+        audio.onerror = cleanupAudio;
+        setIsPreviewSpeaking(true);
+        await audio.play();
+        return;
+      } catch (error) {
+        setVoiceStatus(
+          error instanceof Error && error.message
+            ? error.message
+            : "高质量播报暂时没接通，当前先用浏览器播报。",
+        );
+      }
+    }
+
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setVoiceStatus("当前浏览器不支持播报，可以在儿童端继续演示。");
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "zh-CN";
+    utterance.rate = 0.95;
+    utterance.pitch = 1.03;
+    utterance.onstart = () => setIsPreviewSpeaking(true);
+    utterance.onend = () => setIsPreviewSpeaking(false);
+    utterance.onerror = () => setIsPreviewSpeaking(false);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    setVoiceStatus("当前正在用浏览器播报老师引导语。");
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
       <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
@@ -81,6 +159,7 @@ export function TeacherStudio() {
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
             这里和儿童端分开，方便老师在备课、餐前提醒、家园沟通时直接拿内容去用。生成出来的文案会尽量短、温柔、适合现场口头表达。
+            {premiumTtsEnabled ? ` 当前已经预留 ${premiumVoiceLabel} 播报入口，适合比赛时直接试播老师引导语。` : ""}
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -219,11 +298,24 @@ export function TeacherStudio() {
             >
               复制结果
             </button>
+            <button
+              onClick={() => void previewResultVoice()}
+              className="rounded-full bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-800 transition hover:-translate-y-0.5 disabled:opacity-60"
+              disabled={!result}
+            >
+              {isPreviewSpeaking ? "正在试播..." : "试播结果"}
+            </button>
           </div>
 
           {copyStatus ? (
             <p className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-800">
               {copyStatus}
+            </p>
+          ) : null}
+
+          {voiceStatus ? (
+            <p className="mt-4 rounded-2xl bg-cyan-100 px-4 py-3 text-sm font-semibold text-cyan-900">
+              {voiceStatus}
             </p>
           ) : null}
 
