@@ -335,6 +335,7 @@ export function StoryExperience() {
   const [isLoading, setIsLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [isPainting, setIsPainting] = useState(false);
+  const [lastImagePrompt, setLastImagePrompt] = useState("");
   const [status, setStatus] = useState("准备出发啦。");
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [isListening, setIsListening] = useState(false);
@@ -391,6 +392,7 @@ export function StoryExperience() {
         messages?: ChatMessage[];
         quickChoices?: string[];
         imageUrl?: string;
+        lastImagePrompt?: string;
         status?: string;
         badges?: string[];
       };
@@ -410,6 +412,10 @@ export function StoryExperience() {
 
         if (typeof parsed.imageUrl === "string") {
           setImageUrl(parsed.imageUrl);
+        }
+
+        if (typeof parsed.lastImagePrompt === "string") {
+          setLastImagePrompt(parsed.lastImagePrompt);
         }
 
         if (typeof parsed.status === "string" && parsed.status.trim()) {
@@ -437,12 +443,13 @@ export function StoryExperience() {
       messages,
       quickChoices,
       imageUrl,
+      lastImagePrompt,
       status,
       badges,
     };
 
     window.localStorage.setItem(storyStateStorageKey, JSON.stringify(payload));
-  }, [badges, imageUrl, messages, quickChoices, status, themeId]);
+  }, [badges, imageUrl, lastImagePrompt, messages, quickChoices, status, themeId]);
 
   function switchTheme(nextTheme: ThemeId) {
     setThemeId(nextTheme);
@@ -454,6 +461,7 @@ export function StoryExperience() {
     ]);
     setQuickChoices(themes[nextTheme].choices);
     setImageUrl("");
+    setLastImagePrompt("");
     setStatus(`${themes[nextTheme].label}准备好了。`);
   }
 
@@ -468,6 +476,7 @@ export function StoryExperience() {
     setQuickChoices(themes.habit.choices);
     setInput("");
     setImageUrl("");
+    setLastImagePrompt("");
     setStatus("准备出发啦。");
     setBadges([]);
 
@@ -541,11 +550,17 @@ export function StoryExperience() {
       return;
     }
 
+    const prompt = `${activeTheme.imagePrompt} 当前剧情：${lastAssistantMessage || activeTheme.starter}`;
+
+    if (imageUrl && lastImagePrompt === prompt) {
+      setStatus("这一章的插图已经画好了，不用重复等待啦。");
+      return;
+    }
+
     setIsPainting(true);
-    setStatus("正在画本章插图...");
+    setStatus("正在画本章插图，高清图片会比文字回复慢一些...");
 
     try {
-      const prompt = `${activeTheme.imagePrompt} 当前剧情：${lastAssistantMessage || activeTheme.starter}`;
       const response = await fetch("/api/generate-image", {
         method: "POST",
         headers: {
@@ -560,6 +575,7 @@ export function StoryExperience() {
       }
 
       setImageUrl(data.imageUrl);
+      setLastImagePrompt(prompt);
       setStatus("绘本插图生成好了。");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "图片暂时画不出来，稍后再试。");
@@ -747,7 +763,7 @@ export function StoryExperience() {
                   <>
                     <p className="text-lg font-semibold text-slate-700">点击“生成本章插图”</p>
                     <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
-                      我会使用火山方舟文生图接口，给当前故事章节画一张绘本风插图。
+                      我会使用火山方舟文生图接口，给当前故事章节画一张绘本风插图。因为当前默认是高清图，所以会比文字回复慢一些。
                     </p>
                   </>
                 ) : (

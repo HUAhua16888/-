@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     process.env.VOLCENGINE_ARK_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/v3";
   const model =
     process.env.VOLCENGINE_ARK_IMAGE_MODEL ?? "doubao-seedream-5-0-260128";
+  const imageSize = process.env.VOLCENGINE_ARK_IMAGE_SIZE ?? "2K";
 
   if (!imageEnabled) {
     return NextResponse.json(
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
         prompt,
         sequential_image_generation: "disabled",
         response_format: "url",
-        size: "2K",
+        size: imageSize,
         stream: false,
         watermark: true,
       }),
