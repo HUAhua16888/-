@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { teacherTasks, themes, type ThemeId } from "@/lib/site-data";
+import { teacherPitchCards, teacherTasks, themes, type ThemeId } from "@/lib/site-data";
 
 type TeacherResponse = {
   title: string;
@@ -97,6 +97,15 @@ export function TeacherStudio() {
               </button>
             ))}
           </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {teacherPitchCards.map((item) => (
+              <div key={item.title} className="rounded-[1.6rem] bg-white/75 p-4">
+                <p className="font-semibold text-slate-900">{item.title}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
@@ -127,6 +136,13 @@ export function TeacherStudio() {
                 <p className="mt-2 text-sm leading-7 text-slate-500">{item.starter}</p>
               </button>
             ))}
+          </div>
+
+          <div className="mt-5 rounded-[1.8rem] bg-[linear-gradient(135deg,#effcfc_0%,#ffffff_100%)] p-4">
+            <p className="text-sm font-semibold text-slate-500">演示时可以这样讲</p>
+            <p className="mt-2 text-sm leading-7 text-slate-700">
+              儿童端负责“让孩子愿意参与”，老师端负责“让老师和家长拿到可直接使用的内容”，两端一起组成完整教育闭环。
+            </p>
           </div>
         </div>
       </section>

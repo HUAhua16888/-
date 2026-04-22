@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import {
+  demoRouteSteps,
+  judgeFocusCards,
   landingHighlights,
   miniGameCards,
   showcaseHighlights,
@@ -144,6 +146,42 @@ export default function Home() {
                 优先玩快捷选项和小游戏，图片生成放在新章节节点使用，体验会更顺畅，也更容易吸引注意力。
               </p>
             </div>
+          </div>
+        </article>
+      </section>
+
+      <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 pb-16 md:px-8 lg:grid-cols-[1.1fr_0.9fr]">
+        <article className="rounded-[2.5rem] bg-white/85 p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
+          <p className="text-sm font-semibold text-cyan-700">比赛演示路线</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">照着这 3 步讲，最容易讲清楚</h2>
+          <div className="mt-6 space-y-4">
+            {demoRouteSteps.map((item) => (
+              <div
+                key={item.step}
+                className="flex gap-4 rounded-[1.6rem] bg-[linear-gradient(135deg,#effcfc_0%,#ffffff_100%)] p-4"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  {item.step}
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-slate-900">{item.title}</p>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff9e3_0%,#ffffff_60%,#e7fbfa_100%)] p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
+          <p className="text-sm font-semibold text-teal-700">评审快速看点</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">30 秒能理解的 3 个价值点</h2>
+          <div className="mt-6 grid gap-4">
+            {judgeFocusCards.map((item) => (
+              <div key={item.title} className="rounded-[1.8rem] bg-white/85 p-5">
+                <p className="text-lg font-semibold text-slate-900">{item.title}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
+              </div>
+            ))}
           </div>
         </article>
       </section>

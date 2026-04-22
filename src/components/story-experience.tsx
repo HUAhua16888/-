@@ -5,6 +5,7 @@ import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState }
 
 import {
   kindPhrases,
+  mealTrayOptions,
   queueOrder,
   storyMissionMap,
   themes,
@@ -230,6 +231,96 @@ function KindWordsGame() {
   );
 }
 
+function MealTrayGame() {
+  const [pickedItems, setPickedItems] = useState<string[]>([]);
+  const pickedCount = pickedItems.length;
+  const completed = pickedCount === 3;
+  const healthyCount = pickedItems.filter((item) =>
+    mealTrayOptions.find((option) => option.label === item)?.isHealthy,
+  ).length;
+
+  function handlePick(item: string) {
+    if (pickedItems.includes(item) || completed) {
+      return;
+    }
+
+    setPickedItems((current) => [...current, item]);
+  }
+
+  function resetGame() {
+    setPickedItems([]);
+  }
+
+  return (
+    <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-orange-700">小游戏 4</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">午餐小餐盘</h3>
+        </div>
+        <button
+          onClick={resetGame}
+          className="rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 transition hover:bg-orange-200"
+        >
+          重新搭配
+        </button>
+      </div>
+
+      <p className="mt-3 text-sm leading-7 text-slate-600">
+        从下面选 3 样食物，帮小朋友搭一个更勇敢、更均衡的小餐盘。
+      </p>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        {mealTrayOptions.map((item) => (
+          <button
+            key={item.label}
+            onClick={() => handlePick(item.label)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              pickedItems.includes(item.label)
+                ? item.isHealthy
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-rose-100 text-rose-700"
+                : "bg-orange-50 text-slate-700 hover:-translate-y-0.5 hover:bg-orange-100"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-[1.5rem] bg-slate-50 p-4">
+        <p className="text-sm font-semibold text-slate-700">你选的餐盘</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {pickedCount === 0 ? (
+            <span className="text-sm text-slate-400">还没有选食物，点上面的食物按钮。</span>
+          ) : (
+            pickedItems.map((item) => (
+              <span
+                key={item}
+                className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+              >
+                {item}
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+
+      {completed ? (
+        <p
+          className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${
+            healthyCount >= 2 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+          }`}
+        >
+          {healthyCount >= 2
+            ? "搭配得很棒，这是一份很适合鼓励孩子尝试的小餐盘。"
+            : "这份餐盘还可以更均衡一点，换一换会更好。"}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function StoryExperience() {
   const imageFeatureEnabled = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true";
   const [themeId, setThemeId] = useState<ThemeId>("habit");
@@ -252,6 +343,10 @@ export function StoryExperience() {
 
   const activeTheme = themes[themeId];
   const activeMissions = storyMissionMap[themeId];
+  const unlockedChapterCount = Math.max(
+    1,
+    messages.filter((message) => message.role === "assistant").length,
+  );
   const lastAssistantMessage = useMemo(
     () =>
       [...messages]
@@ -565,6 +660,20 @@ export function StoryExperience() {
             <div className="w-full max-w-xs rounded-[2rem] bg-white/85 p-5 shadow-[0_16px_50px_rgba(43,104,98,0.12)]">
               <p className="text-sm font-semibold text-slate-500">今日成长状态</p>
               <p className="mt-3 text-lg font-semibold text-slate-900">{status}</p>
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="rounded-[1.2rem] bg-slate-50 px-3 py-3 text-center">
+                  <p className="text-xs font-semibold text-slate-500">当前主题</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{activeTheme.label}</p>
+                </div>
+                <div className="rounded-[1.2rem] bg-slate-50 px-3 py-3 text-center">
+                  <p className="text-xs font-semibold text-slate-500">解锁章节</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{unlockedChapterCount}</p>
+                </div>
+                <div className="rounded-[1.2rem] bg-slate-50 px-3 py-3 text-center">
+                  <p className="text-xs font-semibold text-slate-500">勋章数量</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{badges.length}</p>
+                </div>
+              </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 {badges.length === 0 ? (
                   <span className="rounded-full bg-amber-100 px-3 py-2 text-sm text-amber-800">
@@ -760,13 +869,21 @@ export function StoryExperience() {
               ))}
             </div>
           </div>
+
+          <div className="mt-6 rounded-[1.8rem] bg-slate-900 px-4 py-4 text-white">
+            <p className="text-sm font-semibold text-white/70">比赛演示小提示</p>
+            <p className="mt-2 text-sm leading-7 text-white/90">
+              如果你在现场展示，建议先点一个快捷选项，再演示图片生成，最后滑到小游戏区，会更容易抓住评审注意力。
+            </p>
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-3">
+      <section className="grid gap-6 xl:grid-cols-2">
         <ShuffleStepsGame />
         <QueueGame />
         <KindWordsGame />
+        <MealTrayGame />
       </section>
     </div>
   );

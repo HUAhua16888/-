@@ -99,6 +99,10 @@ export const miniGameCards = [
     title: "勇敢尝一口",
     hint: "选出最温柔的鼓励话术，陪孩子勇敢尝试新食物。",
   },
+  {
+    title: "午餐小餐盘",
+    hint: "挑选适合孩子的餐盘搭配，完成一轮食育小任务。",
+  },
 ];
 
 export const teacherTasks = [
@@ -157,3 +161,78 @@ export const storyMissionMap: Record<ThemeId, string[]> = {
   habit: ["完成洗手步骤排序", "帮小队排好队", "说出一句整理提醒"],
   food: ["听完一段食育故事", "说一句鼓励尝试的话", "点亮一枚勇敢尝鲜章"],
 };
+
+export const demoRouteSteps = [
+  {
+    step: "01",
+    title: "先看首页",
+    description: "30 秒说明项目定位：儿童互动 + 老师辅助 + 已上线可访问。",
+  },
+  {
+    step: "02",
+    title: "切到儿童端",
+    description: "展示 AI 对话、快捷选项、图片生成和小游戏，最容易吸引评审注意。",
+  },
+  {
+    step: "03",
+    title: "打开老师页",
+    description: "现场生成课堂引导语或家园共育文案，突出实际教育价值。",
+  },
+];
+
+export const judgeFocusCards = [
+  {
+    title: "教育价值",
+    description: "把生活习惯养成和闽南食育合并成一个可落地的幼儿成长场景。",
+  },
+  {
+    title: "互动体验",
+    description: "孩子不是只看内容，而是能聊天、点选、听播报、玩小游戏和拿勋章。",
+  },
+  {
+    title: "部署能力",
+    description: "项目已经完成公网部署，评审可以直接通过线上地址体验完整流程。",
+  },
+];
+
+export const teacherPitchCards = [
+  {
+    title: "课堂引导",
+    description: "把备课时的零散想法，快速变成适合 4-5 岁幼儿听懂的简短引导语。",
+  },
+  {
+    title: "家园共育",
+    description: "老师和家长能围绕同一个主题协同表达，减少家园沟通成本。",
+  },
+  {
+    title: "比赛展示",
+    description: "老师页适合演示“一键生成结果并复制带走”，很容易体现实用价值。",
+  },
+];
+
+export const mealTrayOptions = [
+  {
+    label: "海蛎煎",
+    isHealthy: true,
+  },
+  {
+    label: "紫菜蛋汤",
+    isHealthy: true,
+  },
+  {
+    label: "南瓜小块",
+    isHealthy: true,
+  },
+  {
+    label: "苹果片",
+    isHealthy: true,
+  },
+  {
+    label: "汽水",
+    isHealthy: false,
+  },
+  {
+    label: "薯片",
+    isHealthy: false,
+  },
+];
