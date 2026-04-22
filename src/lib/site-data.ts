@@ -56,6 +56,36 @@ export const landingHighlights = [
   },
 ];
 
+export const showcaseStats = [
+  {
+    label: "双入口模式",
+    value: "儿童端 + 老师端",
+  },
+  {
+    label: "互动玩法",
+    value: "AI 对话 + 3 个小游戏",
+  },
+  {
+    label: "部署状态",
+    value: "香港服务器已上线",
+  },
+];
+
+export const showcaseHighlights = [
+  {
+    title: "适合比赛展示",
+    description: "首页、儿童互动、老师辅助三条主线清晰，评审一看就能明白项目结构。",
+  },
+  {
+    title: "可直接公网访问",
+    description: "当前版本已经完成服务器部署，支持通过公网地址直接打开体验。",
+  },
+  {
+    title: "后续扩展方便",
+    description: "后面可以继续补语音 API、数据库、勋章记录和更多主题小游戏。",
+  },
+];
+
 export const miniGameCards = [
   {
     title: "洗手步骤排序",
@@ -122,3 +152,8 @@ export const kindPhrases = [
     isPositive: false,
   },
 ];
+
+export const storyMissionMap: Record<ThemeId, string[]> = {
+  habit: ["完成洗手步骤排序", "帮小队排好队", "说出一句整理提醒"],
+  food: ["听完一段食育故事", "说一句鼓励尝试的话", "点亮一枚勇敢尝鲜章"],
+};

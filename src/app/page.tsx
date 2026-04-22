@@ -1,6 +1,11 @@
 import Link from "next/link";
 
-import { landingHighlights, miniGameCards } from "@/lib/site-data";
+import {
+  landingHighlights,
+  miniGameCards,
+  showcaseHighlights,
+  showcaseStats,
+} from "@/lib/site-data";
 
 export default function Home() {
   return (
@@ -33,6 +38,18 @@ export default function Home() {
             >
               打开老师辅助页
             </Link>
+          </div>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            {showcaseStats.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-[1.8rem] border border-white/60 bg-white/75 px-5 py-4 shadow-[0_16px_40px_rgba(35,88,95,0.08)]"
+              >
+                <p className="text-sm font-semibold text-slate-500">{item.label}</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{item.value}</p>
+              </div>
+            ))}
           </div>
 
           <div className="mt-10 grid gap-4 md:grid-cols-3">
@@ -92,6 +109,43 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 pb-12 md:px-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <article className="rounded-[2.5rem] bg-white/85 p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
+          <p className="text-sm font-semibold text-amber-700">比赛展示亮点</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">为什么这版适合直接展示</h2>
+          <div className="mt-6 space-y-4">
+            {showcaseHighlights.map((item) => (
+              <div
+                key={item.title}
+                className="rounded-[1.6rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_100%)] p-4"
+              >
+                <p className="font-semibold text-slate-900">{item.title}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-[2.5rem] bg-[linear-gradient(135deg,#dff8f7_0%,#ffffff_55%,#fff4cf_100%)] p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
+          <p className="text-sm font-semibold text-teal-700">当前体验建议</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">适合你现在的使用方式</h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-[1.8rem] bg-white/80 p-5">
+              <p className="text-lg font-semibold text-slate-900">给评审和老师看</p>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                先从首页切到儿童互动页，再点老师辅助页，能最快展示“故事互动 + 教育辅助”这两个价值点。
+              </p>
+            </div>
+            <div className="rounded-[1.8rem] bg-white/80 p-5">
+              <p className="text-lg font-semibold text-slate-900">给孩子试玩</p>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                优先玩快捷选项和小游戏，图片生成放在新章节节点使用，体验会更顺畅，也更容易吸引注意力。
+              </p>
+            </div>
+          </div>
+        </article>
       </section>
     </main>
   );

@@ -6,6 +6,7 @@ import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState }
 import {
   kindPhrases,
   queueOrder,
+  storyMissionMap,
   themes,
   washSteps,
   type ThemeId,
@@ -38,6 +39,7 @@ type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 const initialWashOrder = ["抹上泡泡", "擦干小手", "打湿小手", "冲洗干净", "搓搓手心手背"];
 const initialQueueOrder = ["第三位小朋友", "小队长举牌", "第二位小朋友", "第一位小朋友"];
+const storyStateStorageKey = "tongqu-growth-web-story-state";
 
 function ShuffleStepsGame() {
   const [shuffled, setShuffled] = useState(initialWashOrder);
@@ -249,6 +251,7 @@ export function StoryExperience() {
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
   const activeTheme = themes[themeId];
+  const activeMissions = storyMissionMap[themeId];
   const lastAssistantMessage = useMemo(
     () =>
       [...messages]
@@ -276,6 +279,76 @@ export function StoryExperience() {
     }
   }, [lastAssistantMessage]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const savedState = window.localStorage.getItem(storyStateStorageKey);
+
+    if (!savedState) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedState) as {
+        themeId?: ThemeId;
+        messages?: ChatMessage[];
+        quickChoices?: string[];
+        imageUrl?: string;
+        status?: string;
+        badges?: string[];
+      };
+
+      const restoreHandle = window.setTimeout(() => {
+        if (parsed.themeId && themes[parsed.themeId]) {
+          setThemeId(parsed.themeId);
+        }
+
+        if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+        }
+
+        if (Array.isArray(parsed.quickChoices) && parsed.quickChoices.length > 0) {
+          setQuickChoices(parsed.quickChoices);
+        }
+
+        if (typeof parsed.imageUrl === "string") {
+          setImageUrl(parsed.imageUrl);
+        }
+
+        if (typeof parsed.status === "string" && parsed.status.trim()) {
+          setStatus(parsed.status);
+        }
+
+        if (Array.isArray(parsed.badges)) {
+          setBadges(parsed.badges);
+        }
+      }, 0);
+
+      return () => window.clearTimeout(restoreHandle);
+    } catch {
+      window.localStorage.removeItem(storyStateStorageKey);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const payload = {
+      themeId,
+      messages,
+      quickChoices,
+      imageUrl,
+      status,
+      badges,
+    };
+
+    window.localStorage.setItem(storyStateStorageKey, JSON.stringify(payload));
+  }, [badges, imageUrl, messages, quickChoices, status, themeId]);
+
   function switchTheme(nextTheme: ThemeId) {
     setThemeId(nextTheme);
     setMessages([
@@ -287,6 +360,28 @@ export function StoryExperience() {
     setQuickChoices(themes[nextTheme].choices);
     setImageUrl("");
     setStatus(`${themes[nextTheme].label}准备好了。`);
+  }
+
+  function resetStoryProgress() {
+    setThemeId("habit");
+    setMessages([
+      {
+        role: "assistant",
+        content: themes.habit.starter,
+      },
+    ]);
+    setQuickChoices(themes.habit.choices);
+    setInput("");
+    setImageUrl("");
+    setStatus("准备出发啦。");
+    setBadges([]);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(storyStateStorageKey);
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
   }
 
   async function sendMessage(messageText: string) {
@@ -505,6 +600,12 @@ export function StoryExperience() {
                 >
                   {autoSpeak ? "关闭播报" : "开启播报"}
                 </button>
+                <button
+                  onClick={resetStoryProgress}
+                  className="rounded-full bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
+                >
+                  重新开始本轮
+                </button>
               </div>
             </div>
           </div>
@@ -645,6 +746,20 @@ export function StoryExperience() {
             </li>
             <li>5. 底部还有 3 个小游戏，可以一起配合课堂或家里练习。</li>
           </ul>
+
+          <div className="mt-6 rounded-[1.8rem] bg-white/80 p-4">
+            <p className="text-sm font-semibold text-slate-500">本轮成长任务</p>
+            <div className="mt-3 space-y-2">
+              {activeMissions.map((mission) => (
+                <div
+                  key={mission}
+                  className="rounded-[1.2rem] bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
+                >
+                  {mission}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

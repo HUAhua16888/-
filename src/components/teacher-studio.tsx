@@ -20,6 +20,7 @@ export function TeacherStudio() {
   );
   const [result, setResult] = useState<TeacherResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
 
   async function generate() {
     if (!scenario.trim()) {
@@ -46,6 +47,21 @@ export function TeacherStudio() {
       setResult(data);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function copyResult() {
+    if (!result) {
+      return;
+    }
+
+    const text = [result.title, result.content, ...(result.tips ?? [])].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("已复制，直接发到家长群或备课文档里就行。");
+    } catch {
+      setCopyStatus("这次没有复制成功，可以再试一次。");
     }
   }
 
@@ -149,6 +165,10 @@ export function TeacherStudio() {
           >
             {isLoading ? "正在生成..." : "开始生成"}
           </button>
+
+          <p className="mt-4 rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-600">
+            小建议：比赛展示时，先点一个“常用生成任务”，再展示生成结果和复制动作，评审会更容易看懂老师端价值。
+          </p>
         </div>
 
         <div className="rounded-[2.5rem] bg-[linear-gradient(180deg,#e6fbfa_0%,#ffffff_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
@@ -162,6 +182,29 @@ export function TeacherStudio() {
               {result?.content ?? "点击左侧按钮后，这里会出现可以直接拿去课堂、家长群或餐前使用的内容。"}
             </p>
           </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              onClick={() => void generate()}
+              className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:opacity-60"
+              disabled={isLoading}
+            >
+              {isLoading ? "重新生成中..." : "换一版结果"}
+            </button>
+            <button
+              onClick={() => void copyResult()}
+              className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 disabled:opacity-60"
+              disabled={!result}
+            >
+              复制结果
+            </button>
+          </div>
+
+          {copyStatus ? (
+            <p className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-800">
+              {copyStatus}
+            </p>
+          ) : null}
 
           <div className="mt-5 space-y-3">
             {(result?.tips ?? ["建议控制在 1 分钟内说完。", "优先用鼓励式表达。", "结尾加一句家园同步。"]).map((tip) => (
