@@ -47,8 +47,8 @@ export const landingHighlights = [
     description: "孩子可以打字、点选，也可以用语音和角色聊天推进剧情。",
   },
   {
-    title: "轻量小游戏",
-    description: "每个故事节点都能接一个小游戏，让知识点变成可操作的小任务。",
+    title: "成长闯关图卡",
+    description: "习惯养成、闽食探索、勋章打卡和图卡任务能一起展示。",
   },
   {
     title: "老师家长辅助",
@@ -63,7 +63,7 @@ export const showcaseStats = [
   },
   {
     label: "互动玩法",
-    value: "AI 对话 + 3 个小游戏",
+    value: "AI 对话 + 4 个小游戏",
   },
   {
     label: "部署状态",
@@ -103,6 +103,86 @@ export const miniGameCards = [
     title: "午餐小餐盘",
     hint: "挑选适合孩子的餐盘搭配，完成一轮食育小任务。",
   },
+];
+
+export const habitSkillCards = [
+  {
+    title: "上课小坐姿",
+    icon: "🪑",
+    hint: "学会坐端正、脚放稳、眼睛看老师。",
+    tone: "bg-amber-100 text-amber-900",
+  },
+  {
+    title: "专注小耳朵",
+    icon: "👂",
+    hint: "练习认真听、少分心，跟上课堂节奏。",
+    tone: "bg-sky-100 text-sky-900",
+  },
+  {
+    title: "礼貌小种子",
+    icon: "🌱",
+    hint: "会说请、谢谢、对不起，做有礼貌的小朋友。",
+    tone: "bg-emerald-100 text-emerald-900",
+  },
+  {
+    title: "阅读小书虫",
+    icon: "📚",
+    hint: "愿意翻书、看图、听故事，养成阅读习惯。",
+    tone: "bg-violet-100 text-violet-900",
+  },
+  {
+    title: "情绪小天气",
+    icon: "🌤️",
+    hint: "会说开心、生气和难过，慢慢学会安抚自己。",
+    tone: "bg-rose-100 text-rose-900",
+  },
+  {
+    title: "实验小侦探",
+    icon: "🔬",
+    hint: "跟着任务做小实验，练习观察和任务意识。",
+    tone: "bg-cyan-100 text-cyan-900",
+  },
+  {
+    title: "整理小能手",
+    icon: "🧺",
+    hint: "玩具、图书和文具都能慢慢归位。",
+    tone: "bg-orange-100 text-orange-900",
+  },
+  {
+    title: "喝水小勇士",
+    icon: "🥤",
+    hint: "愿意主动喝水，记得一口一口慢慢喝。",
+    tone: "bg-teal-100 text-teal-900",
+  },
+];
+
+export const foodBadgeCards = [
+  {
+    title: "闽食小寻宝",
+    icon: "🧭",
+    description: "去找一找家里、学校或街边看到的闽食。",
+  },
+  {
+    title: "勇敢品尝章",
+    icon: "🥢",
+    description: "愿意闻一闻、看一看、尝一小口，也算勇敢。",
+  },
+  {
+    title: "家庭小主厨",
+    icon: "👨‍🍳",
+    description: "和家人一起做一份简单闽食，拍照留念。",
+  },
+  {
+    title: "闽食宣传员",
+    icon: "📣",
+    description: "会介绍一种闽食名字和它的特别之处。",
+  },
+];
+
+export const mealPhotoChecklist = [
+  "先拍清楚整张餐盘，再上传到网站。",
+  "适合比赛演示：先讲闽食故事，再展示孩子拍图打卡。",
+  "当前版本先支持上传预览，后续接视觉模型可做剩饭识别和闽食识别。",
 ];
 
 export const teacherTasks = [

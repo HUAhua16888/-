@@ -7,8 +7,11 @@ import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
+  foodBadgeCards,
+  habitSkillCards,
   kindPhrases,
   mealTrayOptions,
+  mealPhotoChecklist,
   queueOrder,
   storyMissionMap,
   themes,
@@ -27,6 +30,16 @@ type StoryApiResponse = {
   badge: string;
   error?: string;
 };
+
+type MealPhotoReviewResponse = {
+  ok?: boolean;
+  message?: string;
+  filename?: string;
+  sizeKb?: number;
+  tips?: string[];
+  error?: string;
+};
+
 type BrowserSpeechRecognition = {
   lang: string;
   interimResults: boolean;
@@ -43,6 +56,264 @@ type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 const initialWashOrder = ["抹上泡泡", "擦干小手", "打湿小手", "冲洗干净", "搓搓手心手背"];
 const initialQueueOrder = ["第三位小朋友", "小队长举牌", "第二位小朋友", "第一位小朋友"];
 const storyStateStorageKey = "tongqu-growth-web-story-state";
+
+function HabitVisualBoard() {
+  return (
+    <div className="rounded-[2.2rem] border border-white/70 bg-white/88 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-amber-700">成长图卡</p>
+          <h3 className="mt-1 text-2xl font-semibold text-slate-900">习惯能力星图</h3>
+        </div>
+        <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+          8 个习惯主题
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {habitSkillCards.map((item) => (
+          <article
+            key={item.title}
+            className="story-card rounded-[1.7rem] bg-[linear-gradient(180deg,#fffdf7_0%,#f5fffe_100%)] p-4 shadow-sm"
+          >
+            <div
+              className={`inline-flex h-12 w-12 items-center justify-center rounded-[1.1rem] text-2xl ${item.tone}`}
+            >
+              {item.icon}
+            </div>
+            <h4 className="mt-4 text-lg font-semibold text-slate-900">{item.title}</h4>
+            <p className="mt-2 text-sm leading-7 text-slate-600">{item.hint}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HabitMissionPoster({ badges, missions }: { badges: string[]; missions: string[] }) {
+  return (
+    <div className="rounded-[2.2rem] border border-white/70 bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_55%,#dff8f7_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <p className="text-sm font-semibold text-teal-700">课堂展示海报</p>
+      <h3 className="mt-1 text-2xl font-semibold text-slate-900">今日习惯闯关</h3>
+      <div className="mt-5 rounded-[2rem] bg-white/80 p-5">
+        <div className="flex flex-wrap gap-3">
+          {missions.map((mission, index) => (
+            <div
+              key={mission}
+              className="rounded-[1.3rem] bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
+            >
+              {index + 1}. {mission}
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-[1.6rem] bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-800">上课图示</p>
+            <p className="mt-2 text-sm leading-7 text-slate-700">
+              先坐好，再看老师，再举小手，最后认真听任务。
+            </p>
+          </div>
+          <div className="rounded-[1.6rem] bg-sky-50 p-4">
+            <p className="text-sm font-semibold text-sky-800">喝水打卡</p>
+            <p className="mt-2 text-sm leading-7 text-slate-700">
+              一口一口慢慢喝，喝完记得放回小水杯。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {(badges.length > 0 ? badges : ["坐姿闪亮章", "礼貌微笑章", "阅读小书虫"]).map((badge) => (
+          <span
+            key={badge}
+            className="rounded-full bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800"
+          >
+            {badge}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FoodBadgeWall() {
+  return (
+    <div className="rounded-[2.2rem] border border-white/70 bg-white/88 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-rose-700">闽食小勋章</p>
+          <h3 className="mt-1 text-2xl font-semibold text-slate-900">闽食探索勋章墙</h3>
+        </div>
+        <div className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800">
+          家园共育可一起完成
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        {foodBadgeCards.map((item) => (
+          <article
+            key={item.title}
+            className="story-card rounded-[1.8rem] bg-[linear-gradient(180deg,#fff9ec_0%,#ffffff_100%)] p-5 shadow-sm"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-amber-100 text-3xl">
+                {item.icon}
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">{item.title}</h4>
+                <p className="mt-1 text-sm leading-7 text-slate-600">{item.description}</p>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MealPhotoBooth() {
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [reviewStatus, setReviewStatus] = useState("上传一张餐盘照片，演示光盘打卡会更直观。");
+  const [reviewTips, setReviewTips] = useState<string[]>(mealPhotoChecklist);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  function handleSelectPhoto(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    const nextUrl = URL.createObjectURL(file);
+    setPreviewUrl(nextUrl);
+    setFileName(file.name);
+    setReviewStatus("照片已选好，可以点按钮上传检查。");
+  }
+
+  async function reviewPhoto() {
+    const file = fileRef.current?.files?.[0];
+
+    if (!file) {
+      setReviewStatus("先选一张孩子餐盘或闽食作品照片。");
+      return;
+    }
+
+    setIsReviewing(true);
+    setReviewStatus("正在上传照片并检查拍图任务...");
+
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
+
+      const response = await fetch("/api/meal-photo-review", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await response.json()) as MealPhotoReviewResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error || "照片检查暂时失败了");
+      }
+
+      setReviewStatus(
+        `${data.message ?? "照片上传成功。"}${data.sizeKb ? ` 当前文件约 ${data.sizeKb}KB。` : ""}`,
+      );
+      setReviewTips(data.tips && data.tips.length > 0 ? data.tips : mealPhotoChecklist);
+    } catch (error) {
+      setReviewStatus(error instanceof Error ? error.message : "照片检查暂时失败了");
+    } finally {
+      setIsReviewing(false);
+    }
+  }
+
+  return (
+    <div className="rounded-[2.2rem] border border-white/70 bg-[linear-gradient(135deg,#e6fbfa_0%,#ffffff_50%,#fff7dc_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-cyan-700">闽食光盘打卡</p>
+          <h3 className="mt-1 text-2xl font-semibold text-slate-900">拍图上传台</h3>
+        </div>
+        <div className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-800">
+          支持手机直接拍照
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-[1.8rem] bg-white/80 p-4">
+          {previewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={previewUrl}
+              alt="餐盘上传预览"
+              className="h-64 w-full rounded-[1.4rem] object-cover"
+            />
+          ) : (
+            <div className="flex h-64 flex-col items-center justify-center rounded-[1.4rem] border border-dashed border-cyan-200 bg-white/70 text-center">
+              <div className="text-4xl">🍱</div>
+              <p className="mt-3 text-lg font-semibold text-slate-700">拍一张餐盘照片</p>
+              <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
+                适合展示孩子光盘、闽食制作或闽食宣传打卡。
+              </p>
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <label className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+              选择照片
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(event) => handleSelectPhoto(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            <button
+              onClick={() => void reviewPhoto()}
+              className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 disabled:opacity-60"
+              disabled={isReviewing}
+            >
+              {isReviewing ? "检查中..." : "上传看看"}
+            </button>
+          </div>
+          {fileName ? (
+            <p className="mt-3 text-sm font-semibold text-slate-600">当前照片：{fileName}</p>
+          ) : null}
+        </div>
+
+        <div className="rounded-[1.8rem] bg-white/80 p-5">
+          <p className="text-sm font-semibold text-slate-500">当前状态</p>
+          <p className="mt-3 text-base leading-8 font-semibold text-slate-900">{reviewStatus}</p>
+
+          <div className="mt-5 space-y-3">
+            {reviewTips.map((tip) => (
+              <div
+                key={tip}
+                className="rounded-[1.3rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-700"
+              >
+                {tip}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ShuffleStepsGame() {
   const [shuffled, setShuffled] = useState(initialWashOrder);
@@ -1040,6 +1311,18 @@ export function StoryExperience() {
           </div>
         </div>
       </section>
+
+      {themeId === "habit" ? (
+        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <HabitVisualBoard />
+          <HabitMissionPoster badges={badges} missions={activeMissions} />
+        </section>
+      ) : (
+        <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <FoodBadgeWall />
+          <MealPhotoBooth />
+        </section>
+      )}
 
       <section className="grid gap-6 xl:grid-cols-2">
         <ShuffleStepsGame />

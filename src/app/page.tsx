@@ -3,8 +3,11 @@ import Link from "next/link";
 import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import {
   demoRouteSteps,
+  foodBadgeCards,
+  habitSkillCards,
   judgeFocusCards,
   landingHighlights,
+  mealPhotoChecklist,
   miniGameCards,
   showcaseHighlights,
   showcaseStats,
@@ -25,7 +28,7 @@ export default function Home() {
             </span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-            我们把生活习惯养成和闽南食育故事合并成了一个可对外部署的网站。孩子可以和 AI 角色聊天、点选剧情、体验小游戏，还能听语音播报和生成绘本插图。老师和家长也有单独入口，能快速生成课堂和家园共育内容。
+            我们把生活习惯养成和闽南食育故事合并成了一个可对外部署的网站。孩子可以和 AI 角色聊天、点选剧情、体验小游戏、上传打卡照片，还能听语音播报和生成绘本插图。
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">
@@ -95,7 +98,7 @@ export default function Home() {
               <div className="story-card float-slower rounded-[1.8rem] bg-orange-50 p-4">
                 <p className="text-sm font-semibold text-orange-700">互动方式</p>
                 <p className="mt-2 text-sm leading-7 text-slate-700">
-                  支持文字、快捷选项、浏览器语音输入和自动语音播报。
+                  支持文字、快捷选项、浏览器语音输入、自动语音播报和拍照打卡入口。
                 </p>
               </div>
               <div className="story-card float-slow rounded-[1.8rem] bg-sky-50 p-4">
@@ -187,6 +190,75 @@ export default function Home() {
                 <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
               </div>
             ))}
+          </div>
+        </article>
+      </section>
+
+      <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 pb-12 md:px-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <article className="rounded-[2.5rem] bg-white/88 p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-amber-700">习惯成长岛</p>
+              <h2 className="mt-2 text-3xl font-semibold text-slate-900">八大习惯图卡</h2>
+            </div>
+            <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+              图文结合展示
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {habitSkillCards.map((item) => (
+              <div
+                key={item.title}
+                className="story-card rounded-[1.8rem] bg-[linear-gradient(180deg,#fffdf7_0%,#f8fffe_100%)] p-4 shadow-sm"
+              >
+                <div
+                  className={`inline-flex h-12 w-12 items-center justify-center rounded-[1rem] text-2xl ${item.tone}`}
+                >
+                  {item.icon}
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-900">{item.title}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{item.hint}</p>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff8e8_0%,#ffffff_56%,#e6fbfa_100%)] p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-rose-700">闽食成长岛</p>
+              <h2 className="mt-2 text-3xl font-semibold text-slate-900">闽食勋章 + 拍图打卡</h2>
+            </div>
+            <div className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800">
+              适合家园共育
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {foodBadgeCards.map((item) => (
+              <div key={item.title} className="rounded-[1.8rem] bg-white/80 p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-amber-100 text-2xl">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold text-slate-900">{item.title}</p>
+                    <p className="mt-1 text-sm leading-7 text-slate-600">{item.description}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 rounded-[1.9rem] bg-white/82 p-5">
+            <p className="text-sm font-semibold text-slate-500">闽食光盘打卡路线</p>
+            <div className="mt-4 space-y-3">
+              {mealPhotoChecklist.map((item) => (
+                <div key={item} className="rounded-[1.3rem] bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </article>
       </section>
