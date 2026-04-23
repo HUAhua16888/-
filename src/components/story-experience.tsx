@@ -33,9 +33,18 @@ type StoryApiResponse = {
 
 type MealPhotoReviewResponse = {
   ok?: boolean;
+  mode?: "demo" | "ai";
   message?: string;
   filename?: string;
   sizeKb?: number;
+  summary?: string;
+  scoreCards?: Array<{
+    label: string;
+    value: number;
+  }>;
+  guessedFoods?: string[];
+  stickers?: string[];
+  nextMission?: string;
   tips?: string[];
   error?: string;
 };
@@ -176,6 +185,7 @@ function MealPhotoBooth() {
   const [fileName, setFileName] = useState("");
   const [reviewStatus, setReviewStatus] = useState("上传一张餐盘照片，演示光盘打卡会更直观。");
   const [reviewTips, setReviewTips] = useState<string[]>(mealPhotoChecklist);
+  const [reviewResult, setReviewResult] = useState<MealPhotoReviewResponse | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -200,6 +210,7 @@ function MealPhotoBooth() {
     setPreviewUrl(nextUrl);
     setFileName(file.name);
     setReviewStatus("照片已选好，可以点按钮上传检查。");
+    setReviewResult(null);
   }
 
   async function reviewPhoto() {
@@ -228,6 +239,7 @@ function MealPhotoBooth() {
         throw new Error(data.error || "照片检查暂时失败了");
       }
 
+      setReviewResult(data);
       setReviewStatus(
         `${data.message ?? "照片上传成功。"}${data.sizeKb ? ` 当前文件约 ${data.sizeKb}KB。` : ""}`,
       );
@@ -296,8 +308,79 @@ function MealPhotoBooth() {
         </div>
 
         <div className="rounded-[1.8rem] bg-white/80 p-5">
-          <p className="text-sm font-semibold text-slate-500">当前状态</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-500">当前状态</p>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                reviewResult?.mode === "ai"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {reviewResult?.mode === "ai" ? "AI 识图中" : "演示分析卡"}
+            </span>
+          </div>
           <p className="mt-3 text-base leading-8 font-semibold text-slate-900">{reviewStatus}</p>
+
+          {reviewResult?.summary ? (
+            <div className="mt-5 rounded-[1.5rem] bg-cyan-50 px-4 py-4">
+              <p className="text-sm font-semibold text-cyan-800">分析结论</p>
+              <p className="mt-2 text-sm leading-7 text-slate-700">{reviewResult.summary}</p>
+            </div>
+          ) : null}
+
+          {reviewResult?.scoreCards && reviewResult.scoreCards.length > 0 ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {reviewResult.scoreCards.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-[1.5rem] bg-slate-50 px-4 py-4 text-center shadow-sm"
+                >
+                  <p className="text-xs font-semibold text-slate-500">{item.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {reviewResult?.guessedFoods && reviewResult.guessedFoods.length > 0 ? (
+            <div className="mt-5 rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
+              <p className="text-sm font-semibold text-slate-700">识别候选</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {reviewResult.guessedFoods.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {reviewResult?.stickers && reviewResult.stickers.length > 0 ? (
+            <div className="mt-5 rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
+              <p className="text-sm font-semibold text-slate-700">点亮勋章</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {reviewResult.stickers.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {reviewResult?.nextMission ? (
+            <div className="mt-5 rounded-[1.5rem] bg-slate-900 px-4 py-4 text-white">
+              <p className="text-sm font-semibold text-white/70">下一步挑战</p>
+              <p className="mt-2 text-sm leading-7 text-white/90">{reviewResult.nextMission}</p>
+            </div>
+          ) : null}
 
           <div className="mt-5 space-y-3">
             {reviewTips.map((tip) => (
