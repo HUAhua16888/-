@@ -35,6 +35,15 @@ type ReviewResult = {
   tips: string[];
 };
 
+type VisualReviewRuntimeConfig = {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  providerStyle: string;
+  apiPath: string;
+  source: "custom" | "ark";
+};
+
 function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
   const baseScore = Math.max(62, Math.min(94, 70 + (sizeKb % 18)));
 
@@ -62,6 +71,40 @@ function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
       "后续接视觉模型后可扩展成真实 AI 检测。",
     ],
   };
+}
+
+function getVisualReviewRuntimeConfig(): VisualReviewRuntimeConfig | null {
+  const customApiKey = process.env.VISUAL_REVIEW_API_KEY;
+  const customBaseUrl = process.env.VISUAL_REVIEW_BASE_URL;
+  const customModel = process.env.VISUAL_REVIEW_MODEL;
+
+  if (customApiKey && customBaseUrl && customModel) {
+    return {
+      apiKey: customApiKey,
+      baseUrl: customBaseUrl,
+      model: customModel,
+      providerStyle: process.env.VISUAL_REVIEW_PROVIDER_STYLE ?? "openai-chat",
+      apiPath: process.env.VISUAL_REVIEW_API_PATH ?? "/chat/completions",
+      source: "custom",
+    };
+  }
+
+  const arkApiKey = process.env.VOLCENGINE_ARK_API_KEY;
+  const arkBaseUrl = process.env.VOLCENGINE_ARK_BASE_URL;
+  const arkVisionModel = process.env.VOLCENGINE_ARK_VISION_MODEL;
+
+  if (arkApiKey && arkBaseUrl && arkVisionModel) {
+    return {
+      apiKey: arkApiKey,
+      baseUrl: arkBaseUrl,
+      model: arkVisionModel,
+      providerStyle: "openai-chat",
+      apiPath: "/chat/completions",
+      source: "ark",
+    };
+  }
+
+  return null;
 }
 
 function clampScore(input: unknown, fallback: number) {
@@ -244,16 +287,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const apiKey = process.env.VISUAL_REVIEW_API_KEY;
-  const baseUrl = process.env.VISUAL_REVIEW_BASE_URL;
-  const model = process.env.VISUAL_REVIEW_MODEL;
-  const providerStyle = process.env.VISUAL_REVIEW_PROVIDER_STYLE ?? "openai-chat";
-  const apiPath = process.env.VISUAL_REVIEW_API_PATH ?? "/chat/completions";
+  const runtimeConfig = getVisualReviewRuntimeConfig();
   const sizeKb = Math.max(1, Math.round(file.size / 1024));
   const filename = file.name || "meal-photo.jpg";
   const fallback = buildDemoReview(filename, sizeKb);
 
-  if (!apiKey || !baseUrl || !model) {
+  if (!runtimeConfig) {
     return NextResponse.json(fallback);
   }
 
@@ -262,12 +301,12 @@ export async function POST(request: Request) {
     const mimeType = file.type || "image/jpeg";
     const dataUrl = `data:${mimeType};base64,${bytes.toString("base64")}`;
     const prompt = buildPrompt();
-    const endpoint = getEndpointUrl(baseUrl, apiPath);
+    const endpoint = getEndpointUrl(runtimeConfig.baseUrl, runtimeConfig.apiPath);
 
     const requestBody =
-      providerStyle === "openai-responses" || apiPath.includes("/responses")
+      runtimeConfig.providerStyle === "openai-responses" || runtimeConfig.apiPath.includes("/responses")
         ? {
-            model,
+            model: runtimeConfig.model,
             input: [
               {
                 role: "system",
@@ -284,7 +323,7 @@ export async function POST(request: Request) {
             max_output_tokens: 900,
           }
         : {
-            model,
+            model: runtimeConfig.model,
             temperature: 0.2,
             max_tokens: 900,
             messages: [
@@ -313,7 +352,7 @@ export async function POST(request: Request) {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${runtimeConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestBody),
@@ -330,7 +369,19 @@ export async function POST(request: Request) {
 
     const raw = extractVisionText(payload);
     const parsed = extractJsonObject(raw);
-    return NextResponse.json(normalizeReviewPayload(parsed, fallback));
+    const normalized = normalizeReviewPayload(parsed, fallback);
+
+    return NextResponse.json({
+      ...normalized,
+      message:
+        runtimeConfig.source === "ark"
+          ? "照片已经上传成功，当前结果来自火山方舟视觉分析。"
+          : normalized.message,
+      confidenceLabel:
+        runtimeConfig.source === "ark" && normalized.confidenceLabel === "AI 已分析"
+          ? "方舟已分析"
+          : normalized.confidenceLabel,
+    });
   } catch {
     return NextResponse.json(fallback);
   }
