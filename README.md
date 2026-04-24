@@ -10,6 +10,8 @@
 - 本地可保存的成长记录册
 - 闽食光盘拍图上传与图文分析卡
 - 老师 / 家长辅助内容生成页
+- 统一顶栏导航与移动端底部导航
+- 老师端本机自动保存草稿
 
 ## 本地运行
 
@@ -81,3 +83,19 @@ VISUAL_REVIEW_PROVIDER_STYLE=openai-chat
 5. 绑定你自己的域名。
 
 如果你要在中国大陆长期稳定访问，建议后续再迁移到国内云服务，并补齐备案、对象存储和数据库。
+
+## 当前香港服务器更新方式
+
+当前线上服务器已经部署在腾讯云香港轻量服务器上，手动更新时优先使用仓库内脚本：
+
+```bash
+cd /var/www/tongqu-growth-web
+chmod +x deploy/server-update.sh
+bash deploy/server-update.sh
+```
+
+如果本机已经配置好 SSH 凭据，也可以在 Windows 本地执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\run-remote-deploy.ps1
+```
