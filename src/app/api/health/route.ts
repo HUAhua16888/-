@@ -15,6 +15,11 @@ export async function GET() {
           process.env.VOLCENGINE_SPEECH_ACCESS_TOKEN &&
           process.env.VOLCENGINE_SPEECH_SECRET_KEY,
       ),
+      visualReviewConfigured: Boolean(
+        process.env.VISUAL_REVIEW_API_KEY &&
+          process.env.VISUAL_REVIEW_BASE_URL &&
+          process.env.VISUAL_REVIEW_MODEL,
+      ),
       siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL),
       imageFeatureEnabled: process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true",
       premiumTtsEnabled: process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true",

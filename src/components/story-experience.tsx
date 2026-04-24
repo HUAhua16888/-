@@ -40,6 +40,9 @@ type MealPhotoReviewResponse = {
   filename?: string;
   sizeKb?: number;
   summary?: string;
+  plateState?: string;
+  confidenceLabel?: string;
+  highlightTags?: string[];
   scoreCards?: Array<{
     label: string;
     value: number;
@@ -226,7 +229,7 @@ function FoodBadgeWall() {
 function MealPhotoBooth() {
   const [previewUrl, setPreviewUrl] = useState("");
   const [fileName, setFileName] = useState("");
-  const [reviewStatus, setReviewStatus] = useState("上传一张餐盘照片，演示光盘打卡会更直观。");
+  const [reviewStatus, setReviewStatus] = useState("上传一张餐盘照片，看看光盘和闽食识别结果。");
   const [reviewTips, setReviewTips] = useState<string[]>(mealPhotoChecklist);
   const [reviewResult, setReviewResult] = useState<MealPhotoReviewResponse | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
@@ -360,7 +363,7 @@ function MealPhotoBooth() {
                   : "bg-amber-100 text-amber-800"
               }`}
             >
-              {reviewResult?.mode === "ai" ? "AI 识图中" : "演示分析卡"}
+              {reviewResult?.mode === "ai" ? "AI 识图结果" : "演示分析卡"}
             </span>
           </div>
           <p className="mt-3 text-base leading-8 font-semibold text-slate-900">{reviewStatus}</p>
@@ -369,6 +372,39 @@ function MealPhotoBooth() {
             <div className="mt-5 rounded-[1.5rem] bg-cyan-50 px-4 py-4">
               <p className="text-sm font-semibold text-cyan-800">分析结论</p>
               <p className="mt-2 text-sm leading-7 text-slate-700">{reviewResult.summary}</p>
+            </div>
+          ) : null}
+
+          {reviewResult?.plateState || reviewResult?.confidenceLabel ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
+                <p className="text-xs font-semibold text-slate-500">餐盘状态</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {reviewResult?.plateState ?? "等待分析"}
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
+                <p className="text-xs font-semibold text-slate-500">识图把握</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {reviewResult?.confidenceLabel ?? "等待分析"}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {reviewResult?.highlightTags && reviewResult.highlightTags.length > 0 ? (
+            <div className="mt-5 rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
+              <p className="text-sm font-semibold text-slate-700">照片亮点</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {reviewResult.highlightTags.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full bg-cyan-100 px-3 py-2 text-sm font-semibold text-cyan-900"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
             </div>
           ) : null}
 
