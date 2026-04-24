@@ -27,7 +27,9 @@ function normalizeImageError(message: string) {
 export async function POST(request: Request) {
   const body = (await request.json()) as ImageRequest;
   const prompt = body.prompt?.trim();
-  const imageEnabled = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true";
+  const imageEnabled =
+    (process.env.ENABLE_IMAGE_GENERATION ?? process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION) ===
+    "true";
 
   const apiKey = process.env.VOLCENGINE_ARK_API_KEY;
   const baseUrl =

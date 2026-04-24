@@ -4,6 +4,19 @@ import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
+import {
+  countUniqueBadges,
+  createEmptyGrowthArchive,
+  getMiniGameCompletionTotal,
+  growthArchiveStorageKey,
+  parseGrowthArchive,
+  recordBadge,
+  recordMealReview,
+  recordMiniGameCompletion,
+  recordThemeVisit,
+  type GrowthArchive,
+  type MiniGameKey,
+} from "@/lib/growth-archive";
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
@@ -226,7 +239,11 @@ function FoodBadgeWall() {
   );
 }
 
-function MealPhotoBooth() {
+function MealPhotoBooth({
+  onReviewLogged,
+}: {
+  onReviewLogged?: (review: MealPhotoReviewResponse, fileName: string) => void;
+}) {
   const [previewUrl, setPreviewUrl] = useState("");
   const [fileName, setFileName] = useState("");
   const [reviewStatus, setReviewStatus] = useState("上传一张餐盘照片，看看光盘和闽食识别结果。");
@@ -290,6 +307,10 @@ function MealPhotoBooth() {
         `${data.message ?? "照片上传成功。"}${data.sizeKb ? ` 当前文件约 ${data.sizeKb}KB。` : ""}`,
       );
       setReviewTips(data.tips && data.tips.length > 0 ? data.tips : mealPhotoChecklist);
+
+      if (data.ok) {
+        onReviewLogged?.(data, file.name);
+      }
     } catch (error) {
       setReviewStatus(error instanceof Error ? error.message : "照片检查暂时失败了");
     } finally {
@@ -477,9 +498,10 @@ function MealPhotoBooth() {
   );
 }
 
-function ShuffleStepsGame() {
+function ShuffleStepsGame({ onComplete }: { onComplete?: () => void }) {
   const [shuffled, setShuffled] = useState(initialWashOrder);
   const [selected, setSelected] = useState<string[]>([]);
+  const completionReportedRef = useRef(false);
   const completed = selected.length === washSteps.length;
 
   function handlePick(step: string) {
@@ -493,9 +515,17 @@ function ShuffleStepsGame() {
   function resetGame() {
     setShuffled(initialWashOrder);
     setSelected([]);
+    completionReportedRef.current = false;
   }
 
   const isCorrect = completed && selected.every((step, index) => step === washSteps[index]);
+
+  useEffect(() => {
+    if (completed && isCorrect && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.();
+    }
+  }, [completed, isCorrect, onComplete]);
 
   return (
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
@@ -562,8 +592,9 @@ function ShuffleStepsGame() {
   );
 }
 
-function QueueGame() {
+function QueueGame({ onComplete }: { onComplete?: () => void }) {
   const [currentOrder, setCurrentOrder] = useState(initialQueueOrder);
+  const completionReportedRef = useRef(false);
   const correct = currentOrder.every((item, index) => item === queueOrder[index]);
 
   function moveLeft(index: number) {
@@ -578,10 +609,32 @@ function QueueGame() {
     });
   }
 
+  function resetGame() {
+    setCurrentOrder(initialQueueOrder);
+    completionReportedRef.current = false;
+  }
+
+  useEffect(() => {
+    if (correct && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.();
+    }
+  }, [correct, onComplete]);
+
   return (
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
-      <p className="text-sm font-semibold text-cyan-700">小游戏 2</p>
-      <h3 className="mt-1 text-xl font-semibold text-slate-900">排队不拥挤</h3>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-cyan-700">小游戏 2</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">排队不拥挤</h3>
+        </div>
+        <button
+          onClick={resetGame}
+          className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-200"
+        >
+          重新开始
+        </button>
+      </div>
       <p className="mt-3 text-sm leading-7 text-slate-600">
         点击“往前站一点”，帮小朋友从前到后排好队。
       </p>
@@ -614,9 +667,10 @@ function QueueGame() {
   );
 }
 
-function KindWordsGame() {
+function KindWordsGame({ onComplete }: { onComplete?: () => void }) {
   const [picked, setPicked] = useState<number[]>([]);
   const [score, setScore] = useState(0);
+  const completionReportedRef = useRef(false);
 
   function handlePick(index: number, positive: boolean) {
     if (picked.includes(index)) {
@@ -629,10 +683,33 @@ function KindWordsGame() {
     }
   }
 
+  function resetGame() {
+    setPicked([]);
+    setScore(0);
+    completionReportedRef.current = false;
+  }
+
+  useEffect(() => {
+    if (picked.length === kindPhrases.length && score >= 2 && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.();
+    }
+  }, [onComplete, picked.length, score]);
+
   return (
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
-      <p className="text-sm font-semibold text-rose-700">小游戏 3</p>
-      <h3 className="mt-1 text-xl font-semibold text-slate-900">勇敢尝一口</h3>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-rose-700">小游戏 3</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">勇敢尝一口</h3>
+        </div>
+        <button
+          onClick={resetGame}
+          className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800 transition hover:bg-rose-200"
+        >
+          重新开始
+        </button>
+      </div>
       <p className="mt-3 text-sm leading-7 text-slate-600">
         选出你觉得最温柔、最会鼓励人的话。
       </p>
@@ -666,8 +743,9 @@ function KindWordsGame() {
   );
 }
 
-function MealTrayGame() {
+function MealTrayGame({ onComplete }: { onComplete?: () => void }) {
   const [pickedItems, setPickedItems] = useState<string[]>([]);
+  const completionReportedRef = useRef(false);
   const pickedCount = pickedItems.length;
   const completed = pickedCount === 3;
   const healthyCount = pickedItems.filter((item) =>
@@ -684,7 +762,15 @@ function MealTrayGame() {
 
   function resetGame() {
     setPickedItems([]);
+    completionReportedRef.current = false;
   }
+
+  useEffect(() => {
+    if (completed && healthyCount >= 2 && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.();
+    }
+  }, [completed, healthyCount, onComplete]);
 
   return (
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
@@ -756,10 +842,134 @@ function MealTrayGame() {
   );
 }
 
+function GrowthArchivePanel({
+  archive,
+  onClear,
+}: {
+  archive: GrowthArchive;
+  onClear: () => void;
+}) {
+  const uniqueBadgeCount = countUniqueBadges(archive);
+  const totalMiniGames = getMiniGameCompletionTotal(archive);
+  const latestBadges = archive.badgeRecords.slice(0, 4);
+  const latestReviews = archive.mealReviews.slice(0, 2);
+
+  return (
+    <div className="rounded-[2.2rem] border border-white/70 bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_55%,#e6fbfa_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-teal-700">成长记录册</p>
+          <h3 className="mt-1 text-2xl font-semibold text-slate-900">孩子下次再来，也能接着成长</h3>
+        </div>
+        <button
+          onClick={onClear}
+          className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
+        >
+          清空记录册
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-4">
+        <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
+          <p className="text-xs font-semibold text-slate-500">点亮勋章</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{uniqueBadgeCount}</p>
+        </div>
+        <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
+          <p className="text-xs font-semibold text-slate-500">小游戏完成</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{totalMiniGames}</p>
+        </div>
+        <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
+          <p className="text-xs font-semibold text-slate-500">习惯岛进入</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{archive.themeVisits.habit}</p>
+        </div>
+        <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
+          <p className="text-xs font-semibold text-slate-500">闽食岛进入</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{archive.themeVisits.food}</p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-[1.8rem] bg-white/82 p-5 shadow-sm">
+          <p className="text-sm font-semibold text-slate-700">最近点亮的勋章</p>
+          <div className="mt-4 space-y-3">
+            {latestBadges.length > 0 ? (
+              latestBadges.map((item) => (
+                <div
+                  key={`${item.name}-${item.earnedAt}`}
+                  className="rounded-[1.3rem] bg-slate-50 px-4 py-3"
+                >
+                  <p className="font-semibold text-slate-900">{item.name}</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {item.themeId === "habit" ? "习惯成长岛" : "闽食成长岛"} ·{" "}
+                    {item.source === "story"
+                      ? "故事解锁"
+                      : item.source === "meal-review"
+                        ? "拍图打卡"
+                        : "小游戏完成"}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-[1.3rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
+                还没有历史记录，先聊一轮故事或完成一个小游戏吧。
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[1.8rem] bg-white/82 p-5 shadow-sm">
+          <p className="text-sm font-semibold text-slate-700">最近拍图打卡</p>
+          <div className="mt-4 space-y-3">
+            {latestReviews.length > 0 ? (
+              latestReviews.map((item) => (
+                <div
+                  key={`${item.reviewedAt}-${item.imageName}`}
+                  className="rounded-[1.3rem] bg-slate-50 px-4 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold text-slate-900">{item.plateState}</p>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        item.mode === "ai"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {item.mode === "ai" ? "AI 分析" : "演示分析"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">{item.summary}</p>
+                  {item.guessedFoods.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.guessedFoods.map((food) => (
+                        <span
+                          key={food}
+                          className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900"
+                        >
+                          {food}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <p className="rounded-[1.3rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
+                还没有拍图记录，等你上传第一张餐盘照片后，这里会自动保存。
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function StoryExperience() {
   const imageFeatureEnabled = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true";
   const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
   const premiumVoiceLabel = process.env.NEXT_PUBLIC_TTS_VOICE_LABEL ?? defaultPremiumVoiceLabel;
+  const growthArchiveHydratedRef = useRef(false);
   const [themeId, setThemeId] = useState<ThemeId>("habit");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -779,6 +989,7 @@ export function StoryExperience() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [badges, setBadges] = useState<string[]>([]);
+  const [growthArchive, setGrowthArchive] = useState<GrowthArchive>(createEmptyGrowthArchive());
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
@@ -925,6 +1136,28 @@ export function StoryExperience() {
       return;
     }
 
+    const restoreHandle = window.setTimeout(() => {
+      const savedArchive = window.localStorage.getItem(growthArchiveStorageKey);
+      setGrowthArchive(parseGrowthArchive(savedArchive));
+      growthArchiveHydratedRef.current = true;
+    }, 0);
+
+    return () => window.clearTimeout(restoreHandle);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !growthArchiveHydratedRef.current) {
+      return;
+    }
+
+    window.localStorage.setItem(growthArchiveStorageKey, JSON.stringify(growthArchive));
+  }, [growthArchive]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     const savedState = window.localStorage.getItem(storyStateStorageKey);
 
     if (!savedState) {
@@ -996,7 +1229,65 @@ export function StoryExperience() {
     window.localStorage.setItem(storyStateStorageKey, JSON.stringify(payload));
   }, [badges, imageUrl, lastImagePrompt, messages, quickChoices, status, themeId]);
 
+  function updateGrowthArchive(updater: (current: GrowthArchive) => GrowthArchive) {
+    setGrowthArchive((current) => updater(current));
+  }
+
+  function logThemeVisit(nextTheme: ThemeId) {
+    updateGrowthArchive((current) => recordThemeVisit(current, nextTheme));
+  }
+
+  function logBadgeRecords(nextBadges: string[], source: "story" | "meal-review" | "mini-game") {
+    if (nextBadges.length === 0) {
+      return;
+    }
+
+    updateGrowthArchive((current) =>
+      nextBadges.reduce(
+        (draft, badge) => recordBadge(draft, badge, themeId, source),
+        current,
+      ),
+    );
+  }
+
+  function logMiniGameCompletion(gameKey: MiniGameKey, badgeName: string) {
+    updateGrowthArchive((current) => {
+      const withGame = recordMiniGameCompletion(current, gameKey);
+      return recordBadge(withGame, badgeName, themeId, "mini-game");
+    });
+  }
+
+  function handleMealReviewLogged(review: MealPhotoReviewResponse, imageName: string) {
+    updateGrowthArchive((current) => {
+      const withReview = recordMealReview(current, {
+        reviewedAt: new Date().toISOString(),
+        mode: review.mode ?? "demo",
+        summary: review.summary ?? "餐盘照片已完成一次分析。",
+        guessedFoods: review.guessedFoods ?? [],
+        stickers: review.stickers ?? [],
+        plateState: review.plateState ?? "等待分析",
+        imageName,
+      });
+
+      return (review.stickers ?? []).reduce(
+        (draft, sticker) => recordBadge(draft, sticker, "food", "meal-review"),
+        withReview,
+      );
+    });
+  }
+
+  function clearGrowthArchive() {
+    setGrowthArchive(createEmptyGrowthArchive());
+
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(growthArchiveStorageKey);
+    }
+
+    setStatus("成长记录册已经清空了，新的成长记录会从现在重新开始。");
+  }
+
   function switchTheme(nextTheme: ThemeId) {
+    stopSpeaking();
     setThemeId(nextTheme);
     setMessages([
       {
@@ -1005,9 +1296,11 @@ export function StoryExperience() {
       },
     ]);
     setQuickChoices(themes[nextTheme].choices);
+    setInput("");
     setImageUrl("");
     setLastImagePrompt("");
     setStatus(`${themes[nextTheme].label}准备好了。`);
+    logThemeVisit(nextTheme);
   }
 
   function resetStoryProgress() {
@@ -1072,6 +1365,10 @@ export function StoryExperience() {
           return [...current, data.badge];
         });
       });
+
+      if (data.badge && !badges.includes(data.badge)) {
+        logBadgeRecords([data.badge], "story");
+      }
 
       setStatus(data.error ? `模型回复成功，但有提醒：${data.error}` : "新的故事节点已经解锁。");
     } catch {
@@ -1506,19 +1803,20 @@ export function StoryExperience() {
       ) : (
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <FoodBadgeWall />
-          <MealPhotoBooth />
+          <MealPhotoBooth onReviewLogged={handleMealReviewLogged} />
         </section>
       )}
 
       <section className="grid gap-6">
         <RewardStickerShelf badges={badges} />
+        <GrowthArchivePanel archive={growthArchive} onClear={clearGrowthArchive} />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <ShuffleStepsGame />
-        <QueueGame />
-        <KindWordsGame />
-        <MealTrayGame />
+        <ShuffleStepsGame onComplete={() => logMiniGameCompletion("washSteps", "洗手闪亮章")} />
+        <QueueGame onComplete={() => logMiniGameCompletion("queue", "排队小队长")} />
+        <KindWordsGame onComplete={() => logMiniGameCompletion("kindWords", "礼貌微笑章")} />
+        <MealTrayGame onComplete={() => logMiniGameCompletion("mealTray", "均衡小餐盘")} />
       </section>
     </div>
   );

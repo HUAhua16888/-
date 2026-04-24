@@ -18,6 +18,19 @@ type StoryRequest = {
   teacherTask?: string;
 };
 
+function normalizeShortList(input: unknown, fallback: string[], limit: number) {
+  if (!Array.isArray(input)) {
+    return fallback;
+  }
+
+  const cleaned = input
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, limit);
+
+  return cleaned.length === limit ? cleaned : fallback;
+}
+
 function buildChildFallback(theme: ThemeId, userInput: string) {
   const currentTheme = themes[theme];
 
@@ -137,7 +150,15 @@ export async function POST(request: Request) {
         typeof parsed.content === "string" &&
         Array.isArray(parsed.tips)
       ) {
-        return NextResponse.json(parsed);
+        return NextResponse.json({
+          title: parsed.title.trim() || "老师辅助小卡片",
+          content: parsed.content.trim() || buildTeacherFallback(body.teacherTask ?? "").content,
+          tips: normalizeShortList(
+            parsed.tips,
+            buildTeacherFallback(body.teacherTask ?? "").tips,
+            3,
+          ),
+        });
       }
 
       return NextResponse.json(buildTeacherFallback(body.teacherTask ?? ""));
@@ -149,7 +170,11 @@ export async function POST(request: Request) {
       Array.isArray(parsed.choices) &&
       typeof parsed.badge === "string"
     ) {
-      return NextResponse.json(parsed);
+      return NextResponse.json({
+        reply: parsed.reply.trim() || buildChildFallback(theme, userInput).reply,
+        choices: normalizeShortList(parsed.choices, themeConfig.choices, 3),
+        badge: parsed.badge.trim() || themeConfig.badgePool[0],
+      });
     }
 
     return NextResponse.json(buildChildFallback(theme, userInput));

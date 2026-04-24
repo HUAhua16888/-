@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 export const maxDuration = 10;
 
 export async function GET() {
+  const imageFeatureEnabled =
+    (process.env.ENABLE_IMAGE_GENERATION ?? process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION) ===
+    "true";
   const customVisualConfigured = Boolean(
     process.env.VISUAL_REVIEW_API_KEY &&
       process.env.VISUAL_REVIEW_BASE_URL &&
@@ -29,7 +32,7 @@ export async function GET() {
       visualReviewConfigured: customVisualConfigured || arkVisualConfigured,
       visualReviewSource: customVisualConfigured ? "custom" : arkVisualConfigured ? "ark" : "demo",
       siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL),
-      imageFeatureEnabled: process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION === "true",
+      imageFeatureEnabled,
       premiumTtsEnabled: process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true",
     },
   });
