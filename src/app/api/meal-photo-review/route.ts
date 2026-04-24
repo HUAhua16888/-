@@ -12,11 +12,11 @@ function buildDemoReview(filename: string, sizeKb: number) {
     mode: "demo",
     filename,
     sizeKb,
-    message: "照片已经上传成功。当前比赛版先返回图文分析卡，后续接视觉模型后可升级成真实 AI 检测。",
-    summary: "这张照片适合做“闽食光盘打卡”演示，构图比较完整，适合继续做餐盘识别。",
+    message: "照片已经上传成功。当前先返回图文分析卡，后续接视觉模型后可升级成真实 AI 检测。",
+    summary: "这张照片构图比较完整，适合继续做闽食光盘打卡和餐盘识别。",
     scoreCards: [
       { label: "光盘观察分", value: baseScore },
-      { label: "闽食展示分", value: Math.max(58, baseScore - 6) },
+      { label: "闽食识别分", value: Math.max(58, baseScore - 6) },
       { label: "勇敢尝试分", value: Math.min(96, baseScore + 4) },
     ],
     guessedFoods: ["海蛎煎候选", "紫菜蛋汤候选", "南瓜小块候选"],
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     const dataUrl = `data:${mimeType};base64,${bytes.toString("base64")}`;
     const prompt = [
       "你是一名幼儿园食育与习惯养成辅助助手。",
-      "请根据上传的餐盘或闽食照片，判断它是否适合作为“闽食光盘打卡”演示材料。",
+      "请根据上传的餐盘或闽食照片，判断它是否适合作为“闽食光盘打卡”分析材料。",
       "如果你不确定具体食物名称，请用“某种闽食候选”或“某种餐食候选”，不要乱编。",
       "必须只返回 JSON，不要返回其他文字。",
       '格式：{"summary":"","scoreCards":[{"label":"","value":0},{"label":"","value":0},{"label":"","value":0}],"guessedFoods":["","",""],"stickers":["","",""],"nextMission":"","tips":["","",""]}',
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       "- guessedFoods 恰好 3 个",
       "- stickers 恰好 3 个，风格适合幼儿",
       "- nextMission 25 字以内",
-      "- tips 恰好 3 条，适合现场拍图指导",
+      "- tips 恰好 3 条，适合老师或家长拍图指导",
     ].join("\n");
 
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {

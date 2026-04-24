@@ -7,12 +7,14 @@ import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
+  adventureFeaturePills,
   foodBadgeCards,
   habitSkillCards,
   kindPhrases,
   mealTrayOptions,
   mealPhotoChecklist,
   queueOrder,
+  rewardStickerCards,
   storyMissionMap,
   themes,
   washSteps,
@@ -102,7 +104,7 @@ function HabitVisualBoard() {
 function HabitMissionPoster({ badges, missions }: { badges: string[]; missions: string[] }) {
   return (
     <div className="rounded-[2.2rem] border border-white/70 bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_55%,#dff8f7_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
-      <p className="text-sm font-semibold text-teal-700">课堂展示海报</p>
+      <p className="text-sm font-semibold text-teal-700">今日任务海报</p>
       <h3 className="mt-1 text-2xl font-semibold text-slate-900">今日习惯闯关</h3>
       <div className="mt-5 rounded-[2rem] bg-white/80 p-5">
         <div className="flex flex-wrap gap-3">
@@ -144,6 +146,47 @@ function HabitMissionPoster({ badges, missions }: { badges: string[]; missions: 
     </div>
   );
 }
+
+function RewardStickerShelf({ badges }: { badges: string[] }) {
+  const stickerPool =
+    badges.length > 0
+      ? badges.map((badge, index) => ({
+          ...rewardStickerCards[index % rewardStickerCards.length],
+          title: badge,
+        }))
+      : rewardStickerCards;
+
+  return (
+    <div className="rounded-[2.2rem] border border-white/70 bg-white/88 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-rose-700">奖励贴纸墙</p>
+          <h3 className="mt-1 text-2xl font-semibold text-slate-900">孩子最爱看的成果区</h3>
+        </div>
+        <div className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800">
+          随玩随点亮
+        </div>
+      </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {stickerPool.map((item, index) => (
+            <div
+              key={`${item.title}-${index}`}
+              className="story-card rounded-[1.7rem] bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 shadow-sm"
+            >
+              <div
+                className={`inline-flex h-12 w-12 items-center justify-center rounded-[1rem] text-2xl ${item.tone}`}
+              >
+                {item.icon}
+              </div>
+              <p className="mt-4 text-lg font-semibold text-slate-900">{item.title}</p>
+              <p className="mt-2 text-sm leading-7 text-slate-600">完成一个小任务，就能把它点亮。</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
 function FoodBadgeWall() {
   return (
@@ -277,7 +320,7 @@ function MealPhotoBooth() {
               <div className="text-4xl">🍱</div>
               <p className="mt-3 text-lg font-semibold text-slate-700">拍一张餐盘照片</p>
               <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
-                适合展示孩子光盘、闽食制作或闽食宣传打卡。
+                适合记录孩子光盘、闽食制作或闽食宣传打卡。
               </p>
             </div>
           )}
@@ -1387,10 +1430,34 @@ export function StoryExperience() {
           </div>
 
           <div className="mt-6 rounded-[1.8rem] bg-slate-900 px-4 py-4 text-white">
-            <p className="text-sm font-semibold text-white/70">比赛演示小提示</p>
+            <p className="text-sm font-semibold text-white/70">使用小提示</p>
             <p className="mt-2 text-sm leading-7 text-white/90">
-              如果你在现场展示，建议先点一个快捷选项，再演示图片生成，最后滑到小游戏区，会更容易抓住评审注意力。
+              先点快捷选项进入剧情，再切到插图、小游戏和拍图打卡，孩子会更容易被吸引。
             </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-6">
+        <div className="rounded-[2.2rem] border border-white/70 bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_50%,#dff8f7_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-cyan-700">互动能力条</p>
+              <h3 className="mt-1 text-2xl font-semibold text-slate-900">这一页能怎么玩</h3>
+            </div>
+            <div className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+              一页看懂主要功能
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {adventureFeaturePills.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm"
+              >
+                {item.icon} {item.label}
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -1406,6 +1473,10 @@ export function StoryExperience() {
           <MealPhotoBooth />
         </section>
       )}
+
+      <section className="grid gap-6">
+        <RewardStickerShelf badges={badges} />
+      </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
         <ShuffleStepsGame />

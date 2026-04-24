@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import {
+  adventureFeaturePills,
   demoRouteSteps,
   foodBadgeCards,
   habitSkillCards,
@@ -9,6 +10,9 @@ import {
   landingHighlights,
   mealPhotoChecklist,
   miniGameCards,
+  posterJourneySteps,
+  posterVisionCards,
+  serviceSceneCards,
   showcaseHighlights,
   showcaseStats,
 } from "@/lib/site-data";
@@ -28,7 +32,7 @@ export default function Home() {
             </span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-            我们把生活习惯养成和闽南食育故事合并成了一个可对外部署的网站。孩子可以和 AI 角色聊天、点选剧情、体验小游戏、上传打卡照片，还能听语音播报和生成绘本插图。
+            这是一个把习惯养成、闽食探索、AI 对话、勋章奖励和老师辅助合成在一起的儿童成长网站。
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">
@@ -70,6 +74,17 @@ export default function Home() {
             ))}
           </div>
 
+          <div className="mt-8 flex flex-wrap gap-3">
+            {adventureFeaturePills.map((item) => (
+              <span
+                key={item.label}
+                className="rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+              >
+                {item.icon} {item.label}
+              </span>
+            ))}
+          </div>
+
           <div className="mt-8 max-w-md">
             <AmbientMusicToggle scene="home" />
           </div>
@@ -84,7 +99,7 @@ export default function Home() {
                 <h2 className="mt-1 text-2xl font-semibold text-slate-900">会呼吸的故事舞台</h2>
               </div>
               <div className="rounded-full bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800">
-                V1 可上线版
+                当前可用版
               </div>
             </div>
 
@@ -117,14 +132,33 @@ export default function Home() {
                 </div>
               ))}
             </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              {posterJourneySteps.map((item) => (
+                <div
+                  key={item.step}
+                  className="rounded-[1.4rem] bg-[linear-gradient(135deg,#ffffff_0%,#f7fffe_100%)] px-4 py-4 shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                      {item.step}
+                    </div>
+                    <div>
+                      <p className="text-2xl">{item.icon}</p>
+                      <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 pb-12 md:px-8 lg:grid-cols-[0.95fr_1.05fr]">
         <article className="rounded-[2.5rem] bg-white/85 p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-amber-700">比赛展示亮点</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-900">为什么这版适合直接展示</h2>
+          <p className="text-sm font-semibold text-amber-700">产品亮点</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">为什么这版适合直接给孩子和老师用</h2>
           <div className="mt-6 space-y-4">
             {showcaseHighlights.map((item) => (
               <div
@@ -139,13 +173,13 @@ export default function Home() {
         </article>
 
         <article className="rounded-[2.5rem] bg-[linear-gradient(135deg,#dff8f7_0%,#ffffff_55%,#fff4cf_100%)] p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-teal-700">当前体验建议</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-900">适合你现在的使用方式</h2>
+          <p className="text-sm font-semibold text-teal-700">使用建议</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">适合家庭、课堂和集体活动的使用方式</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div className="rounded-[1.8rem] bg-white/80 p-5">
-              <p className="text-lg font-semibold text-slate-900">给评审和老师看</p>
+              <p className="text-lg font-semibold text-slate-900">给老师和家长看</p>
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                先从首页切到儿童互动页，再点老师辅助页，能最快展示“故事互动 + 教育辅助”这两个价值点。
+                先从首页切到儿童互动页，再点老师辅助页，能最快理解“故事互动 + 教育辅助”这两个核心入口。
               </p>
             </div>
             <div className="rounded-[1.8rem] bg-white/80 p-5">
@@ -158,10 +192,40 @@ export default function Home() {
         </article>
       </section>
 
+      <section className="mx-auto w-full max-w-7xl px-4 pb-12 md:px-8">
+        <article className="rounded-[2.7rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_45%,#dff8f7_100%)] p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-teal-700">一张海报看项目</p>
+              <h2 className="mt-2 text-3xl font-semibold text-slate-900">一眼扫懂网站能做什么</h2>
+            </div>
+            <div className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+              图卡优先，少量文字
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+            {posterVisionCards.map((item) => (
+              <div
+                key={item.title}
+                className="story-card rounded-[1.8rem] bg-white/88 p-4 shadow-sm"
+              >
+                <div
+                  className={`inline-flex h-12 w-12 items-center justify-center rounded-[1rem] text-2xl ${item.tone}`}
+                >
+                  {item.icon}
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-900">{item.title}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{item.caption}</p>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+
       <section className="mx-auto grid w-full max-w-7xl gap-6 px-4 pb-16 md:px-8 lg:grid-cols-[1.1fr_0.9fr]">
         <article className="rounded-[2.5rem] bg-white/85 p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-cyan-700">比赛演示路线</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-900">照着这 3 步讲，最容易讲清楚</h2>
+          <p className="text-sm font-semibold text-cyan-700">推荐体验路线</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">第一次使用可以这样走</h2>
           <div className="mt-6 space-y-4">
             {demoRouteSteps.map((item) => (
               <div
@@ -181,8 +245,8 @@ export default function Home() {
         </article>
 
         <article className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff9e3_0%,#ffffff_60%,#e7fbfa_100%)] p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-teal-700">评审快速看点</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-900">30 秒能理解的 3 个价值点</h2>
+          <p className="text-sm font-semibold text-teal-700">快速看点</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">30 秒能理解的 3 个核心价值</h2>
           <div className="mt-6 grid gap-4">
             {judgeFocusCards.map((item) => (
               <div key={item.title} className="rounded-[1.8rem] bg-white/85 p-5">
@@ -202,7 +266,7 @@ export default function Home() {
               <h2 className="mt-2 text-3xl font-semibold text-slate-900">八大习惯图卡</h2>
             </div>
             <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
-              图文结合展示
+              图文结合引导
             </div>
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -259,6 +323,34 @@ export default function Home() {
                 </div>
               ))}
             </div>
+          </div>
+        </article>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-4 pb-12 md:px-8">
+        <article className="rounded-[2.5rem] bg-white/88 p-6 shadow-[0_20px_70px_rgba(35,88,95,0.12)]">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-cyan-700">适用场景</p>
+              <h2 className="mt-2 text-3xl font-semibold text-slate-900">打开网站后，可以这样用</h2>
+            </div>
+            <div className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-800">
+              家庭和园所都能接住
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {serviceSceneCards.map((item) => (
+              <div
+                key={item.title}
+                className="story-card rounded-[1.8rem] bg-[linear-gradient(180deg,#f8fffe_0%,#ffffff_100%)] p-5 shadow-sm"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-cyan-100 text-2xl">
+                  {item.icon}
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-900">{item.title}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
+              </div>
+            ))}
           </div>
         </article>
       </section>

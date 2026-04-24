@@ -6,7 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
-import { teacherPitchCards, teacherTasks, themes, type ThemeId } from "@/lib/site-data";
+import {
+  teacherPitchCards,
+  teacherTasks,
+  teacherWorkflowCards,
+  themes,
+  type ThemeId,
+} from "@/lib/site-data";
 
 type TeacherResponse = {
   title: string;
@@ -158,8 +164,8 @@ export function TeacherStudio() {
             </span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-            这里和儿童端分开，方便老师在备课、餐前提醒、家园沟通时直接拿内容去用。生成出来的文案会尽量短、温柔、适合现场口头表达。
-            {premiumTtsEnabled ? ` 当前已经预留 ${premiumVoiceLabel} 播报入口，适合比赛时直接试播老师引导语。` : ""}
+            这里和儿童端分开，方便老师在备课、餐前提醒、家园沟通时直接拿内容去用。生成出来的文案会尽量短、温柔、适合课堂和家长沟通直接使用。
+            {premiumTtsEnabled ? ` 当前已经预留 ${premiumVoiceLabel} 播报入口，适合直接试播老师引导语。` : ""}
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -223,10 +229,63 @@ export function TeacherStudio() {
           </div>
 
           <div className="mt-5 rounded-[1.8rem] bg-[linear-gradient(135deg,#effcfc_0%,#ffffff_100%)] p-4">
-            <p className="text-sm font-semibold text-slate-500">演示时可以这样讲</p>
+            <p className="text-sm font-semibold text-slate-500">这一页适合什么时候打开</p>
             <p className="mt-2 text-sm leading-7 text-slate-700">
               儿童端负责“让孩子愿意参与”，老师端负责“让老师和家长拿到可直接使用的内容”，两端一起组成完整教育闭环。
             </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_56%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-amber-700">老师一天怎么用</p>
+              <h2 className="mt-2 text-3xl font-semibold text-slate-900">四张场景卡就够了</h2>
+            </div>
+            <div className="rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+              短、快、直接能拿走
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {teacherWorkflowCards.map((item) => (
+              <div
+                key={item.title}
+                className="story-card rounded-[1.8rem] bg-white/88 p-5 shadow-sm"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-amber-100 text-2xl">
+                  {item.icon}
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-900">{item.title}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+          <p className="text-sm font-semibold text-cyan-700">老师端能带走什么</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-900">不是只生成一句话</h2>
+          <div className="mt-6 space-y-4">
+            <div className="rounded-[1.8rem] bg-cyan-50 p-4">
+              <p className="text-lg font-semibold text-slate-900">课堂可说</p>
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                生成结果会尽量短一点，老师在教室里直接念出来也不会太长。
+              </p>
+            </div>
+            <div className="rounded-[1.8rem] bg-amber-50 p-4">
+              <p className="text-lg font-semibold text-slate-900">家长可转发</p>
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                复制以后就能放进家长群、班级通知或成长记录里。
+              </p>
+            </div>
+            <div className="rounded-[1.8rem] bg-emerald-50 p-4">
+              <p className="text-lg font-semibold text-slate-900">还能试播</p>
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                语音播报能提前帮老师听一遍语气，决定要不要再润色一下。
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -267,7 +326,7 @@ export function TeacherStudio() {
           </button>
 
           <p className="mt-4 rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-600">
-            小建议：比赛展示时，先点一个“常用生成任务”，再展示生成结果和复制动作，评审会更容易看懂老师端价值。
+            小建议：先点一个“常用生成任务”，再看生成结果、复制动作和试播按钮，老师端价值会更直观。
           </p>
         </div>
 

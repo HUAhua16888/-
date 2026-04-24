@@ -22,7 +22,7 @@ const sceneConfig: Record<
 > = {
   home: {
     label: "星光轻音乐",
-    description: "适合首页展示的明亮氛围音乐",
+    description: "适合首页使用的明亮氛围音乐",
     notes: [523.25, 659.25, 783.99],
     bass: 261.63,
   },
