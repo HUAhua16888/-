@@ -24,6 +24,7 @@ type TeacherResponse = {
 export function TeacherStudio() {
   const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
   const premiumVoiceLabel = process.env.NEXT_PUBLIC_TTS_VOICE_LABEL ?? defaultPremiumVoiceLabel;
+  const draftStorageKey = "tongqu-growth-web-teacher-draft";
   const [themeId, setThemeId] = useState<ThemeId>("habit");
   const [task, setTask] = useState(teacherTasks[0].label);
   const [scenario, setScenario] = useState(
@@ -34,6 +35,8 @@ export function TeacherStudio() {
   const [copyStatus, setCopyStatus] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("");
   const [isPreviewSpeaking, setIsPreviewSpeaking] = useState(false);
+  const [draftStatus, setDraftStatus] = useState("当前内容会自动保存在这台设备上。");
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
 
@@ -57,6 +60,63 @@ export function TeacherStudio() {
   }
 
   useEffect(() => () => cleanupAudio(), []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(draftStorageKey);
+
+        if (!raw) {
+          setDraftHydrated(true);
+          return;
+        }
+
+        const parsed = JSON.parse(raw) as {
+          themeId?: ThemeId;
+          task?: string;
+          scenario?: string;
+        };
+
+        if (parsed.themeId && themes[parsed.themeId]) {
+          setThemeId(parsed.themeId);
+        }
+
+        if (parsed.task) {
+          setTask(parsed.task);
+        }
+
+        if (parsed.scenario) {
+          setScenario(parsed.scenario);
+          setDraftStatus("已恢复这台设备上次留下的老师端草稿。");
+        }
+      } catch {
+        setDraftStatus("草稿读取失败了，当前先用默认示例。");
+      } finally {
+        setDraftHydrated(true);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [draftStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !draftHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      draftStorageKey,
+      JSON.stringify({
+        themeId,
+        task,
+        scenario,
+      }),
+    );
+  }, [draftHydrated, draftStorageKey, scenario, task, themeId]);
 
   async function generate() {
     if (!scenario.trim()) {
@@ -134,7 +194,7 @@ export function TeacherStudio() {
     }
 
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      setVoiceStatus("当前浏览器不支持播报，可以在儿童端继续演示。");
+      setVoiceStatus("当前浏览器不支持播报，可以先继续使用儿童互动页。");
       return;
     }
 
@@ -148,6 +208,24 @@ export function TeacherStudio() {
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
     setVoiceStatus("当前正在用浏览器播报老师引导语。");
+  }
+
+  function resetTeacherDraft(statusMessage = "已经恢复到默认示例，可以重新开始输入。") {
+    setThemeId("habit");
+    setTask(teacherTasks[0].label);
+    setScenario("今天午餐前，我想给 4-5 岁幼儿讲一个关于勇敢尝试新食物的小故事。");
+    setResult(null);
+    setCopyStatus("");
+    setVoiceStatus("");
+    setDraftStatus(statusMessage);
+  }
+
+  function clearTeacherDraft() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(draftStorageKey);
+    }
+
+    resetTeacherDraft("这台设备上的老师端草稿已经清空。");
   }
 
   return (
@@ -172,7 +250,10 @@ export function TeacherStudio() {
             {Object.values(themes).map((theme) => (
               <button
                 key={theme.id}
-                onClick={() => setThemeId(theme.id)}
+                onClick={() => {
+                  setThemeId(theme.id);
+                  setDraftStatus("主题切换后会自动保存到这台设备。");
+                }}
                 className={`rounded-full px-5 py-3 text-sm font-semibold transition ${
                   theme.id === themeId
                     ? "bg-slate-900 text-white"
@@ -219,6 +300,7 @@ export function TeacherStudio() {
                 onClick={() => {
                   setTask(item.label);
                   setScenario(item.starter);
+                  setDraftStatus("已切换到新的老师任务模板，会自动保存到这台设备。");
                 }}
                 className="rounded-[1.5rem] bg-slate-50 px-4 py-4 text-left transition hover:-translate-y-0.5 hover:bg-slate-100"
               >
@@ -299,7 +381,10 @@ export function TeacherStudio() {
             {teacherTasks.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setTask(item.label)}
+                onClick={() => {
+                  setTask(item.label);
+                  setDraftStatus("任务类型已切换，会自动保存到这台设备。");
+                }}
                 className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
                   task === item.label
                     ? "bg-slate-900 text-white"
@@ -313,7 +398,10 @@ export function TeacherStudio() {
 
           <textarea
             value={scenario}
-            onChange={(event) => setScenario(event.target.value)}
+            onChange={(event) => {
+              setScenario(event.target.value);
+              setDraftStatus("输入内容会自动保存到这台设备。");
+            }}
             className="mt-5 min-h-48 w-full rounded-[2rem] border border-slate-200 bg-slate-50 px-5 py-4 text-sm leading-7 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white"
           />
 
@@ -325,9 +413,26 @@ export function TeacherStudio() {
             {isLoading ? "正在生成..." : "开始生成"}
           </button>
 
-          <p className="mt-4 rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-600">
-            小建议：先点一个“常用生成任务”，再看生成结果、复制动作和试播按钮，老师端价值会更直观。
-          </p>
+          <div className="mt-4 rounded-[1.5rem] bg-slate-50 px-4 py-4">
+            <p className="text-sm leading-7 text-slate-600">
+              小建议：先点一个“常用生成任务”，再看生成结果、复制动作和试播按钮，老师端价值会更直观。
+            </p>
+            <p className="mt-3 text-sm font-semibold text-teal-700">{draftStatus}</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={() => resetTeacherDraft()}
+                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
+              >
+                恢复默认示例
+              </button>
+              <button
+                onClick={clearTeacherDraft}
+                className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800 transition hover:-translate-y-0.5"
+              >
+                清空这台设备草稿
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-[2.5rem] bg-[linear-gradient(180deg,#e6fbfa_0%,#ffffff_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">

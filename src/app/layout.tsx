@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans_SC, ZCOOL_KuaiLe } from "next/font/google";
+
+import { SiteShell } from "@/components/site-shell";
 import "./globals.css";
 
 const bodyFont = Noto_Sans_SC({
@@ -38,7 +40,9 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${bodyFont.variable} ${displayFont.variable} h-full scroll-smooth antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <SiteShell>{children}</SiteShell>
+      </body>
     </html>
   );
 }

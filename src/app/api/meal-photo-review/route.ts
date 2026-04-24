@@ -55,7 +55,7 @@ function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
     message: "照片已经上传成功。当前先返回图文分析卡，后续接视觉模型后可升级成真实 AI 检测。",
     summary: "这张照片构图比较完整，适合继续做闽食光盘打卡和餐盘识别。",
     plateState: "餐盘主体清楚",
-    confidenceLabel: "演示分析中",
+    confidenceLabel: "结构化分析中",
     highlightTags: ["整盘入镜", "适合继续识别", "可补真实视觉模型"],
     scoreCards: [
       { label: "光盘观察分", value: baseScore },

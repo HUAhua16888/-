@@ -384,7 +384,7 @@ function MealPhotoBooth({
                   : "bg-amber-100 text-amber-800"
               }`}
             >
-              {reviewResult?.mode === "ai" ? "AI 识图结果" : "演示分析卡"}
+              {reviewResult?.mode === "ai" ? "AI 识图结果" : "结构化分析卡"}
             </span>
           </div>
           <p className="mt-3 text-base leading-8 font-semibold text-slate-900">{reviewStatus}</p>
@@ -935,7 +935,7 @@ function GrowthArchivePanel({
                           : "bg-amber-100 text-amber-800"
                       }`}
                     >
-                      {item.mode === "ai" ? "AI 分析" : "演示分析"}
+                      {item.mode === "ai" ? "AI 分析" : "结构化分析"}
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-7 text-slate-600">{item.summary}</p>
