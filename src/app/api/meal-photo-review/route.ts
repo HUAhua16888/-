@@ -5,6 +5,7 @@ import { extractJsonObject, normalizeTextContent } from "@/lib/json";
 export const maxDuration = 45;
 
 const maxImageSizeBytes = 8 * 1024 * 1024;
+const maxMultipartSizeBytes = maxImageSizeBytes + 512 * 1024;
 const supportedImageTypes = new Set([
   "image/jpeg",
   "image/png",
@@ -86,10 +87,10 @@ function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
     mode: "demo",
     filename,
     sizeKb,
-    message: "照片已经上传成功。当前先返回示例分析卡，这次不会用于点亮勋章。",
+    message: "照片已经上传成功，已经生成基础观察卡。",
     summary: "这张照片构图比较完整，适合继续做闽食光盘观察和餐盘介绍。",
     plateState: "餐盘主体清楚",
-    confidenceLabel: "示例分析",
+    confidenceLabel: "基础观察",
     highlightTags: ["整盘入镜", "适合观察", "可继续介绍"],
     scoreCards: [
       { label: "光盘观察分", value: baseScore },
@@ -102,7 +103,7 @@ function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
     tips: [
       "建议拍整张餐盘，别只拍局部。",
       "餐盘边缘和食物都要在画面里。",
-      "这次是示例分析，先记录观察，不点亮勋章。",
+      "请以老师或家长现场观察为准。",
     ],
   };
 }
@@ -149,13 +150,23 @@ function clampScore(input: unknown, fallback: number) {
   return Math.max(0, Math.min(100, Math.round(input)));
 }
 
-function normalizeStringList(input: unknown, fallback: string[], limit: number) {
+function normalizeShortText(input: unknown, fallback: string, maxLength: number) {
+  if (typeof input !== "string") {
+    return fallback;
+  }
+
+  const cleaned = input.replace(/\s+/g, " ").trim().slice(0, maxLength);
+
+  return cleaned || fallback;
+}
+
+function normalizeStringList(input: unknown, fallback: string[], limit: number, maxLength = 18) {
   if (!Array.isArray(input)) {
     return fallback;
   }
 
   const cleaned = input
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .map((item) => normalizeShortText(item, "", maxLength))
     .filter(Boolean)
     .slice(0, limit);
 
@@ -175,7 +186,7 @@ function normalizeScoreCards(input: unknown, fallback: ReviewCard[]) {
 
       const label =
         "label" in item && typeof item.label === "string" && item.label.trim()
-          ? item.label.trim()
+          ? item.label.trim().slice(0, 10)
           : fallback[index]?.label ?? `观察分 ${index + 1}`;
       const value = clampScore("value" in item ? item.value : undefined, fallback[index]?.value ?? 72);
 
@@ -199,36 +210,24 @@ function normalizeReviewPayload(
     return fallback;
   }
 
-  const summary =
-    typeof parsed.summary === "string" && parsed.summary.trim()
-      ? parsed.summary.trim()
-      : fallback.summary;
-  const nextMission =
-    typeof parsed.nextMission === "string" && parsed.nextMission.trim()
-      ? parsed.nextMission.trim()
-      : fallback.nextMission;
-  const plateState =
-    typeof parsed.plateState === "string" && parsed.plateState.trim()
-      ? parsed.plateState.trim()
-      : fallback.plateState;
-  const confidenceLabel =
-    typeof parsed.confidenceLabel === "string" && parsed.confidenceLabel.trim()
-      ? parsed.confidenceLabel.trim()
-      : "AI 已分析";
+  const summary = normalizeShortText(parsed.summary, fallback.summary, 40);
+  const nextMission = normalizeShortText(parsed.nextMission, fallback.nextMission, 30);
+  const plateState = normalizeShortText(parsed.plateState, fallback.plateState, 14);
+  const confidenceLabel = normalizeShortText(parsed.confidenceLabel, "已生成", 12);
 
   return {
     ...fallback,
     mode: "ai",
-    message: "照片已经上传成功，当前结果来自 AI 视觉分析。",
+    message: "照片已经上传成功，已经生成餐盘观察卡。",
     summary,
     nextMission,
     plateState,
     confidenceLabel,
-    highlightTags: normalizeStringList(parsed.highlightTags, fallback.highlightTags, 3),
+    highlightTags: normalizeStringList(parsed.highlightTags, fallback.highlightTags, 3, 8),
     scoreCards: normalizeScoreCards(parsed.scoreCards, fallback.scoreCards),
-    guessedFoods: normalizeStringList(parsed.guessedFoods, fallback.guessedFoods, 3),
-    stickers: normalizeStringList(parsed.stickers, fallback.stickers, 3),
-    tips: normalizeStringList(parsed.tips, fallback.tips, 3),
+    guessedFoods: normalizeStringList(parsed.guessedFoods, fallback.guessedFoods, 3, 12),
+    stickers: normalizeStringList(parsed.stickers, fallback.stickers, 3, 10),
+    tips: normalizeStringList(parsed.tips, fallback.tips, 3, 24),
   };
 }
 
@@ -301,6 +300,11 @@ function buildPrompt() {
 
 export async function POST(request: Request) {
   let formData: FormData;
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+
+  if (contentLength > maxMultipartSizeBytes) {
+    return buildErrorResponse("图片有点大，建议压到 8MB 以内再上传。", "file_too_large", false, 413);
+  }
 
   try {
     formData = await request.formData();
@@ -410,7 +414,7 @@ export async function POST(request: Request) {
         buildFallbackReview(
           fallback,
           "vision_response_invalid",
-          "AI 视觉结果暂时无法结构化，当前先返回基础分析卡。",
+          "这张照片先生成基础观察卡，请结合现场情况判断。",
         ),
       );
     }
@@ -421,11 +425,11 @@ export async function POST(request: Request) {
       ...normalized,
       message:
         runtimeConfig.source === "ark"
-          ? "照片已经上传成功，当前结果来自火山方舟视觉分析。"
+          ? "照片已经上传成功，已经生成餐盘观察卡。"
           : normalized.message,
       confidenceLabel:
         runtimeConfig.source === "ark" && normalized.confidenceLabel === "AI 已分析"
-          ? "方舟已分析"
+          ? "已生成"
           : normalized.confidenceLabel,
     });
   } catch {
@@ -433,7 +437,7 @@ export async function POST(request: Request) {
       buildFallbackReview(
         fallback,
         "vision_provider_failed",
-        "AI 视觉分析暂时不可用，当前先返回基础分析卡。",
+        "这张照片先生成基础观察卡，请结合现场情况判断。",
       ),
     );
   }

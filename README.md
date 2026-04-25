@@ -2,7 +2,7 @@
 
 一个面向幼儿园儿童、老师和家长的 AI 互动故事网站。当前版本已经包含：
 
-- 首页品牌展示
+- 首页入口
 - 儿童互动故事页
 - 浏览器语音输入和语音播报
 - 火山方舟章节插图生成接口
@@ -32,10 +32,12 @@ OPENAI_BASE_URL=https://api.deepseek.com
 OPENAI_MODEL=deepseek-reasoner
 
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_SHOW_INTERNAL_NOTES=false
 NEXT_PUBLIC_ENABLE_IMAGE_GENERATION=true
 ENABLE_IMAGE_GENERATION=true
 NEXT_PUBLIC_ENABLE_PREMIUM_TTS=true
 NEXT_PUBLIC_TTS_VOICE_LABEL=小何 2.0
+INTERNAL_HEALTH_TOKEN=
 
 VOLCENGINE_ARK_API_KEY=
 VOLCENGINE_ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
@@ -64,7 +66,7 @@ VISUAL_REVIEW_PROVIDER_STYLE=openai-chat
 - `/`：项目首页
 - `/adventure`：儿童互动故事页
 - `/teachers`：老师和家长辅助页
-- `/api/health`：部署后可用于检查环境变量是否配置到位
+- `/api/health`：公开健康检查；带 `x-internal-health-token` 才返回内部配置状态
 - `/api/meal-photo-review`：拍图上传与闽食光盘分析卡
 - `/api/text-to-speech`：高质量语音播报接口
 

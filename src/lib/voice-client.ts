@@ -4,13 +4,18 @@ type TextToSpeechErrorResponse = {
   error?: string;
 };
 
-export async function fetchPremiumSpeechAudio(text: string, scene: VoiceScene) {
+export async function fetchPremiumSpeechAudio(
+  text: string,
+  scene: VoiceScene,
+  signal?: AbortSignal,
+) {
   const response = await fetch("/api/text-to-speech", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ text, scene }),
+    signal,
   });
 
   if (!response.ok) {
@@ -20,4 +25,3 @@ export async function fetchPremiumSpeechAudio(text: string, scene: VoiceScene) {
 
   return response.blob();
 }
-

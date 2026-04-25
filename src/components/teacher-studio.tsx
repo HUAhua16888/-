@@ -55,8 +55,36 @@ function buildMiniGameExtensionScenario(themeId: ThemeId) {
     : "孩子刚在儿童端完成了洗手、排队或礼貌表达小游戏，请生成一段老师可延伸的课堂提醒和家长同步话术。";
 }
 
+const internalNoteGroups = [
+  {
+    title: "使用顺序",
+    items: [
+      "儿童端：先选主题，再聊天或点快捷任务。",
+      "完成小游戏或拍图后，再回到老师页生成家园同步话术。",
+      "需要检查接口配置时，只从老师页进入能力状态。",
+    ],
+  },
+  {
+    title: "内容边界",
+    items: [
+      "前台不放项目介绍、展示路线、技术背书和部署说明。",
+      "儿童页只保留故事、语音、插图、小游戏、拍图和记录册。",
+      "首页只作为入口，不承担说明文档功能。",
+    ],
+  },
+  {
+    title: "维护备注",
+    items: [
+      "接口密钥只放服务端环境变量，不写进前台页面。",
+      "成长记录、老师草稿和生成历史都保存在当前设备。",
+      "临时登录、截图、网络调试文件不要放进项目目录。",
+    ],
+  },
+];
+
 export function TeacherStudio() {
   const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
+  const showInternalNotes = process.env.NEXT_PUBLIC_SHOW_INTERNAL_NOTES === "true";
   const premiumVoiceLabel = process.env.NEXT_PUBLIC_TTS_VOICE_LABEL ?? defaultPremiumVoiceLabel;
   const draftStorageKey = "tongqu-growth-web-teacher-draft";
   const historyStorageKey = "tongqu-growth-web-teacher-history";
@@ -411,7 +439,7 @@ export function TeacherStudio() {
         setVoiceStatus(
           error instanceof Error && error.message
             ? error.message
-            : "高质量播报暂时没接通，当前先用浏览器播报。",
+            : "高质量播报暂时不可用，当前先用浏览器播报。",
         );
       }
     }
@@ -579,6 +607,37 @@ export function TeacherStudio() {
           </div>
         </div>
       </section>
+
+      {showInternalNotes ? (
+        <details className="rounded-[2.2rem] bg-slate-900 p-6 text-white shadow-[0_24px_80px_rgba(35,88,95,0.16)]">
+          <summary className="cursor-pointer text-xl font-semibold">内部备注</summary>
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            {internalNoteGroups.map((group) => (
+              <div key={group.title} className="rounded-[1.6rem] bg-white/10 p-4">
+                <p className="text-sm font-semibold text-white/70">{group.title}</p>
+                <div className="mt-3 space-y-2">
+                  {group.items.map((item) => (
+                    <p
+                      key={item}
+                      className="rounded-[1.1rem] bg-white/10 px-3 py-2 text-sm leading-6"
+                    >
+                      {item}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/adventure"
+              className="rounded-full bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            >
+              打开儿童端
+            </Link>
+          </div>
+        </details>
+      ) : null}
 
       <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_56%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
@@ -784,7 +843,7 @@ export function TeacherStudio() {
 
           {result?.error ? (
             <p className="mt-4 rounded-2xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">
-              接口提醒：{result.error}
+              生成提醒：{result.error}
             </p>
           ) : null}
         </div>

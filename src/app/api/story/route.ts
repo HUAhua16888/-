@@ -61,13 +61,18 @@ function normalizeMessages(input: unknown) {
     .slice(-6);
 }
 
-function normalizeShortList(input: unknown, fallback: string[], limit: number) {
+function normalizeShortList(
+  input: unknown,
+  fallback: string[],
+  limit: number,
+  maxItemLength = 18,
+) {
   if (!Array.isArray(input)) {
     return fallback;
   }
 
   const cleaned = input
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .map((item) => normalizePlainText(item, "", maxItemLength))
     .filter(Boolean)
     .slice(0, limit);
 
@@ -75,7 +80,7 @@ function normalizeShortList(input: unknown, fallback: string[], limit: number) {
 }
 
 function normalizeChildChoices(input: unknown, fallback: string[]) {
-  return normalizeShortList(input, fallback, 3).map((item) => item.slice(0, 10));
+  return normalizeShortList(input, fallback, 3, 10);
 }
 
 function normalizeBadgeName(input: unknown, fallback: string) {
@@ -172,7 +177,15 @@ function buildTeacherFallback(task: string, userInput = "") {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as StoryRequest;
+  let body: StoryRequest = {};
+
+  try {
+    const parsed = (await request.json()) as unknown;
+    body = parsed && typeof parsed === "object" ? (parsed as StoryRequest) : {};
+  } catch {
+    body = {};
+  }
+
   const mode = body.mode ?? "child";
   const theme = normalizeTheme(body.theme);
   const userInput = normalizePlainText(
@@ -276,13 +289,17 @@ export async function POST(request: Request) {
         Array.isArray(parsed.tips)
       ) {
         return NextResponse.json({
-          title: parsed.title.trim() || "老师辅助小卡片",
-          content:
-            parsed.content.trim() || buildTeacherFallback(teacherTask, userInput).content,
+          title: normalizePlainText(parsed.title, "老师辅助小卡片", 32),
+          content: normalizePlainText(
+            parsed.content,
+            buildTeacherFallback(teacherTask, userInput).content,
+            180,
+          ),
           tips: normalizeShortList(
             parsed.tips,
             buildTeacherFallback(teacherTask, userInput).tips,
             3,
+            18,
           ),
         });
       }
@@ -297,15 +314,18 @@ export async function POST(request: Request) {
       typeof parsed.badge === "string"
     ) {
       return NextResponse.json({
-        reply: parsed.reply.trim() || buildChildFallback(theme, userInput).reply,
+        reply: normalizePlainText(parsed.reply, buildChildFallback(theme, userInput).reply, 110),
         choices: normalizeChildChoices(parsed.choices, themeConfig.choices),
         badge: normalizeBadgeName(parsed.badge, themeConfig.badgePool[0]),
       });
     }
 
     return NextResponse.json(buildChildFallback(theme, userInput));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "暂时连接不到模型服务";
+  } catch {
+    const message =
+      mode === "teacher"
+        ? "内容生成暂时不稳定，已先使用本地模板。"
+        : "故事伙伴暂时有点忙，已先接上本地故事。";
 
     return NextResponse.json(
       mode === "teacher"

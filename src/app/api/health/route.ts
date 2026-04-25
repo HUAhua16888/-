@@ -26,16 +26,18 @@ function capability(
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const internalToken = process.env.INTERNAL_HEALTH_TOKEN;
+  const requestToken = request.headers.get("x-internal-health-token");
+  const canShowInternal = Boolean(internalToken && requestToken === internalToken);
+
   const deepseekConfigured = Boolean(process.env.OPENAI_API_KEY);
   const imageFeatureEnabled =
     (process.env.ENABLE_IMAGE_GENERATION ?? process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION) ===
     "true";
   const volcImageConfigured = Boolean(process.env.VOLCENGINE_ARK_API_KEY);
   const volcSpeechConfigured = Boolean(
-    process.env.VOLCENGINE_SPEECH_APP_ID &&
-      process.env.VOLCENGINE_SPEECH_ACCESS_TOKEN &&
-      process.env.VOLCENGINE_SPEECH_SECRET_KEY,
+    process.env.VOLCENGINE_SPEECH_APP_ID && process.env.VOLCENGINE_SPEECH_ACCESS_TOKEN,
   );
   const customVisualConfigured = Boolean(
     process.env.VISUAL_REVIEW_API_KEY &&
@@ -92,10 +94,22 @@ export async function GET() {
         ? "需要高质量播报时打开 NEXT_PUBLIC_ENABLE_PREMIUM_TTS。"
         : volcSpeechConfigured
           ? "已接通，保持当前配置。"
-          : "配置 VOLCENGINE_SPEECH_APP_ID、ACCESS_TOKEN 和 SECRET_KEY。",
+          : "配置 VOLCENGINE_SPEECH_APP_ID 和 ACCESS_TOKEN。",
     },
   };
   const readyCount = Object.values(capabilities).filter((item) => item.ready).length;
+  const publicMode =
+    readyCount >= 3 ? "production-ready" : readyCount >= 1 ? "hybrid-demo" : "local-demo";
+
+  if (!canShowInternal) {
+    return NextResponse.json({
+      ok: true,
+      app: "童趣成长乐园",
+      now: new Date().toISOString(),
+      status: publicMode === "local-demo" ? "basic" : "available",
+    });
+  }
+
   const recommendations = Object.entries(capabilities)
     .filter(([, item]) => !item.ready)
     .map(([key, item]) => ({
@@ -112,8 +126,7 @@ export async function GET() {
     summary: {
       readyCapabilities: readyCount,
       totalCapabilities: Object.keys(capabilities).length,
-      publicMode:
-        readyCount >= 3 ? "production-ready" : readyCount >= 1 ? "hybrid-demo" : "local-demo",
+      publicMode,
     },
     capabilities,
     recommendations,

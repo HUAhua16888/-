@@ -6,6 +6,8 @@ type ImageRequest = {
   prompt?: string;
 };
 
+const imagePromptMaxLength = 1200;
+
 function normalizeImageError(message: string) {
   const lower = message.toLowerCase();
 
@@ -14,7 +16,7 @@ function normalizeImageError(message: string) {
     lower.includes("do not have access") ||
     lower.includes("model")
   ) {
-    return "图片生成功能暂时还没有配置好，请先体验聊天和小游戏。后面把火山图像模型开通后，这里就能正常出图。";
+    return "图片生成功能暂时不可用，请先体验聊天、语音和小游戏。";
   }
 
   if (lower.includes("timeout")) {
@@ -25,8 +27,16 @@ function normalizeImageError(message: string) {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as ImageRequest;
-  const prompt = body.prompt?.trim();
+  let body: ImageRequest = {};
+
+  try {
+    const parsed = (await request.json()) as unknown;
+    body = parsed && typeof parsed === "object" ? (parsed as ImageRequest) : {};
+  } catch {
+    body = {};
+  }
+
+  const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, imagePromptMaxLength) : "";
   const imageEnabled =
     (process.env.ENABLE_IMAGE_GENERATION ?? process.env.NEXT_PUBLIC_ENABLE_IMAGE_GENERATION) ===
     "true";
@@ -40,14 +50,14 @@ export async function POST(request: Request) {
 
   if (!imageEnabled) {
     return NextResponse.json(
-      { error: "当前对外稳定版已暂时关闭 AI 出图功能，避免影响聊天和小游戏体验。" },
+      { error: "AI 出图功能当前先关闭，请先体验聊天、语音和小游戏主流程。" },
       { status: 400 },
     );
   }
 
   if (!apiKey || !prompt) {
     return NextResponse.json(
-      { error: "缺少文生图配置或提示词" },
+      { error: "图片生成功能暂时不可用，请稍后再试。" },
       { status: 400 },
     );
   }

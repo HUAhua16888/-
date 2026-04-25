@@ -16,19 +16,25 @@ type SseEvent = {
   data?: string;
 };
 
+type SpeechRequestOptions = {
+  endpoint: string;
+  headers: Record<string, string>;
+  body: unknown;
+};
+
 function normalizeSpeechError(message: string) {
   const lower = message.toLowerCase();
 
   if (lower.includes("appid") || lower.includes("grant")) {
-    return "高质量播报的应用信息还没完全校准好，当前先用浏览器播报。";
+    return "高质量播报暂时不可用，当前先用浏览器播报。";
   }
 
   if (lower.includes("access") || lower.includes("token") || lower.includes("auth")) {
-    return "高质量播报的鉴权信息暂时没接通，当前先用浏览器播报。";
+    return "高质量播报暂时不可用，当前先用浏览器播报。";
   }
 
   if (lower.includes("resource")) {
-    return "高质量播报的模型资源还没完全配置好，当前先用浏览器播报。";
+    return "高质量播报暂时不可用，当前先用浏览器播报。";
   }
 
   if (lower.includes("timeout")) {
@@ -84,10 +90,62 @@ function extractAudioChunk(value: unknown): string | null {
   return null;
 }
 
+async function fetchSpeechChunks({ endpoint, headers, body }: SpeechRequestOptions) {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  const source = await response.text();
+  const events = parseSseEvents(source);
+  const audioChunks: string[] = [];
+  let lastError = "";
+
+  for (const event of events) {
+    if (!event.data) {
+      continue;
+    }
+
+    try {
+      const payload = JSON.parse(event.data) as Record<string, unknown>;
+
+      if (typeof payload.message === "string" && typeof payload.code === "number" && payload.code !== 0) {
+        lastError = payload.message;
+      }
+
+      const audioChunk = extractAudioChunk(payload);
+      if (audioChunk) {
+        audioChunks.push(audioChunk);
+      }
+    } catch {
+      lastError = lastError || "高质量播报返回内容暂时无法解析";
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(lastError || "高质量播报接口调用失败");
+  }
+
+  if (audioChunks.length === 0) {
+    throw new Error(lastError || "高质量播报暂时没有返回音频");
+  }
+
+  return audioChunks;
+}
+
 export async function POST(request: Request) {
-  const body = (await request.json()) as TextToSpeechRequest;
-  const text = body.text?.trim();
-  const scene = body.scene ?? "child";
+  let body: TextToSpeechRequest = {};
+
+  try {
+    const parsed = (await request.json()) as unknown;
+    body = parsed && typeof parsed === "object" ? (parsed as TextToSpeechRequest) : {};
+  } catch {
+    body = {};
+  }
+
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  const scene = body.scene === "teacher" ? "teacher" : "child";
 
   const appId = process.env.VOLCENGINE_SPEECH_APP_ID;
   const accessToken = process.env.VOLCENGINE_SPEECH_ACCESS_TOKEN;
@@ -103,9 +161,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "缺少要播报的文本内容" }, { status: 400 });
   }
 
-  if (!appId || !accessToken || !secretKey) {
+  if (!appId || !accessToken) {
     return NextResponse.json(
-      { error: "高质量播报还没有配置完成，当前先用浏览器播报。" },
+      { error: "高质量播报暂时不可用，当前先用浏览器播报。" },
       { status: 400 },
     );
   }
@@ -113,68 +171,72 @@ export async function POST(request: Request) {
   const requestId = randomUUID();
 
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Api-App-Key": secretKey,
-        "X-Api-Access-Key": accessToken,
-        "X-Api-Resource-Id": resourceId,
-        "X-Api-Request-Id": requestId,
+    const textForSpeech = text.slice(0, 280);
+    const commonHeaders = {
+      Authorization: `Bearer;${accessToken}`,
+      "Content-Type": "application/json",
+      "X-Api-Access-Key": accessToken,
+      "X-Api-App-Id": appId,
+      "X-Api-Resource-Id": resourceId,
+      "X-Api-Request-Id": requestId,
+    };
+    const v3Body = {
+      user: {
+        uid: `tongqu-growth-web-${scene}`,
       },
-      body: JSON.stringify({
-        app: {
-          appid: appId,
+      req_params: {
+        text: textForSpeech,
+        speaker: voiceType,
+        audio_params: {
+          format: audioFormat,
+          sample_rate: sampleRate,
+          speech_rate: 0,
+          loudness_rate: 0,
         },
-        user: {
-          uid: `tongqu-growth-web-${scene}`,
-        },
-        audio: {
-          voice_type: voiceType,
-          encoding: audioFormat,
-          rate: sampleRate,
-          speed_ratio: 1,
-        },
-        request: {
-          reqid: requestId,
-          operation: "query",
-          text: text.slice(0, 280),
-        },
-      }),
-    });
+      },
+    };
+    const legacyBody = {
+      app: {
+        appid: appId,
+      },
+      user: {
+        uid: `tongqu-growth-web-${scene}`,
+      },
+      audio: {
+        voice_type: voiceType,
+        encoding: audioFormat,
+        rate: sampleRate,
+        speed_ratio: 1,
+      },
+      request: {
+        reqid: requestId,
+        operation: "query",
+        text: textForSpeech,
+      },
+    };
 
-    const source = await response.text();
-    const events = parseSseEvents(source);
-    const audioChunks: string[] = [];
-    let lastError = "";
+    let audioChunks: string[];
 
-    for (const event of events) {
-      if (!event.data) {
-        continue;
+    try {
+      audioChunks = await fetchSpeechChunks({
+        endpoint,
+        headers: commonHeaders,
+        body: v3Body,
+      });
+    } catch (primaryError) {
+      if (!secretKey) {
+        throw primaryError;
       }
 
-      try {
-        const payload = JSON.parse(event.data) as Record<string, unknown>;
-
-        if (typeof payload.message === "string" && typeof payload.code === "number" && payload.code !== 0) {
-          lastError = payload.message;
-        }
-
-        const audioChunk = extractAudioChunk(payload);
-        if (audioChunk) {
-          audioChunks.push(audioChunk);
-        }
-      } catch {
-        lastError = lastError || "高质量播报返回内容暂时无法解析";
-      }
-    }
-
-    if (!response.ok) {
-      throw new Error(lastError || "高质量播报接口调用失败");
-    }
-
-    if (audioChunks.length === 0) {
-      throw new Error(lastError || "高质量播报暂时没有返回音频");
+      audioChunks = await fetchSpeechChunks({
+        endpoint,
+        headers: {
+          ...commonHeaders,
+          "X-Api-App-Key": appId,
+          "X-Api-Secret-Key": secretKey,
+        },
+        body: legacyBody,
+      });
     }
 
     const audioBuffer = Buffer.from(audioChunks.join(""), "base64");
