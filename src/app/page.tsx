@@ -48,6 +48,12 @@ export default function Home() {
             >
               打开老师辅助页
             </Link>
+            <Link
+              href="/api/health"
+              className="rounded-full bg-teal-100 px-6 py-4 text-sm font-semibold text-teal-900 shadow-sm transition hover:-translate-y-0.5"
+            >
+              当前能力状态
+            </Link>
           </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">

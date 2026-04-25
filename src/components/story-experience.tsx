@@ -65,6 +65,11 @@ type MealPhotoReviewResponse = {
   nextMission?: string;
   tips?: string[];
   error?: string;
+  errorCode?: string;
+  retryable?: boolean;
+  fallbackUsed?: boolean;
+  warning?: string;
+  warningCode?: "vision_provider_failed" | "vision_response_invalid";
 };
 
 type BrowserSpeechRecognition = {
@@ -83,6 +88,40 @@ type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 const initialWashOrder = ["抹上泡泡", "擦干小手", "打湿小手", "冲洗干净", "搓搓手心手背"];
 const initialQueueOrder = ["第三位小朋友", "小队长举牌", "第二位小朋友", "第一位小朋友"];
 const storyStateStorageKey = "tongqu-growth-web-story-state";
+const storyInputMaxLength = 120;
+const supportedMealPhotoTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const supportedMealPhotoExtensions = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
+const maxMealPhotoSizeBytes = 8 * 1024 * 1024;
+
+function canAwardMealReviewBadge(review: MealPhotoReviewResponse) {
+  if (review.fallbackUsed || review.mode !== "ai") {
+    return false;
+  }
+
+  return !/结构化分析中|不确定|低把握|仅供参考|示例|基础分析/.test(
+    review.confidenceLabel ?? "",
+  );
+}
+
+function buildMealPhotoEncouragement(review: MealPhotoReviewResponse) {
+  const firstFood = review.guessedFoods?.[0];
+
+  if (firstFood) {
+    return `可以对孩子说：“你愿意观察${firstFood}，已经是很棒的尝试啦。”`;
+  }
+
+  if (review.plateState) {
+    return `可以对孩子说：“你把餐盘观察得很认真，${review.plateState}也被记录下来啦。”`;
+  }
+
+  return "可以对孩子说：“谢谢你愿意一起看一看、说一说，尝试本身就很勇敢。”";
+}
 
 function HabitVisualBoard() {
   return (
@@ -251,6 +290,7 @@ function MealPhotoBooth({
   const [reviewResult, setReviewResult] = useState<MealPhotoReviewResponse | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const canAwardReviewSticker = reviewResult ? canAwardMealReviewBadge(reviewResult) : false;
 
   useEffect(() => {
     return () => {
@@ -260,8 +300,48 @@ function MealPhotoBooth({
     };
   }, [previewUrl]);
 
+  function resetSelectedPhoto(status: string) {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    if (fileRef.current) {
+      fileRef.current.value = "";
+    }
+
+    setPreviewUrl("");
+    setFileName("");
+    setReviewStatus(status);
+    setReviewResult(null);
+    setReviewTips(mealPhotoChecklist);
+  }
+
+  function getPhotoValidationMessage(file: File) {
+    const normalizedName = file.name.toLowerCase();
+    const typeSupported = file.type ? supportedMealPhotoTypes.has(file.type) : false;
+    const extensionSupported = supportedMealPhotoExtensions.some((extension) =>
+      normalizedName.endsWith(extension),
+    );
+
+    if (!typeSupported && !extensionSupported) {
+      return "当前支持 JPG、PNG、WebP 或 HEIC 图片，请重新选择照片。";
+    }
+
+    if (file.size > maxMealPhotoSizeBytes) {
+      return "这张照片超过 8MB，请先压缩或换一张更小的照片。";
+    }
+
+    return "";
+  }
+
   function handleSelectPhoto(file: File | null) {
     if (!file) {
+      return;
+    }
+
+    const validationMessage = getPhotoValidationMessage(file);
+    if (validationMessage) {
+      resetSelectedPhoto(validationMessage);
       return;
     }
 
@@ -281,6 +361,12 @@ function MealPhotoBooth({
 
     if (!file) {
       setReviewStatus("先选一张孩子餐盘或闽食作品照片。");
+      return;
+    }
+
+    const validationMessage = getPhotoValidationMessage(file);
+    if (validationMessage) {
+      resetSelectedPhoto(validationMessage);
       return;
     }
 
@@ -308,7 +394,7 @@ function MealPhotoBooth({
       );
       setReviewTips(data.tips && data.tips.length > 0 ? data.tips : mealPhotoChecklist);
 
-      if (data.ok) {
+      if (data.ok && !data.fallbackUsed) {
         onReviewLogged?.(data, file.name);
       }
     } catch (error) {
@@ -364,7 +450,7 @@ function MealPhotoBooth({
             <button
               onClick={() => void reviewPhoto()}
               className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 disabled:opacity-60"
-              disabled={isReviewing}
+              disabled={isReviewing || !fileName}
             >
               {isReviewing ? "检查中..." : "上传看看"}
             </button>
@@ -372,6 +458,12 @@ function MealPhotoBooth({
           {fileName ? (
             <p className="mt-3 text-sm font-semibold text-slate-600">当前照片：{fileName}</p>
           ) : null}
+          <p className="mt-3 text-xs leading-6 font-semibold text-slate-500">
+            支持 JPG、PNG、WebP、HEIC，单张不超过 8MB。请只上传餐盘或闽食作品照片。
+          </p>
+          <p className="mt-2 text-xs leading-6 font-semibold text-amber-800">
+            拍照时尽量避开孩子正脸、姓名牌和班级牌，只记录餐盘或作品。
+          </p>
         </div>
 
         <div className="rounded-[1.8rem] bg-white/80 p-5">
@@ -384,10 +476,28 @@ function MealPhotoBooth({
                   : "bg-amber-100 text-amber-800"
               }`}
             >
-              {reviewResult?.mode === "ai" ? "AI 识图结果" : "结构化分析卡"}
+              {reviewResult?.fallbackUsed
+                ? "基础分析卡"
+                : reviewResult?.mode === "ai"
+                  ? "AI 识图结果"
+                  : "示例分析卡"}
             </span>
           </div>
-          <p className="mt-3 text-base leading-8 font-semibold text-slate-900">{reviewStatus}</p>
+          <p aria-live="polite" className="mt-3 text-base leading-8 font-semibold text-slate-900">
+            {reviewStatus}
+          </p>
+
+          {reviewResult?.fallbackUsed ? (
+            <div className="mt-5 rounded-[1.5rem] bg-amber-50 px-4 py-4">
+              <p className="text-sm font-semibold text-amber-900">当前使用基础分析</p>
+              <p className="mt-2 text-sm leading-7 text-slate-700">
+                {reviewResult.warning ?? "AI 视觉分析暂时不可用，当前先返回基础分析卡。"}
+              </p>
+              <p className="mt-2 text-xs leading-6 font-semibold text-amber-900">
+                这次结果仅供参考，不会写入孩子成长记录册。
+              </p>
+            </div>
+          ) : null}
 
           {reviewResult?.summary ? (
             <div className="mt-5 rounded-[1.5rem] bg-cyan-50 px-4 py-4">
@@ -445,7 +555,19 @@ function MealPhotoBooth({
 
           {reviewResult?.guessedFoods && reviewResult.guessedFoods.length > 0 ? (
             <div className="mt-5 rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-700">识别候选</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-700">识别候选</p>
+                {reviewResult.mode === "demo" ? (
+                  <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
+                    示例候选
+                  </span>
+                ) : null}
+              </div>
+              {reviewResult.mode === "demo" ? (
+                <p className="mt-2 text-xs leading-6 font-semibold text-slate-500">
+                  当前是基础分析示例，不代表真实识别结果。
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 {reviewResult.guessedFoods.map((item) => (
                   <span
@@ -461,7 +583,21 @@ function MealPhotoBooth({
 
           {reviewResult?.stickers && reviewResult.stickers.length > 0 ? (
             <div className="mt-5 rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-700">点亮勋章</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-700">
+                  {canAwardReviewSticker ? "点亮勋章" : "观察贴纸"}
+                </p>
+                {!canAwardReviewSticker ? (
+                  <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
+                    暂不点亮
+                  </span>
+                ) : null}
+              </div>
+              {!canAwardReviewSticker ? (
+                <p className="mt-2 text-xs leading-6 font-semibold text-slate-500">
+                  这次只记录观察，不写入勋章。
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 {reviewResult.stickers.map((item) => (
                   <span
@@ -479,6 +615,15 @@ function MealPhotoBooth({
             <div className="mt-5 rounded-[1.5rem] bg-slate-900 px-4 py-4 text-white">
               <p className="text-sm font-semibold text-white/70">下一步挑战</p>
               <p className="mt-2 text-sm leading-7 text-white/90">{reviewResult.nextMission}</p>
+            </div>
+          ) : null}
+
+          {reviewResult ? (
+            <div className="mt-5 rounded-[1.5rem] bg-emerald-50 px-4 py-4">
+              <p className="text-sm font-semibold text-emerald-800">下一句鼓励话术</p>
+              <p className="mt-2 text-sm leading-7 text-slate-700">
+                {buildMealPhotoEncouragement(reviewResult)}
+              </p>
             </div>
           ) : null}
 
@@ -842,6 +987,68 @@ function MealTrayGame({ onComplete }: { onComplete?: () => void }) {
   );
 }
 
+function buildGrowthArchiveSummary(archive: GrowthArchive) {
+  const uniqueBadgeCount = countUniqueBadges(archive);
+  const totalMiniGames = getMiniGameCompletionTotal(archive);
+  const latestBadges = archive.badgeRecords.slice(0, 3).map((item) => item.name);
+  const latestReview = archive.mealReviews[0];
+  const totalThemeVisits = archive.themeVisits.food + archive.themeVisits.habit;
+  const strongerTheme =
+    archive.themeVisits.food > archive.themeVisits.habit ? "闽食成长岛" : "习惯成长岛";
+  const nextFocus =
+    totalMiniGames < 2
+      ? "下次可以优先完成 1 个小游戏，把故事体验转成可见的小任务。"
+      : uniqueBadgeCount < 3
+        ? "下次可以继续点亮新勋章，帮助孩子看到自己的进步。"
+        : "下次可以让孩子自己复述今天学到的一句话，强化表达和记忆。";
+
+  return [
+    "童趣成长乐园成长小结",
+    latestBadges.length > 0 ? `孩子刚刚点亮了${latestBadges[0]}，值得被看见和鼓励。` : "孩子正在开始自己的成长任务，可以先从一个小尝试被看见。",
+    `本次记录中，孩子已点亮 ${uniqueBadgeCount} 枚不同勋章，完成 ${totalMiniGames} 次小游戏。`,
+    totalThemeVisits > 0
+      ? `孩子更常进入的是${strongerTheme}，可以围绕这个兴趣继续延伸。`
+      : "孩子还在探索两个成长岛，可以先观察他更喜欢习惯任务还是闽食任务。",
+    latestBadges.length > 0 ? `最近点亮：${latestBadges.join("、")}。` : "最近还没有点亮勋章，可以先从一个简单任务开始。",
+    latestReview
+      ? `最近拍图打卡：${latestReview.plateState}，${latestReview.summary}`
+      : "暂时还没有拍图打卡记录，后续可以补一张餐盘或闽食作品照片。",
+    `下一步建议：${nextFocus}`,
+    `回家延伸：${buildHomeExtensionPrompt(archive)}`,
+  ].join("\n");
+}
+
+function buildHomeExtensionPrompt(archive: GrowthArchive) {
+  const latestBadge = archive.badgeRecords[0]?.name;
+  const latestReview = archive.mealReviews[0];
+
+  if (latestReview) {
+    return `可以问孩子：“今天这张餐盘里，你最愿意再尝试哪一种食物？”`;
+  }
+
+  if (latestBadge) {
+    return `可以问孩子：“你今天拿到${latestBadge}时，做了哪件勇敢的小事？”`;
+  }
+
+  return "可以问孩子：“今天你最想把哪个好习惯带回家试一试？”";
+}
+
+function buildGrowthArchiveExportJson(archive: GrowthArchive) {
+  const summaryText = buildGrowthArchiveSummary(archive);
+
+  return JSON.stringify(
+    {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      source: "tongqu-growth-web",
+      summaryText,
+      archive,
+    },
+    null,
+    2,
+  );
+}
+
 function GrowthArchivePanel({
   archive,
   onClear,
@@ -853,6 +1060,72 @@ function GrowthArchivePanel({
   const totalMiniGames = getMiniGameCompletionTotal(archive);
   const latestBadges = archive.badgeRecords.slice(0, 4);
   const latestReviews = archive.mealReviews.slice(0, 2);
+  const archiveSummary = buildGrowthArchiveSummary(archive);
+  const archiveExportJson = buildGrowthArchiveExportJson(archive);
+  const homeExtensionPrompt = buildHomeExtensionPrompt(archive);
+  const latestMiniGameBadge = archive.badgeRecords.find((item) => item.source === "mini-game");
+  const nextFocus =
+    totalMiniGames < 2
+      ? "先完成一个小游戏"
+      : uniqueBadgeCount < 3
+        ? "继续点亮新勋章"
+        : "鼓励孩子复述收获";
+  const [copySummaryStatus, setCopySummaryStatus] = useState("");
+  const [archiveActionStatus, setArchiveActionStatus] = useState("");
+  const [clearConfirming, setClearConfirming] = useState(false);
+
+  async function copyArchiveSummary() {
+    try {
+      await navigator.clipboard.writeText(archiveSummary);
+      setCopySummaryStatus("成长小结已复制，可以直接发给家长或贴进观察记录。");
+    } catch {
+      setCopySummaryStatus("复制失败，可以手动选中下方小结内容。");
+    }
+  }
+
+  async function copyFullArchive() {
+    setClearConfirming(false);
+
+    try {
+      await navigator.clipboard.writeText(archiveExportJson);
+      setArchiveActionStatus("完整成长档案 JSON 已复制，可以粘贴到本地文档留存。");
+    } catch {
+      setArchiveActionStatus("复制完整档案失败，可以改用导出 JSON 文件。");
+    }
+  }
+
+  function exportArchiveJson() {
+    setClearConfirming(false);
+
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const blob = new Blob([archiveExportJson], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const exportDate = new Date().toISOString().slice(0, 10);
+
+    link.href = url;
+    link.download = `tongqu-growth-archive-${exportDate}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setArchiveActionStatus("成长档案 JSON 已导出，可用于本机备份或转交给老师。");
+  }
+
+  function confirmClearArchive() {
+    if (!clearConfirming) {
+      setClearConfirming(true);
+      setArchiveActionStatus("再次点击“确认清空”会删除这台设备上的成长记录。");
+      return;
+    }
+
+    setClearConfirming(false);
+    setArchiveActionStatus("");
+    onClear();
+  }
 
   return (
     <div className="rounded-[2.2rem] border border-white/70 bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_55%,#e6fbfa_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
@@ -861,13 +1134,34 @@ function GrowthArchivePanel({
           <p className="text-sm font-semibold text-teal-700">成长记录册</p>
           <h3 className="mt-1 text-2xl font-semibold text-slate-900">孩子下次再来，也能接着成长</h3>
         </div>
-        <button
-          onClick={onClear}
-          className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
-        >
-          清空记录册
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => void copyFullArchive()}
+            className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
+          >
+            复制完整档案
+          </button>
+          <button
+            onClick={exportArchiveJson}
+            className="rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
+          >
+            导出 JSON
+          </button>
+          <button
+            onClick={confirmClearArchive}
+            className={`rounded-full px-4 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 ${
+              clearConfirming ? "bg-amber-100 text-amber-900" : "bg-white/85 text-slate-700"
+            }`}
+          >
+            {clearConfirming ? "确认清空" : "清空记录册"}
+          </button>
+        </div>
       </div>
+      {archiveActionStatus ? (
+        <p className="mt-4 rounded-2xl bg-teal-100 px-4 py-3 text-sm font-semibold text-teal-800">
+          {archiveActionStatus}
+        </p>
+      ) : null}
 
       <div className="mt-5 grid gap-4 md:grid-cols-4">
         <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
@@ -877,6 +1171,11 @@ function GrowthArchivePanel({
         <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
           <p className="text-xs font-semibold text-slate-500">小游戏完成</p>
           <p className="mt-2 text-3xl font-semibold text-slate-900">{totalMiniGames}</p>
+          {latestMiniGameBadge ? (
+            <p className="mt-2 text-xs font-semibold text-amber-800">
+              最近：{latestMiniGameBadge.name}
+            </p>
+          ) : null}
         </div>
         <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
           <p className="text-xs font-semibold text-slate-500">习惯岛进入</p>
@@ -961,6 +1260,43 @@ function GrowthArchivePanel({
           </div>
         </div>
       </div>
+
+      <div className="mt-6 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="rounded-[1.8rem] bg-white/85 p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-teal-700">家园共育小结</p>
+              <h4 className="mt-1 text-xl font-semibold text-slate-900">一键带走本次成长反馈</h4>
+            </div>
+            <button
+              onClick={() => void copyArchiveSummary()}
+              className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            >
+              复制成长小结
+            </button>
+          </div>
+          <div className="mt-4 whitespace-pre-line rounded-[1.5rem] bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700">
+            {archiveSummary}
+          </div>
+          {copySummaryStatus ? (
+            <p className="mt-3 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-800">
+              {copySummaryStatus}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="rounded-[1.8rem] bg-slate-900 p-5 text-white shadow-sm">
+          <p className="text-sm font-semibold text-white/70">下次推荐</p>
+          <h4 className="mt-2 text-2xl font-semibold">{nextFocus}</h4>
+          <p className="mt-4 text-sm leading-7 text-white/85">
+            记录册会保存在这台设备上。老师或家长可以先看这里的建议，再决定下一轮进入故事、小游戏，还是拍图打卡。
+          </p>
+          <div className="mt-5 rounded-[1.4rem] bg-white/10 px-4 py-4">
+            <p className="text-sm font-semibold text-white/70">回家延伸一句话</p>
+            <p className="mt-2 text-sm leading-7 text-white/90">{homeExtensionPrompt}</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -989,6 +1325,10 @@ export function StoryExperience() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [badges, setBadges] = useState<string[]>([]);
+  const [latestBadgeFeedback, setLatestBadgeFeedback] = useState("");
+  const [latestGrowthFeedbackSource, setLatestGrowthFeedbackSource] = useState<
+    "story" | "mini-game" | "meal-review" | ""
+  >("");
   const [growthArchive, setGrowthArchive] = useState<GrowthArchive>(createEmptyGrowthArchive());
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -1008,6 +1348,9 @@ export function StoryExperience() {
         .find((message) => message.role === "assistant")?.content ?? "",
     [messages],
   );
+  const storyInputRemaining = storyInputMaxLength - input.length;
+  const completedMiniGameCount = getMiniGameCompletionTotal(growthArchive);
+  const teacherExtensionHref = `/teachers?theme=${themeId}&from=mini-game`;
 
   function cleanupAudioPlayback() {
     if (audioRef.current) {
@@ -1096,7 +1439,7 @@ export function StoryExperience() {
         return;
       } catch (error) {
         const message =
-          error instanceof Error && error.message ? error.message : "高质量播报暂时没接通，当前先用浏览器播报。";
+          error instanceof Error && error.message ? error.message : "好听的播报暂时没接通，先用本机声音读一读。";
         setStatus(message);
       }
     }
@@ -1255,25 +1598,56 @@ export function StoryExperience() {
       const withGame = recordMiniGameCompletion(current, gameKey);
       return recordBadge(withGame, badgeName, themeId, "mini-game");
     });
+    setBadges((current) => (current.includes(badgeName) ? current : [...current, badgeName]));
+    setLatestBadgeFeedback(`刚刚点亮：${badgeName}`);
+    setLatestGrowthFeedbackSource("mini-game");
+    setStatus(`完成啦，点亮了${badgeName}。`);
   }
 
   function handleMealReviewLogged(review: MealPhotoReviewResponse, imageName: string) {
+    if (review.fallbackUsed) {
+      return;
+    }
+
+    const nextStickers = review.stickers && review.stickers.length > 0 ? review.stickers : ["闽食观察员"];
+    const shouldAwardBadges = canAwardMealReviewBadge(review);
+    const recordedStickers = shouldAwardBadges ? nextStickers : [];
+
     updateGrowthArchive((current) => {
       const withReview = recordMealReview(current, {
         reviewedAt: new Date().toISOString(),
         mode: review.mode ?? "demo",
         summary: review.summary ?? "餐盘照片已完成一次分析。",
         guessedFoods: review.guessedFoods ?? [],
-        stickers: review.stickers ?? [],
+        stickers: recordedStickers,
         plateState: review.plateState ?? "等待分析",
         imageName,
       });
 
-      return (review.stickers ?? []).reduce(
-        (draft, sticker) => recordBadge(draft, sticker, "food", "meal-review"),
-        withReview,
-      );
+      if (!shouldAwardBadges) {
+        return withReview;
+      }
+
+      return nextStickers.reduce((draft, sticker) => recordBadge(draft, sticker, "food", "meal-review"), withReview);
     });
+
+    const firstSticker = nextStickers[0];
+
+    if (shouldAwardBadges) {
+      setBadges((current) =>
+        nextStickers.reduce(
+          (draft, sticker) => (draft.includes(sticker) ? draft : [...draft, sticker]),
+          current,
+        ),
+      );
+      setLatestBadgeFeedback(`刚刚完成拍图打卡：${firstSticker}`);
+      setStatus(`拍图打卡完成啦，点亮了${firstSticker}。`);
+    } else {
+      setLatestBadgeFeedback("拍图观察已记录，暂不点亮勋章。");
+      setStatus("拍图观察已记录，这次先不点亮勋章。");
+    }
+
+    setLatestGrowthFeedbackSource("meal-review");
   }
 
   function clearGrowthArchive() {
@@ -1317,6 +1691,8 @@ export function StoryExperience() {
     setLastImagePrompt("");
     setStatus("准备出发啦。");
     setBadges([]);
+    setLatestBadgeFeedback("");
+    setLatestGrowthFeedbackSource("");
     stopSpeaking();
 
     if (typeof window !== "undefined") {
@@ -1331,10 +1707,15 @@ export function StoryExperience() {
       return;
     }
 
+    if (cleanText.length > storyInputMaxLength) {
+      setStatus(`故事请求太长啦，请控制在 ${storyInputMaxLength} 个字以内。`);
+      return;
+    }
+
     setMessages((current) => [...current, { role: "user", content: cleanText }]);
     setInput("");
     setIsLoading(true);
-    setStatus("AI 小伙伴正在编故事...");
+    setStatus("故事伙伴正在想下一段...");
 
     try {
       const response = await fetch("/api/story", {
@@ -1368,9 +1749,17 @@ export function StoryExperience() {
 
       if (data.badge && !badges.includes(data.badge)) {
         logBadgeRecords([data.badge], "story");
+        setLatestBadgeFeedback(`刚刚点亮：${data.badge}`);
+        setLatestGrowthFeedbackSource("story");
       }
 
-      setStatus(data.error ? `模型回复成功，但有提醒：${data.error}` : "新的故事节点已经解锁。");
+      setStatus(
+        data.error
+          ? `故事已经接上啦，不过还有一点小提醒：${data.error}`
+          : data.badge && !badges.includes(data.badge)
+            ? `太棒啦，点亮了${data.badge}。`
+            : "新的故事节点已经解锁。",
+      );
     } catch {
       setMessages((current) => [
         ...current,
@@ -1398,7 +1787,7 @@ export function StoryExperience() {
     }
 
     setIsPainting(true);
-    setStatus("正在画本章插图，高清图片会比文字回复慢一些...");
+    setStatus("正在画本章插图，漂亮的画面会多等一小会儿...");
 
     try {
       const response = await fetch("/api/generate-image", {
@@ -1438,7 +1827,7 @@ export function StoryExperience() {
       voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionApi) {
-      setStatus("当前浏览器不支持语音输入，建议用 Chrome 或 Edge。");
+      setStatus("这台设备暂时听不清语音，可以先用打字继续。");
       return;
     }
 
@@ -1447,6 +1836,8 @@ export function StoryExperience() {
       setIsListening(false);
       return;
     }
+
+    stopSpeaking();
 
     const recognition = new SpeechRecognitionApi();
     recognition.lang = "zh-CN";
@@ -1508,8 +1899,8 @@ export function StoryExperience() {
                 </span>
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-                {activeTheme.subtitle} 这一版已经支持 AI 对话、浏览器语音输入、语音播报和 4 个轻量小游戏。
-                {imageFeatureEnabled ? " 图片生成功能已开启。" : " 为了保证对外稳定体验，图片生成功能当前先关闭。"}
+                {activeTheme.subtitle} 这里可以听故事、说一句、重听一遍，也可以玩 4 个轻量小游戏。
+                {imageFeatureEnabled ? " 故事插图功能已开启。" : " 为了让体验更稳定，故事插图当前先关闭。"}
                 {premiumTtsEnabled ? ` 当前默认幼儿播报音色是 ${premiumVoiceLabel}。` : ""}
               </p>
             </div>
@@ -1517,6 +1908,11 @@ export function StoryExperience() {
             <div className="w-full max-w-xs rounded-[2rem] bg-white/85 p-5 shadow-[0_16px_50px_rgba(43,104,98,0.12)]">
               <p className="text-sm font-semibold text-slate-500">今日成长状态</p>
               <p className="mt-3 text-lg font-semibold text-slate-900">{status}</p>
+              {latestBadgeFeedback ? (
+                <p className="mt-3 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-800">
+                  {latestBadgeFeedback}
+                </p>
+              ) : null}
               <div className="mt-4 grid grid-cols-3 gap-3">
                 <div className="rounded-[1.2rem] bg-slate-50 px-3 py-3 text-center">
                   <p className="text-xs font-semibold text-slate-500">当前主题</p>
@@ -1543,6 +1939,7 @@ export function StoryExperience() {
                       className="rounded-full bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800"
                     >
                       {badge}
+                      {latestBadgeFeedback.includes(badge) ? " · 最新点亮" : ""}
                     </span>
                   ))
                 )}
@@ -1557,7 +1954,7 @@ export function StoryExperience() {
                   </button>
                 ) : (
                   <span className="rounded-full bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">
-                    稳定版暂不出图
+                    暂不画图
                   </span>
                 )}
                 <button
@@ -1630,7 +2027,7 @@ export function StoryExperience() {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={imageUrl}
-                alt="AI 生成的故事插图"
+                alt="故事插图"
                 className="h-[320px] w-full rounded-[1.5rem] object-cover"
               />
             ) : (
@@ -1639,14 +2036,14 @@ export function StoryExperience() {
                   <>
                     <p className="text-lg font-semibold text-slate-700">点击“生成本章插图”</p>
                     <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
-                      我会使用火山方舟文生图接口，给当前故事章节画一张绘本风插图。因为当前默认是高清图，所以会比文字回复慢一些。
+                      我会给当前故事章节画一张绘本风插图，漂亮的画面会多等一小会儿。
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="text-lg font-semibold text-slate-700">当前为对外稳定版</p>
                     <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
-                      为了避免图片接口波动影响孩子体验，公开版本先关闭 AI 出图，保留聊天、语音和小游戏主流程。
+                      为了让孩子体验更稳定，今天先保留聊天、语音和小游戏主流程。
                     </p>
                   </>
                 )}
@@ -1660,7 +2057,7 @@ export function StoryExperience() {
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-amber-700">AI 对话故事</p>
+              <p className="text-sm font-semibold text-amber-700">互动故事</p>
               <h2 className="mt-1 text-2xl font-semibold text-slate-900">聊天冒险台</h2>
             </div>
             <button
@@ -1695,22 +2092,38 @@ export function StoryExperience() {
             {isLoading ? (
               <div className="flex justify-start">
                 <div className="rounded-[2rem] bg-teal-50 px-5 py-4 text-sm text-slate-500">
-                  AI 小伙伴正在想下一段故事...
+                  故事伙伴正在想下一段...
                 </div>
               </div>
             ) : null}
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-3">
-            {quickChoices.map((choice) => (
-              <button
-                key={choice}
-                onClick={() => void sendMessage(choice)}
-                className="rounded-full bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200"
-              >
-                {choice}
-              </button>
-            ))}
+          {latestBadgeFeedback ? (
+            <div
+              aria-live="polite"
+              className="mt-5 rounded-[1.8rem] bg-emerald-50 px-5 py-4 shadow-sm"
+            >
+              <p className="text-sm font-semibold text-emerald-800">成长勋章点亮</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">{latestBadgeFeedback}</p>
+              <p className="mt-2 text-sm leading-7 text-slate-700">
+                这是你认真尝试的小小成长印记，可以继续下一步啦。
+              </p>
+            </div>
+          ) : null}
+
+          <div className="mt-5 rounded-[1.8rem] bg-white/80 p-4">
+            <p className="text-sm font-semibold text-teal-700">点一个成长任务</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {quickChoices.map((choice) => (
+                <button
+                  key={choice}
+                  onClick={() => void sendMessage(choice)}
+                  className="rounded-full bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200"
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
@@ -1723,15 +2136,22 @@ export function StoryExperience() {
                 }
               }}
               placeholder="可以输入：我想听海蛎小勇士的故事"
+              maxLength={storyInputMaxLength}
               className="h-14 flex-1 rounded-full border border-slate-200 bg-slate-50 px-5 text-sm text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white"
             />
             <button
               onClick={() => void sendMessage(input)}
               className="h-14 rounded-full bg-slate-900 px-6 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isLoading}
+              disabled={isLoading || !input.trim()}
             >
-              发送故事请求
+              发送故事
             </button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+            <span>建议一句话说清楚孩子想听什么，故事伙伴会继续编短故事。</span>
+            <span className={storyInputRemaining < 20 ? "text-amber-700" : "text-slate-500"}>
+              还可输入 {storyInputRemaining} 字
+            </span>
           </div>
         </div>
 
@@ -1739,17 +2159,30 @@ export function StoryExperience() {
           <p className="text-sm font-semibold text-rose-700">玩法说明</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-900">怎么和网站互动</h2>
           <ul className="mt-5 space-y-3 text-sm leading-7 text-slate-700">
-            <li>1. 先选一个故事主题线，再发一句话给 AI。</li>
+            <li>1. 先选一个故事主题线，再发一句话。</li>
             <li>2. 可以直接点快捷选项，也可以自己输入内容。</li>
             <li>3. 想让孩子开口说话时，点击语音按钮开始听写，或者直接点“重听上一句”。</li>
             <li>
-              4. {imageFeatureEnabled ? "到一个新章节后，点击右上角按钮生成绘本插图。" : "当前公开稳定版先关闭 AI 出图，避免接口波动影响使用。"}
+              4. {imageFeatureEnabled ? "到一个新章节后，点击右上角按钮画绘本插图。" : "今天先听故事、玩小游戏，画面晚一点再来。"}
             </li>
             <li>5. 底部还有 4 个小游戏，可以一起配合课堂或家里练习。</li>
           </ul>
 
           <div className="mt-6 rounded-[1.8rem] bg-white/80 p-4">
             <p className="text-sm font-semibold text-slate-500">本轮成长任务</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(themeId === "food"
+                ? ["闽食探索", "表达练习", "家园共育"]
+                : ["习惯养成", "生活练习", "家园共育"]
+              ).map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
             <div className="mt-3 space-y-2">
               {activeMissions.map((mission) => (
                 <div
@@ -1803,7 +2236,21 @@ export function StoryExperience() {
       ) : (
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <FoodBadgeWall />
-          <MealPhotoBooth onReviewLogged={handleMealReviewLogged} />
+          <div className="grid gap-5">
+            <MealPhotoBooth onReviewLogged={handleMealReviewLogged} />
+            {latestGrowthFeedbackSource === "meal-review" && latestBadgeFeedback ? (
+              <div
+                aria-live="polite"
+                className="rounded-[2rem] bg-emerald-50 p-5 shadow-sm"
+              >
+                <p className="text-sm font-semibold text-emerald-800">拍图打卡成长反馈</p>
+                <p className="mt-2 text-xl font-semibold text-slate-900">{latestBadgeFeedback}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-700">
+                  你愿意观察餐盘和闽食，这个小尝试已经被记录下来啦。
+                </p>
+              </div>
+            ) : null}
+          </div>
         </section>
       )}
 
@@ -1813,10 +2260,47 @@ export function StoryExperience() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
+        {latestGrowthFeedbackSource === "mini-game" && latestBadgeFeedback ? (
+          <div
+            aria-live="polite"
+            className="rounded-[2rem] bg-amber-50 p-5 shadow-sm xl:col-span-2"
+          >
+            <p className="text-sm font-semibold text-amber-900">小游戏成长反馈</p>
+            <p className="mt-2 text-xl font-semibold text-slate-900">{latestBadgeFeedback}</p>
+            <p className="mt-2 text-sm leading-7 text-slate-700">
+              你认真完成了这个小挑战，可以带着这个好习惯继续玩啦。
+            </p>
+            <p className="mt-2 text-xs leading-6 font-semibold text-amber-900">
+              老师或家长可以在下方生成一段家园同步话术，把这次小进步带回家。
+            </p>
+          </div>
+        ) : null}
         <ShuffleStepsGame onComplete={() => logMiniGameCompletion("washSteps", "洗手闪亮章")} />
         <QueueGame onComplete={() => logMiniGameCompletion("queue", "排队小队长")} />
         <KindWordsGame onComplete={() => logMiniGameCompletion("kindWords", "礼貌微笑章")} />
         <MealTrayGame onComplete={() => logMiniGameCompletion("mealTray", "均衡小餐盘")} />
+      </section>
+
+      <section className="rounded-[2.2rem] bg-white/90 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-teal-700">家园共育延伸</p>
+            <h3 className="mt-1 text-2xl font-semibold text-slate-900">
+              把孩子刚完成的小任务，变成老师和家长能接住的话
+            </h3>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+              {completedMiniGameCount > 0
+                ? `孩子已经完成 ${completedMiniGameCount} 次小游戏，可以生成一段课堂延伸或家长同步话术。`
+                : "完成洗手、排队、礼貌表达或均衡餐盘后，可以到老师辅助页生成一段班级提醒或家长同步话术。"}
+            </p>
+          </div>
+          <Link
+            href={teacherExtensionHref}
+            className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+          >
+            生成家园同步话术
+          </Link>
+        </div>
       </section>
     </div>
   );

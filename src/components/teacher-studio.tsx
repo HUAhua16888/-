@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AmbientMusicToggle } from "@/components/ambient-music-toggle";
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
@@ -21,16 +21,53 @@ type TeacherResponse = {
   error?: string;
 };
 
+type SavedTeacherResult = TeacherResponse & {
+  id: string;
+  themeId: ThemeId;
+  task: string;
+  scenario: string;
+  savedAt: string;
+  pinned?: boolean;
+};
+
+type TeacherHistoryFilter = "all" | "theme" | "task";
+
+const teacherScenarioMaxLength = 360;
+const teacherHistoryLimit = 6;
+
+function sortTeacherHistory(history: SavedTeacherResult[]) {
+  return [...history].sort((left, right) => {
+    if (left.pinned !== right.pinned) {
+      return left.pinned ? -1 : 1;
+    }
+
+    return new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime();
+  });
+}
+
+function limitTeacherHistory(history: SavedTeacherResult[]) {
+  return sortTeacherHistory(history).slice(0, teacherHistoryLimit);
+}
+
+function buildMiniGameExtensionScenario(themeId: ThemeId) {
+  return themeId === "food"
+    ? "孩子刚在儿童端完成了均衡餐盘或闽食探索小游戏，请生成一段老师可延伸的餐前引导和家长同步话术。"
+    : "孩子刚在儿童端完成了洗手、排队或礼貌表达小游戏，请生成一段老师可延伸的课堂提醒和家长同步话术。";
+}
+
 export function TeacherStudio() {
   const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
   const premiumVoiceLabel = process.env.NEXT_PUBLIC_TTS_VOICE_LABEL ?? defaultPremiumVoiceLabel;
   const draftStorageKey = "tongqu-growth-web-teacher-draft";
+  const historyStorageKey = "tongqu-growth-web-teacher-history";
   const [themeId, setThemeId] = useState<ThemeId>("habit");
   const [task, setTask] = useState(teacherTasks[0].label);
   const [scenario, setScenario] = useState(
     "今天午餐前，我想给 4-5 岁幼儿讲一个关于勇敢尝试新食物的小故事。",
   );
   const [result, setResult] = useState<TeacherResponse | null>(null);
+  const [savedResults, setSavedResults] = useState<SavedTeacherResult[]>([]);
+  const [historyFilter, setHistoryFilter] = useState<TeacherHistoryFilter>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("");
@@ -39,6 +76,94 @@ export function TeacherStudio() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
+  const historyReadFailedRef = useRef(false);
+  const teacherScenarioRemaining = teacherScenarioMaxLength - scenario.length;
+  const pinnedSavedResultCount = savedResults.filter((item) => item.pinned).length;
+  const filteredSavedResults = useMemo(() => {
+    if (historyFilter === "theme") {
+      return savedResults.filter((item) => item.themeId === themeId);
+    }
+
+    if (historyFilter === "task") {
+      return savedResults.filter((item) => item.task === task);
+    }
+
+    return savedResults;
+  }, [historyFilter, savedResults, task, themeId]);
+  const resultQualityChecks = useMemo(() => {
+    const content = result?.content?.trim() ?? "";
+    const tips = result?.tips ?? [];
+    const taskContext = `${task} ${scenario}`;
+    const taskSpecificCheck = (() => {
+      if (/晨间|入园|接待/.test(taskContext)) {
+        return {
+          label: "贴合晨间接待",
+          ok: /入园|早上|打招呼|书包|小任务|老师/.test(content),
+        };
+      }
+
+      if (/餐前|午餐|食|尝|闻/.test(taskContext)) {
+        return {
+          label: "贴合餐前提醒",
+          ok: /看一看|闻一闻|尝|洗手|等待|餐|食物/.test(content),
+        };
+      }
+
+      if (/情绪|安抚|紧张|想家|哭/.test(taskContext)) {
+        return {
+          label: "先接住情绪",
+          ok: /紧张|想家|没关系|慢慢|陪|抱|小台阶|情绪/.test(content),
+        };
+      }
+
+      return {
+        label: "包含家园延续",
+        ok: /家长|回家|家里|今天在园|同步|可以问/.test(content),
+      };
+    })();
+
+    return [
+      {
+        label: "内容已生成",
+        ok: content.length > 0,
+      },
+      {
+        label: "课堂口播不冗长",
+        ok: content.length > 0 && content.length <= 180,
+      },
+      {
+        label: "语气正向温柔",
+        ok: /鼓励|一起|慢慢|勇敢|可以|愿意|谢谢|喜欢|尝试/.test(content),
+      },
+      {
+        label: "带有可执行建议",
+        ok: tips.length > 0 || /今天|下次|回家|家长|老师|孩子/.test(content),
+      },
+      taskSpecificCheck,
+    ];
+  }, [result, scenario, task]);
+  const parentShareLine = useMemo(() => {
+    if (!result) {
+      return "";
+    }
+
+    const themeLabel = themeId === "habit" ? "好习惯练习" : "闽食探索";
+    const taskContext = `${task} ${scenario}`;
+
+    if (/晨间|入园|接待/.test(taskContext)) {
+      return `家长您好，今天我们围绕${themeLabel}帮助孩子完成入园过渡。回家后可以轻轻问一句：“今天早上你是怎么和老师打招呼的？”`;
+    }
+
+    if (/餐前|午餐|食|尝|闻/.test(taskContext)) {
+      return `家长您好，今天我们围绕${themeLabel}做了餐前观察。回家后可以接一句：“你愿意看一看、闻一闻，已经是很勇敢的尝试。”`;
+    }
+
+    if (/情绪|安抚|紧张|想家|哭/.test(taskContext)) {
+      return `家长您好，今天我们先接住孩子的情绪，再陪他完成一个小任务。回家后可以说：“有一点紧张也没关系，你愿意慢慢试就很好。”`;
+    }
+
+    return `家长您好，今天我们围绕${themeLabel}和孩子做了一次小互动。回家后可以用一句鼓励的话接住孩子：“你愿意试一试，就已经很棒啦。”`;
+  }, [result, scenario, task, themeId]);
 
   function cleanupAudio() {
     if (audioRef.current) {
@@ -70,32 +195,79 @@ export function TeacherStudio() {
       try {
         const raw = window.localStorage.getItem(draftStorageKey);
 
-        if (!raw) {
-          setDraftHydrated(true);
-          return;
-        }
+        if (raw) {
+          const parsed = JSON.parse(raw) as {
+            themeId?: ThemeId;
+            task?: string;
+            scenario?: string;
+          };
 
-        const parsed = JSON.parse(raw) as {
-          themeId?: ThemeId;
-          task?: string;
-          scenario?: string;
-        };
+          if (parsed.themeId && themes[parsed.themeId]) {
+            setThemeId(parsed.themeId);
+          }
 
-        if (parsed.themeId && themes[parsed.themeId]) {
-          setThemeId(parsed.themeId);
-        }
+          if (parsed.task) {
+            setTask(parsed.task);
+          }
 
-        if (parsed.task) {
-          setTask(parsed.task);
-        }
-
-        if (parsed.scenario) {
-          setScenario(parsed.scenario);
-          setDraftStatus("已恢复这台设备上次留下的老师端草稿。");
+          if (parsed.scenario) {
+            setScenario(parsed.scenario);
+            setDraftStatus("已恢复这台设备上次留下的老师端草稿。");
+          }
         }
       } catch {
         setDraftStatus("草稿读取失败了，当前先用默认示例。");
+      }
+
+      try {
+        const historyRaw = window.localStorage.getItem(historyStorageKey);
+        if (historyRaw) {
+          const history = JSON.parse(historyRaw) as SavedTeacherResult[];
+          if (Array.isArray(history)) {
+            setSavedResults(
+              limitTeacherHistory(
+                history
+                  .filter(
+                    (item): item is SavedTeacherResult =>
+                      Boolean(
+                        item &&
+                          typeof item.id === "string" &&
+                          typeof item.title === "string" &&
+                          typeof item.content === "string" &&
+                          Array.isArray(item.tips) &&
+                          typeof item.themeId === "string" &&
+                          themes[item.themeId as ThemeId] &&
+                          typeof item.task === "string" &&
+                          typeof item.scenario === "string" &&
+                          typeof item.savedAt === "string",
+                      ),
+                  )
+                  .map((item) => ({
+                    ...item,
+                    pinned: item.pinned === true,
+                  })),
+              ),
+            );
+            historyReadFailedRef.current = false;
+          }
+        }
+      } catch {
+        historyReadFailedRef.current = true;
+        setDraftStatus("历史读取失败了，不影响当前草稿继续使用。");
       } finally {
+        const searchParams = new URLSearchParams(window.location.search);
+        const linkedTheme = searchParams.get("theme");
+        const linkedFrom = searchParams.get("from");
+
+        if (linkedFrom === "mini-game" && (linkedTheme === "habit" || linkedTheme === "food")) {
+          const homeTask = teacherTasks.find((item) => item.id === "home") ?? teacherTasks[0];
+
+          setThemeId(linkedTheme);
+          setTask(homeTask.label);
+          setScenario(buildMiniGameExtensionScenario(linkedTheme));
+          setDraftStatus("已接上儿童端小游戏记录，可以直接生成家园共育延伸话术。");
+        }
+
         setDraftHydrated(true);
       }
     }, 0);
@@ -118,13 +290,32 @@ export function TeacherStudio() {
     );
   }, [draftHydrated, draftStorageKey, scenario, task, themeId]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !draftHydrated) {
+      return;
+    }
+
+    if (historyReadFailedRef.current && savedResults.length === 0) {
+      return;
+    }
+
+    window.localStorage.setItem(historyStorageKey, JSON.stringify(limitTeacherHistory(savedResults)));
+  }, [draftHydrated, historyStorageKey, savedResults]);
+
   async function generate() {
-    if (!scenario.trim()) {
+    const cleanScenario = scenario.trim();
+
+    if (!cleanScenario) {
+      setDraftStatus("先输入一个课堂或家园共育场景，再开始生成。");
+      return;
+    }
+
+    if (cleanScenario.length > teacherScenarioMaxLength) {
+      setDraftStatus(`场景描述太长了，请控制在 ${teacherScenarioMaxLength} 个字以内。`);
       return;
     }
 
     setIsLoading(true);
-
     try {
       const response = await fetch("/api/story", {
         method: "POST",
@@ -140,7 +331,37 @@ export function TeacherStudio() {
       });
 
       const data = (await response.json()) as TeacherResponse;
+      const savedAt = new Date().toISOString();
+      const nextId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setResult(data);
+      historyReadFailedRef.current = false;
+      setSavedResults((current) => {
+        const nextHistory = limitTeacherHistory([
+          {
+            ...data,
+            id: nextId,
+            themeId,
+            task,
+            scenario,
+            savedAt,
+            pinned: false,
+          },
+          ...current,
+        ]);
+        const resultSaved = nextHistory.some((item) => item.id === nextId);
+
+        setDraftStatus(
+          resultSaved
+            ? "已生成并保存到本机历史，之后可以继续套用。"
+            : "生成结果已显示。当前历史固定收藏已满，这次结果不会自动挤掉固定内容。",
+        );
+
+        return nextHistory;
+      });
+      setCopyStatus("");
+      setVoiceStatus("");
+    } catch {
+      setDraftStatus("生成暂时失败了，可以稍后重试；已生成的历史不会被清空。");
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +372,9 @@ export function TeacherStudio() {
       return;
     }
 
-    const text = [result.title, result.content, ...(result.tips ?? [])].join("\n");
+    const text = [result.title, result.content, parentShareLine, ...(result.tips ?? [])]
+      .filter(Boolean)
+      .join("\n");
 
     try {
       await navigator.clipboard.writeText(text);
@@ -228,6 +451,44 @@ export function TeacherStudio() {
     resetTeacherDraft("这台设备上的老师端草稿已经清空。");
   }
 
+  function reuseSavedResult(item: SavedTeacherResult) {
+    setThemeId(item.themeId);
+    setTask(item.task);
+    setScenario(item.scenario);
+    setResult({
+      title: item.title,
+      content: item.content,
+      tips: item.tips,
+      error: item.error,
+    });
+    setDraftStatus("已套用一条历史生成结果，可以继续修改或换一版。");
+  }
+
+  function clearTeacherHistory() {
+    historyReadFailedRef.current = false;
+    setSavedResults([]);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(historyStorageKey);
+    }
+    setDraftStatus("这台设备上的老师端生成历史已经清空。");
+  }
+
+  function deleteSavedResult(id: string) {
+    historyReadFailedRef.current = false;
+    setSavedResults((current) => current.filter((item) => item.id !== id));
+    setDraftStatus("已删除这条历史生成结果，其他历史仍然保留。");
+  }
+
+  function toggleSavedResultPin(id: string) {
+    historyReadFailedRef.current = false;
+    setSavedResults((current) =>
+      limitTeacherHistory(
+        current.map((item) => (item.id === id ? { ...item, pinned: !item.pinned } : item)),
+      ),
+    );
+    setDraftStatus("已更新这条历史的固定状态，固定内容会优先保留。");
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
       <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
@@ -238,11 +499,11 @@ export function TeacherStudio() {
           <h1 className="mt-4 text-4xl leading-tight font-semibold text-slate-900 md:text-6xl">
             一键生成
             <span className="mt-2 block text-2xl text-slate-700 md:text-3xl">
-              课堂引导、食育故事和家园共育内容
+              晨间接待、餐前提醒、情绪安抚和家长同步
             </span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-            这里和儿童端分开，方便老师在备课、餐前提醒、家园沟通时直接拿内容去用。生成出来的文案会尽量短、温柔、适合课堂和家长沟通直接使用。
+            这里和儿童端分开，方便老师在入园、餐前、情绪过渡和家园沟通时直接拿内容去用。生成出来的文案会尽量短、温柔、适合课堂和家长沟通直接使用。
             {premiumTtsEnabled ? ` 当前已经预留 ${premiumVoiceLabel} 播报入口，适合直接试播老师引导语。` : ""}
           </p>
 
@@ -402,13 +663,20 @@ export function TeacherStudio() {
               setScenario(event.target.value);
               setDraftStatus("输入内容会自动保存到这台设备。");
             }}
+            maxLength={teacherScenarioMaxLength}
             className="mt-5 min-h-48 w-full rounded-[2rem] border border-slate-200 bg-slate-50 px-5 py-4 text-sm leading-7 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white"
           />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+            <span>建议写清年龄、场景和目标，生成结果会更适合直接使用。</span>
+            <span className={teacherScenarioRemaining < 40 ? "text-amber-700" : "text-slate-500"}>
+              还可输入 {teacherScenarioRemaining} 字
+            </span>
+          </div>
 
           <button
             onClick={() => void generate()}
             className="mt-5 rounded-full bg-slate-900 px-6 py-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:opacity-60"
-            disabled={isLoading}
+            disabled={isLoading || !scenario.trim()}
           >
             {isLoading ? "正在生成..." : "开始生成"}
           </button>
@@ -446,6 +714,13 @@ export function TeacherStudio() {
               {result?.content ?? "点击左侧按钮后，这里会出现可以直接拿去课堂、家长群或餐前使用的内容。"}
             </p>
           </div>
+
+          {parentShareLine ? (
+            <div className="mt-5 rounded-[1.8rem] bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900">家长沟通可用句</p>
+              <p className="mt-2 text-sm leading-7 text-slate-700">{parentShareLine}</p>
+            </div>
+          ) : null}
 
           <div className="mt-5 flex flex-wrap gap-3">
             <button
@@ -491,11 +766,122 @@ export function TeacherStudio() {
             ))}
           </div>
 
+          <div className="mt-5 rounded-[1.8rem] bg-white/75 p-4">
+            <p className="text-sm font-semibold text-slate-700">可用性检查</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {resultQualityChecks.map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-[1.2rem] px-3 py-3 text-sm font-semibold ${
+                    item.ok ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {item.ok ? "已满足" : "待生成"} · {item.label}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {result?.error ? (
             <p className="mt-4 rounded-2xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">
               接口提醒：{result.error}
             </p>
           ) : null}
+        </div>
+      </section>
+
+      <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-teal-700">生成历史</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">
+              固定收藏优先，保留 6 条可复用内容
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {[
+              { id: "all", label: "全部" },
+              { id: "theme", label: "当前主题" },
+              { id: "task", label: "当前任务" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setHistoryFilter(item.id as TeacherHistoryFilter)}
+                className={`rounded-full px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                  historyFilter === item.id
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+            <button
+              onClick={clearTeacherHistory}
+              className="rounded-full bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-800 transition hover:-translate-y-0.5 disabled:opacity-60"
+              disabled={savedResults.length === 0}
+            >
+              清空历史
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm font-semibold text-slate-500">
+          当前显示 {filteredSavedResults.length} 条，全部历史 {savedResults.length} 条，已固定{" "}
+          {pinnedSavedResultCount} 条。
+        </p>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          {filteredSavedResults.length > 0 ? (
+            filteredSavedResults.map((item) => (
+              <article
+                key={item.id}
+                className="rounded-[1.8rem] bg-[linear-gradient(180deg,#f8fffe_0%,#ffffff_100%)] p-5 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full bg-teal-100 px-3 py-1.5 text-xs font-semibold text-teal-900">
+                      {item.themeId === "habit" ? "习惯" : "闽食"}
+                    </span>
+                    {item.pinned ? (
+                      <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
+                        已固定
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className="text-xs font-semibold text-slate-400">{item.task}</span>
+                </div>
+                <h3 className="mt-4 text-lg font-semibold text-slate-900">{item.title}</h3>
+                <p className="mt-3 line-clamp-4 text-sm leading-7 text-slate-600">{item.content}</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    onClick={() => reuseSavedResult(item)}
+                    className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                  >
+                    套用这条
+                  </button>
+                  <button
+                    onClick={() => toggleSavedResultPin(item.id)}
+                    className="rounded-full bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900 transition hover:-translate-y-0.5"
+                  >
+                    {item.pinned ? "取消固定" : "固定收藏"}
+                  </button>
+                  <button
+                    onClick={() => deleteSavedResult(item.id)}
+                    className="rounded-full bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-800 transition hover:-translate-y-0.5"
+                  >
+                    删除这条
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-[1.8rem] bg-slate-50 px-5 py-6 text-sm leading-7 text-slate-600 lg:col-span-3">
+              {savedResults.length > 0
+                ? "当前筛选下没有匹配内容，可以切回“全部”查看历史。"
+                : "还没有生成历史。生成晨间接待、餐前提醒、情绪安抚或家长同步内容后，会自动保存在这里，方便下一次继续使用。"}
+            </div>
+          )}
         </div>
       </section>
     </div>

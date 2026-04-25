@@ -33,6 +33,9 @@ type ReviewResult = {
   stickers: string[];
   nextMission: string;
   tips: string[];
+  fallbackUsed?: boolean;
+  warning?: string;
+  warningCode?: "vision_provider_failed" | "vision_response_invalid";
 };
 
 type VisualReviewRuntimeConfig = {
@@ -44,6 +47,37 @@ type VisualReviewRuntimeConfig = {
   source: "custom" | "ark";
 };
 
+function buildErrorResponse(
+  error: string,
+  errorCode: "invalid_form_data" | "missing_photo" | "unsupported_type" | "file_too_large",
+  retryable: boolean,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error,
+      errorCode,
+      retryable,
+    },
+    { status },
+  );
+}
+
+function buildFallbackReview(
+  fallback: ReviewResult,
+  warningCode: "vision_provider_failed" | "vision_response_invalid",
+  warning: string,
+): ReviewResult {
+  return {
+    ...fallback,
+    fallbackUsed: true,
+    warning,
+    warningCode,
+    message: `${warning} ${fallback.message}`,
+  };
+}
+
 function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
   const baseScore = Math.max(62, Math.min(94, 70 + (sizeKb % 18)));
 
@@ -52,11 +86,11 @@ function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
     mode: "demo",
     filename,
     sizeKb,
-    message: "照片已经上传成功。当前先返回图文分析卡，后续接视觉模型后可升级成真实 AI 检测。",
-    summary: "这张照片构图比较完整，适合继续做闽食光盘打卡和餐盘识别。",
+    message: "照片已经上传成功。当前先返回示例分析卡，这次不会用于点亮勋章。",
+    summary: "这张照片构图比较完整，适合继续做闽食光盘观察和餐盘介绍。",
     plateState: "餐盘主体清楚",
-    confidenceLabel: "结构化分析中",
-    highlightTags: ["整盘入镜", "适合继续识别", "可补真实视觉模型"],
+    confidenceLabel: "示例分析",
+    highlightTags: ["整盘入镜", "适合观察", "可继续介绍"],
     scoreCards: [
       { label: "光盘观察分", value: baseScore },
       { label: "闽食识别分", value: Math.max(58, baseScore - 6) },
@@ -68,7 +102,7 @@ function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
     tips: [
       "建议拍整张餐盘，别只拍局部。",
       "餐盘边缘和食物都要在画面里。",
-      "后续接视觉模型后可扩展成真实 AI 检测。",
+      "这次是示例分析，先记录观察，不点亮勋章。",
     ],
   };
 }
@@ -266,25 +300,26 @@ function buildPrompt() {
 }
 
 export async function POST(request: Request) {
-  const formData = await request.formData();
+  let formData: FormData;
+
+  try {
+    formData = await request.formData();
+  } catch {
+    return buildErrorResponse("照片表单读取失败，请重新选择照片后上传。", "invalid_form_data", true, 400);
+  }
+
   const file = formData.get("photo");
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "请先上传一张餐盘照片。" }, { status: 400 });
+    return buildErrorResponse("请先上传一张餐盘照片。", "missing_photo", false, 400);
   }
 
   if (!supportedImageTypes.has(file.type)) {
-    return NextResponse.json(
-      { error: "当前支持 JPG、PNG、WebP 或 HEIC 图片。" },
-      { status: 400 },
-    );
+    return buildErrorResponse("当前支持 JPG、PNG、WebP 或 HEIC 图片。", "unsupported_type", false, 400);
   }
 
   if (file.size > maxImageSizeBytes) {
-    return NextResponse.json(
-      { error: "图片有点大，建议压到 8MB 以内再上传。" },
-      { status: 400 },
-    );
+    return buildErrorResponse("图片有点大，建议压到 8MB 以内再上传。", "file_too_large", false, 400);
   }
 
   const runtimeConfig = getVisualReviewRuntimeConfig();
@@ -358,7 +393,7 @@ export async function POST(request: Request) {
       body: JSON.stringify(requestBody),
     });
 
-    const payload = (await response.json()) as {
+    const payload = (await response.json().catch(() => ({}))) as {
       error?: { message?: string };
       message?: string;
     };
@@ -369,6 +404,17 @@ export async function POST(request: Request) {
 
     const raw = extractVisionText(payload);
     const parsed = extractJsonObject(raw);
+
+    if (!parsed) {
+      return NextResponse.json(
+        buildFallbackReview(
+          fallback,
+          "vision_response_invalid",
+          "AI 视觉结果暂时无法结构化，当前先返回基础分析卡。",
+        ),
+      );
+    }
+
     const normalized = normalizeReviewPayload(parsed, fallback);
 
     return NextResponse.json({
@@ -383,6 +429,12 @@ export async function POST(request: Request) {
           : normalized.confidenceLabel,
     });
   } catch {
-    return NextResponse.json(fallback);
+    return NextResponse.json(
+      buildFallbackReview(
+        fallback,
+        "vision_provider_failed",
+        "AI 视觉分析暂时不可用，当前先返回基础分析卡。",
+      ),
+    );
   }
 }
