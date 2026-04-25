@@ -103,6 +103,13 @@ const supportedMealPhotoTypes = new Set([
 ]);
 const supportedMealPhotoExtensions = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
 const maxMealPhotoSizeBytes = 8 * 1024 * 1024;
+const blockedPlaybackPatterns = [
+  "play() failed",
+  "notallowed",
+  "user didn't interact",
+  "user gesture",
+  "interact with the document",
+];
 
 function canAwardMealReviewBadge(review: MealPhotoReviewResponse) {
   if (review.fallbackUsed || review.mode !== "ai") {
@@ -126,6 +133,32 @@ function buildMealPhotoEncouragement(review: MealPhotoReviewResponse) {
   }
 
   return "可以对孩子说：“谢谢你愿意一起看一看、说一说，尝试本身就很勇敢。”";
+}
+
+function isBlockedPlaybackMessage(message: string) {
+  const lower = message.toLowerCase();
+
+  return blockedPlaybackPatterns.some((pattern) => lower.includes(pattern));
+}
+
+function normalizeSpeechPlaybackError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+
+  if (isBlockedPlaybackMessage(message)) {
+    return {
+      blocked: true,
+      message: "浏览器拦截了自动播放，请点“重听上一句”播放语音。",
+    };
+  }
+
+  return {
+    blocked: false,
+    message: message || "高质量播报暂时不可用，当前先用浏览器播报。",
+  };
+}
+
+function normalizeRestoredStoryStatus(status: string) {
+  return isBlockedPlaybackMessage(status) ? "准备出发啦。" : status;
 }
 
 function HabitVisualBoard() {
@@ -1325,7 +1358,7 @@ export function StoryExperience() {
   const [isPainting, setIsPainting] = useState(false);
   const [lastImagePrompt, setLastImagePrompt] = useState("");
   const [status, setStatus] = useState("准备出发啦。");
-  const [autoSpeak, setAutoSpeak] = useState(true);
+  const [autoSpeak, setAutoSpeak] = useState(false);
   const [usePremiumVoice, setUsePremiumVoice] = useState(premiumTtsEnabled);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -1339,6 +1372,7 @@ export function StoryExperience() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const speechAbortRef = useRef<AbortController | null>(null);
+  const lastAutoSpokenMessageRef = useRef("");
 
   const activeTheme = themes[themeId];
   const activeMissions = storyMissionMap[themeId];
@@ -1443,9 +1477,13 @@ export function StoryExperience() {
         await playPremiumSpeech(text);
         return;
       } catch (error) {
-        const message =
-          error instanceof Error && error.message ? error.message : "高质量播报暂时不可用，当前先用浏览器播报。";
-        setStatus(message);
+        const playbackError = normalizeSpeechPlaybackError(error);
+        setStatus(playbackError.message);
+
+        if (playbackError.blocked) {
+          setAutoSpeak(false);
+          return;
+        }
       }
     }
 
@@ -1461,6 +1499,11 @@ export function StoryExperience() {
       return;
     }
 
+    if (lastAutoSpokenMessageRef.current === lastAssistantMessage) {
+      return;
+    }
+
+    lastAutoSpokenMessageRef.current = lastAssistantMessage;
     const playbackHandle = window.setTimeout(() => {
       void playAutoReply(lastAssistantMessage);
     }, 0);
@@ -1567,7 +1610,7 @@ export function StoryExperience() {
         }
 
         if (typeof parsed.status === "string" && parsed.status.trim()) {
-          setStatus(parsed.status);
+          setStatus(normalizeRestoredStoryStatus(parsed.status));
         }
 
         if (Array.isArray(parsed.badges)) {
@@ -1985,14 +2028,16 @@ export function StoryExperience() {
                 )}
                 <button
                   onClick={() => {
-                    setAutoSpeak((current) => {
-                      const next = !current;
-                      if (!next) {
-                        stopSpeaking();
-                      }
+                    if (autoSpeak) {
+                      setAutoSpeak(false);
+                      stopSpeaking();
+                      setStatus("已关闭自动播报。");
+                      return;
+                    }
 
-                      return next;
-                    });
+                    lastAutoSpokenMessageRef.current = lastAssistantMessage;
+                    setAutoSpeak(true);
+                    setStatus("已开启自动播报，下一句故事会自动播放。");
                   }}
                   className="rounded-full bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-800 transition hover:-translate-y-0.5"
                 >
