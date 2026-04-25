@@ -10,6 +10,12 @@ type AmbientMusicToggleProps = {
 };
 
 const musicStorageKey = "tongqu-growth-web-ambient-music";
+const habitMusicProfile = {
+  label: "好习惯轻音乐",
+  description: "洗手、排队、整理和闽食探索都统一使用这套温和音色",
+  notes: [392, 523.25, 659.25],
+  bass: 196,
+};
 
 const sceneConfig: Record<
   MusicScene,
@@ -26,18 +32,8 @@ const sceneConfig: Record<
     notes: [523.25, 659.25, 783.99],
     bass: 261.63,
   },
-  habit: {
-    label: "习惯节奏",
-    description: "适合洗手、排队、整理主题的轻快背景音",
-    notes: [392, 523.25, 659.25],
-    bass: 196,
-  },
-  food: {
-    label: "海风食育乐",
-    description: "适合闽食成长岛的柔和海洋风背景音",
-    notes: [349.23, 440, 523.25],
-    bass: 174.61,
-  },
+  habit: habitMusicProfile,
+  food: habitMusicProfile,
   teacher: {
     label: "备课安静音",
     description: "适合老师生成内容时的轻柔伴奏",
@@ -45,6 +41,8 @@ const sceneConfig: Record<
     bass: 146.83,
   },
 };
+
+type PlayingNode = OscillatorNode | GainNode;
 
 function playTone(
   context: AudioContext,
@@ -69,14 +67,56 @@ function playTone(
   oscillator.stop(startAt + duration + 0.05);
 }
 
+function startBackingPad(context: AudioContext, masterGain: GainNode, config: (typeof sceneConfig)[MusicScene]) {
+  const padGain = context.createGain();
+  const lowTone = context.createOscillator();
+  const highTone = context.createOscillator();
+
+  padGain.gain.setValueAtTime(0.0001, context.currentTime);
+  padGain.gain.exponentialRampToValueAtTime(0.018, context.currentTime + 0.2);
+
+  lowTone.type = "triangle";
+  highTone.type = "sine";
+  lowTone.frequency.setValueAtTime(config.bass, context.currentTime);
+  highTone.frequency.setValueAtTime(config.notes[0], context.currentTime);
+
+  lowTone.connect(padGain);
+  highTone.connect(padGain);
+  padGain.connect(masterGain);
+  lowTone.start();
+  highTone.start();
+
+  return [lowTone, highTone, padGain];
+}
+
 export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggleProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [status, setStatus] = useState("点击开启背景音乐");
   const contextRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const playingNodesRef = useRef<PlayingNode[]>([]);
   const activeRef = useRef(false);
   const config = useMemo(() => sceneConfig[scene], [scene]);
+
+  function stopPlayingNodes() {
+    playingNodesRef.current.forEach((node) => {
+      if ("stop" in node) {
+        try {
+          node.stop();
+        } catch {
+          // The oscillator may already be stopped by the browser.
+        }
+      }
+
+      try {
+        node.disconnect();
+      } catch {
+        // Disconnection is best-effort during unmount and quick toggles.
+      }
+    });
+    playingNodesRef.current = [];
+  }
 
   useEffect(() => {
     return () => {
@@ -86,6 +126,7 @@ export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggle
         window.clearInterval(intervalRef.current);
       }
 
+      stopPlayingNodes();
       masterGainRef.current?.disconnect();
       contextRef.current?.close().catch(() => undefined);
     };
@@ -106,7 +147,7 @@ export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggle
     if (!contextRef.current) {
       const context = new AudioContextApi();
       const masterGain = context.createGain();
-      masterGain.gain.value = 0.05;
+      masterGain.gain.value = 0.12;
       masterGain.connect(context.destination);
 
       contextRef.current = context;
@@ -121,8 +162,21 @@ export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggle
       return;
     }
 
-    await context.resume();
+    try {
+      await context.resume();
+    } catch {
+      setStatus("浏览器没有放行背景音乐，请再点一次开启音乐。");
+      return;
+    }
+
+    if (context.state !== "running") {
+      setStatus("浏览器还没有放行背景音乐，请再点一次开启音乐。");
+      return;
+    }
+
     activeRef.current = true;
+    stopPlayingNodes();
+    playingNodesRef.current = startBackingPad(context, masterGain, config);
 
     const playLoop = () => {
       if (!activeRef.current) {
@@ -132,10 +186,10 @@ export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggle
       const baseTime = context.currentTime + 0.02;
 
       config.notes.forEach((note, index) => {
-        playTone(context, masterGain, note, baseTime + index * 0.36, 1.1, 0.035);
+        playTone(context, masterGain, note, baseTime + index * 0.32, 1.2, 0.08);
       });
 
-      playTone(context, masterGain, config.bass, baseTime, 1.8, 0.02);
+      playTone(context, masterGain, config.bass, baseTime, 1.9, 0.045);
     };
 
     if (intervalRef.current) {
@@ -143,7 +197,7 @@ export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggle
     }
 
     playLoop();
-    intervalRef.current = window.setInterval(playLoop, 2400);
+    intervalRef.current = window.setInterval(playLoop, 2200);
     window.localStorage.setItem(musicStorageKey, "on");
     setIsPlaying(true);
     setStatus(`${config.label}播放中`);
@@ -157,6 +211,7 @@ export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggle
     }
 
     intervalRef.current = null;
+    stopPlayingNodes();
     window.localStorage.setItem(musicStorageKey, "off");
     setIsPlaying(false);
     setStatus("背景音乐已暂停");

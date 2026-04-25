@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { SiteSoundIntro } from "@/components/site-sound-intro";
+
 type SiteShellProps = {
   children: React.ReactNode;
 };
@@ -76,6 +78,7 @@ export function SiteShell({ children }: SiteShellProps) {
       </header>
 
       <div className="pb-24 md:pb-10">{children}</div>
+      <SiteSoundIntro />
 
       <nav className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center justify-between rounded-full bg-white/92 px-3 py-3 shadow-[0_18px_50px_rgba(35,88,95,0.18)] backdrop-blur md:hidden">
         {navItems.map((item) => {
