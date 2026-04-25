@@ -244,7 +244,7 @@ export function TeacherStudio() {
           }
         }
       } catch {
-        setDraftStatus("草稿读取失败了，当前先用默认示例。");
+        setDraftStatus("草稿读取失败了，当前先用默认内容。");
       }
 
       try {
@@ -461,7 +461,7 @@ export function TeacherStudio() {
     setVoiceStatus("当前正在用浏览器播报老师引导语。");
   }
 
-  function resetTeacherDraft(statusMessage = "已经恢复到默认示例，可以重新开始输入。") {
+  function resetTeacherDraft(statusMessage = "已经恢复到默认内容，可以重新开始输入。") {
     setThemeId("habit");
     setTask(teacherTasks[0].label);
     setScenario("今天午餐前，我想给 4-5 岁幼儿讲一个关于勇敢尝试新食物的小故事。");
@@ -750,7 +750,7 @@ export function TeacherStudio() {
                 onClick={() => resetTeacherDraft()}
                 className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
               >
-                恢复默认示例
+                恢复默认内容
               </button>
               <button
                 onClick={clearTeacherDraft}

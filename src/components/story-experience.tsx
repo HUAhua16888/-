@@ -482,10 +482,10 @@ function MealPhotoBooth({
               }`}
             >
               {reviewResult?.fallbackUsed
-                ? "基础分析卡"
+                ? "人工复核卡"
                 : reviewResult?.mode === "ai"
                   ? "AI 识图结果"
-                  : "基础观察卡"}
+                  : "观察记录卡"}
             </span>
           </div>
           <p aria-live="polite" className="mt-3 text-base leading-8 font-semibold text-slate-900">
@@ -494,9 +494,9 @@ function MealPhotoBooth({
 
           {reviewResult?.fallbackUsed ? (
             <div className="mt-5 rounded-[1.5rem] bg-amber-50 px-4 py-4">
-              <p className="text-sm font-semibold text-amber-900">基础观察卡</p>
+              <p className="text-sm font-semibold text-amber-900">观察记录卡</p>
               <p className="mt-2 text-sm leading-7 text-slate-700">
-                {reviewResult.warning ?? "这张照片先生成基础观察卡，请结合现场情况判断。"}
+                {reviewResult.warning ?? "这张照片已生成观察记录，请结合现场情况判断。"}
               </p>
               <p className="mt-2 text-xs leading-6 font-semibold text-amber-900">
                 这次结果仅供参考，不会写入孩子成长记录册。
@@ -594,7 +594,7 @@ function MealPhotoBooth({
                 </p>
                 {!canAwardReviewSticker ? (
                   <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
-                    暂不点亮
+                    先记录观察
                   </span>
                 ) : null}
               </div>
@@ -1017,7 +1017,7 @@ function buildGrowthArchiveSummary(archive: GrowthArchive) {
     latestBadges.length > 0 ? `最近点亮：${latestBadges.join("、")}。` : "最近还没有点亮勋章，可以先从一个简单任务开始。",
     latestReview
       ? `最近拍图打卡：${latestReview.plateState}，${latestReview.summary}`
-      : "暂时还没有拍图打卡记录，后续可以补一张餐盘或闽食作品照片。",
+      : "还没有拍图打卡记录，后续可以补一张餐盘或闽食作品照片。",
     `下一步建议：${nextFocus}`,
     `回家延伸：${buildHomeExtensionPrompt(archive)}`,
   ].join("\n");
@@ -1506,6 +1506,24 @@ export function StoryExperience() {
       return;
     }
 
+    const requestedTheme = new URLSearchParams(window.location.search).get("theme");
+
+    if (requestedTheme === "habit" || requestedTheme === "food") {
+      const restoreHandle = window.setTimeout(() => {
+        setThemeId(requestedTheme);
+        setMessages([
+          {
+            role: "assistant",
+            content: themes[requestedTheme].starter,
+          },
+        ]);
+        setQuickChoices(themes[requestedTheme].choices);
+        setStatus(`已经进入${themes[requestedTheme].label}。`);
+      }, 0);
+
+      return () => window.clearTimeout(restoreHandle);
+    }
+
     const savedState = window.localStorage.getItem(storyStateStorageKey);
 
     if (!savedState) {
@@ -1656,7 +1674,7 @@ export function StoryExperience() {
       setLatestBadgeFeedback(`刚刚完成拍图打卡：${firstSticker}`);
       setStatus(`拍图打卡完成啦，点亮了${firstSticker}。`);
     } else {
-      setLatestBadgeFeedback("拍图观察已记录，暂不点亮勋章。");
+      setLatestBadgeFeedback("拍图观察已记录，这次先不点亮勋章。");
       setStatus("拍图观察已记录，这次先不点亮勋章。");
     }
 
@@ -1962,7 +1980,7 @@ export function StoryExperience() {
                   </button>
                 ) : (
                   <span className="rounded-full bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">
-                    暂不画图
+                    先不画图
                   </span>
                 )}
                 <button

@@ -87,7 +87,7 @@ function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
     mode: "demo",
     filename,
     sizeKb,
-    message: "照片已经上传成功，已经生成基础观察卡。",
+    message: "照片已经上传成功，已经生成观察记录卡。",
     summary: "这张照片构图比较完整，适合继续做闽食光盘观察和餐盘介绍。",
     plateState: "餐盘主体清楚",
     confidenceLabel: "基础观察",
@@ -415,7 +415,7 @@ export async function POST(request: Request) {
         buildFallbackReview(
           fallback,
           "vision_response_invalid",
-          "这张照片先生成基础观察卡，请结合现场情况判断。",
+          "这张照片已生成观察记录，请结合现场情况判断。",
         ),
       );
     }
@@ -438,7 +438,7 @@ export async function POST(request: Request) {
       buildFallbackReview(
         fallback,
         "vision_provider_failed",
-        "这张照片先生成基础观察卡，请结合现场情况判断。",
+        "这张照片已生成观察记录，请结合现场情况判断。",
       ),
     );
   }

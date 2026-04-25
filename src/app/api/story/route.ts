@@ -324,8 +324,8 @@ export async function POST(request: Request) {
   } catch {
     const message =
       mode === "teacher"
-        ? "内容生成暂时不稳定，已先使用本地模板。"
-        : "故事伙伴暂时有点忙，已先接上本地故事。";
+        ? "内容生成有点不稳定，已先给出可用话术。"
+        : "故事伙伴有点忙，已先接上可继续互动的故事。";
 
     return NextResponse.json(
       mode === "teacher"
