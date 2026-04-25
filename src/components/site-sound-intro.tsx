@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
+import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
+
 const introMusicNotes = [392, 523.25, 659.25];
 const introBass = 196;
 
@@ -53,22 +55,6 @@ function playIntroTone(
   oscillator.stop(startAt + duration + 0.05);
 }
 
-function speakIntro(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    return false;
-  }
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "zh-CN";
-  utterance.rate = 0.92;
-  utterance.pitch = 1.03;
-  utterance.volume = 0.86;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
-
-  return true;
-}
-
 export function SiteSoundIntro() {
   const pathname = usePathname();
   const [needsGesture, setNeedsGesture] = useState(false);
@@ -78,6 +64,25 @@ export function SiteSoundIntro() {
   const masterGainRef = useRef<GainNode | null>(null);
   const intervalRef = useRef<number | null>(null);
   const fadeTimerRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const speechAbortRef = useRef<AbortController | null>(null);
+
+  function cleanupIntroSpeech() {
+    speechAbortRef.current?.abort();
+    speechAbortRef.current = null;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  }
 
   function stopIntroMusic() {
     if (intervalRef.current) {
@@ -164,9 +169,28 @@ export function SiteSoundIntro() {
 
     playLoop();
     intervalRef.current = window.setInterval(playLoop, 2400);
-    speakIntro(getIntroText(pathname));
+    const controller = new AbortController();
+    speechAbortRef.current = controller;
+
+    try {
+      const audioBlob = await fetchPremiumSpeechAudio(getIntroText(pathname), "child", controller.signal);
+
+      if (!controller.signal.aborted) {
+        const nextUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(nextUrl);
+
+        audio.volume = 0.92;
+        audioUrlRef.current = nextUrl;
+        audioRef.current = audio;
+        await audio.play();
+      }
+    } catch {
+      setStatus("好习惯语音介绍没有播放，背景音乐已开启。");
+    }
+
     fadeTimerRef.current = window.setTimeout(() => {
       setStatus("入场声音已播放");
+      cleanupIntroSpeech();
       stopIntroMusic();
     }, 12000);
   }
@@ -190,6 +214,7 @@ export function SiteSoundIntro() {
       if (fadeTimerRef.current) {
         window.clearTimeout(fadeTimerRef.current);
       }
+      cleanupIntroSpeech();
       stopIntroMusic();
     };
     // The intro is intentionally one-shot per page load.

@@ -12,7 +12,7 @@ type AmbientMusicToggleProps = {
 const musicStorageKey = "tongqu-growth-web-ambient-music";
 const habitMusicProfile = {
   label: "好习惯轻音乐",
-  description: "洗手、排队、整理和闽食探索都统一使用这套温和音色",
+  description: "全站统一使用洗手、排队、整理主题的温和音色",
   notes: [392, 523.25, 659.25],
   bass: 196,
 };
@@ -26,20 +26,10 @@ const sceneConfig: Record<
     bass: number;
   }
 > = {
-  home: {
-    label: "星光轻音乐",
-    description: "适合首页使用的明亮氛围音乐",
-    notes: [523.25, 659.25, 783.99],
-    bass: 261.63,
-  },
+  home: habitMusicProfile,
   habit: habitMusicProfile,
   food: habitMusicProfile,
-  teacher: {
-    label: "备课安静音",
-    description: "适合老师生成内容时的轻柔伴奏",
-    notes: [293.66, 392, 493.88],
-    bass: 146.83,
-  },
+  teacher: habitMusicProfile,
 };
 
 type PlayingNode = OscillatorNode | GainNode;

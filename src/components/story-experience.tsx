@@ -684,20 +684,36 @@ function MealPhotoBooth({
 function ShuffleStepsGame({ onComplete }: { onComplete?: () => void }) {
   const [shuffled, setShuffled] = useState(initialWashOrder);
   const [selected, setSelected] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState("先找到第一步：打湿小手。");
+  const [mistakeCount, setMistakeCount] = useState(0);
   const completionReportedRef = useRef(false);
   const completed = selected.length === washSteps.length;
+  const expectedStep = washSteps[selected.length];
 
   function handlePick(step: string) {
     if (selected.includes(step) || completed) {
       return;
     }
 
+    if (step !== expectedStep) {
+      setMistakeCount((current) => current + 1);
+      setFeedback(`这一步还没到，先找“${expectedStep}”。`);
+      return;
+    }
+
     setSelected((current) => [...current, step]);
+    setFeedback(
+      selected.length + 1 === washSteps.length
+        ? "洗手顺序完成啦，看看是否全部正确。"
+        : `做得对，下一步找“${washSteps[selected.length + 1]}”。`,
+    );
   }
 
   function resetGame() {
     setShuffled(initialWashOrder);
     setSelected([]);
+    setFeedback("先找到第一步：打湿小手。");
+    setMistakeCount(0);
     completionReportedRef.current = false;
   }
 
@@ -714,7 +730,7 @@ function ShuffleStepsGame({ onComplete }: { onComplete?: () => void }) {
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-teal-700">小游戏 1</p>
+          <p className="text-sm font-semibold text-teal-700">互动小游戏 1</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">洗手步骤排序</h3>
         </div>
         <button
@@ -724,15 +740,45 @@ function ShuffleStepsGame({ onComplete }: { onComplete?: () => void }) {
           重新开始
         </button>
       </div>
-      <p className="mt-3 text-sm leading-7 text-slate-600">
-        按你心里的顺序点一遍，看看能不能拿到洗手闪亮章。
-      </p>
+      <p className="mt-3 text-sm leading-7 text-slate-600">按正确顺序点步骤，点错会提示下一步。</p>
+
+      <div className="mt-5 rounded-[1.6rem] bg-teal-50 p-4">
+        <div className="flex flex-wrap gap-2">
+          {washSteps.map((step, index) => {
+            const done = selected[index] === step;
+            const current = index === selected.length && !completed;
+
+            return (
+              <div
+                key={step}
+                className={`min-w-28 rounded-[1.2rem] px-3 py-3 text-center text-sm font-semibold ${
+                  done
+                    ? "bg-emerald-600 text-white"
+                    : current
+                      ? "bg-white text-teal-800 shadow-sm"
+                      : "bg-white/60 text-slate-400"
+                }`}
+              >
+                <span className="block text-xs opacity-75">第 {index + 1} 步</span>
+                {done ? step : current ? "正在找" : "等待"}
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 rounded-[1.2rem] bg-white/80 px-4 py-3 text-sm font-semibold text-teal-900">
+          {feedback}
+        </p>
+        {mistakeCount > 0 ? (
+          <p className="mt-2 text-xs font-semibold text-amber-800">已经纠正 {mistakeCount} 次。</p>
+        ) : null}
+      </div>
 
       <div className="mt-5 flex flex-wrap gap-3">
         {shuffled.map((step) => (
           <button
             key={step}
             onClick={() => handlePick(step)}
+            disabled={selected.includes(step) || completed}
             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
               selected.includes(step)
                 ? "bg-slate-200 text-slate-400"
@@ -777,6 +823,7 @@ function ShuffleStepsGame({ onComplete }: { onComplete?: () => void }) {
 
 function QueueGame({ onComplete }: { onComplete?: () => void }) {
   const [currentOrder, setCurrentOrder] = useState(initialQueueOrder);
+  const [moveCount, setMoveCount] = useState(0);
   const completionReportedRef = useRef(false);
   const correct = currentOrder.every((item, index) => item === queueOrder[index]);
 
@@ -790,10 +837,12 @@ function QueueGame({ onComplete }: { onComplete?: () => void }) {
       [next[index - 1], next[index]] = [next[index], next[index - 1]];
       return next;
     });
+    setMoveCount((current) => current + 1);
   }
 
   function resetGame() {
     setCurrentOrder(initialQueueOrder);
+    setMoveCount(0);
     completionReportedRef.current = false;
   }
 
@@ -808,7 +857,7 @@ function QueueGame({ onComplete }: { onComplete?: () => void }) {
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-cyan-700">小游戏 2</p>
+          <p className="text-sm font-semibold text-cyan-700">互动小游戏 2</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">排队不拥挤</h3>
         </div>
         <button
@@ -821,6 +870,30 @@ function QueueGame({ onComplete }: { onComplete?: () => void }) {
       <p className="mt-3 text-sm leading-7 text-slate-600">
         点击“往前站一点”，帮小朋友从前到后排好队。
       </p>
+
+      <div className="mt-5 rounded-[1.6rem] bg-cyan-50 p-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {currentOrder.map((item, index) => {
+            const isRightPlace = item === queueOrder[index];
+
+            return (
+              <div
+                key={item}
+                className={`min-w-28 rounded-[1.2rem] px-3 py-4 text-center text-sm font-semibold shadow-sm ${
+                  isRightPlace ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-700"
+                }`}
+              >
+                <span className="block text-2xl">{index === 0 ? "🚩" : "🧒"}</span>
+                <span className="mt-2 block">{item}</span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-sm font-semibold text-cyan-900">
+          已移动 {moveCount} 次，{currentOrder.filter((item, index) => item === queueOrder[index]).length} /{" "}
+          {queueOrder.length} 个位置正确。
+        </p>
+      </div>
 
       <div className="mt-5 space-y-3">
         {currentOrder.map((item, index) => (
@@ -853,6 +926,7 @@ function QueueGame({ onComplete }: { onComplete?: () => void }) {
 function KindWordsGame({ onComplete }: { onComplete?: () => void }) {
   const [picked, setPicked] = useState<number[]>([]);
   const [score, setScore] = useState(0);
+  const [feedback, setFeedback] = useState("把温柔鼓励的话放进爱心口袋。");
   const completionReportedRef = useRef(false);
 
   function handlePick(index: number, positive: boolean) {
@@ -863,12 +937,16 @@ function KindWordsGame({ onComplete }: { onComplete?: () => void }) {
     setPicked((current) => [...current, index]);
     if (positive) {
       setScore((current) => current + 1);
+      setFeedback("这句话很温柔，可以鼓励孩子慢慢尝试。");
+    } else {
+      setFeedback("这句话会让孩子紧张，先不放进口袋。");
     }
   }
 
   function resetGame() {
     setPicked([]);
     setScore(0);
+    setFeedback("把温柔鼓励的话放进爱心口袋。");
     completionReportedRef.current = false;
   }
 
@@ -883,7 +961,7 @@ function KindWordsGame({ onComplete }: { onComplete?: () => void }) {
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-rose-700">小游戏 3</p>
+          <p className="text-sm font-semibold text-rose-700">互动小游戏 3</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">勇敢尝一口</h3>
         </div>
         <button
@@ -896,6 +974,24 @@ function KindWordsGame({ onComplete }: { onComplete?: () => void }) {
       <p className="mt-3 text-sm leading-7 text-slate-600">
         选出你觉得最温柔、最会鼓励人的话。
       </p>
+
+      <div className="mt-5 rounded-[1.6rem] bg-rose-50 p-4">
+        <p className="text-sm font-semibold text-rose-900">爱心口袋</p>
+        <div className="mt-3 flex min-h-14 flex-wrap gap-2 rounded-[1.3rem] bg-white/80 p-3">
+          {picked
+            .filter((index) => kindPhrases[index].isPositive)
+            .map((index) => (
+              <span
+                key={kindPhrases[index].text}
+                className="rounded-full bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800"
+              >
+                {kindPhrases[index].text}
+              </span>
+            ))}
+          {score === 0 ? <span className="text-sm text-slate-400">还没有收进口袋。</span> : null}
+        </div>
+        <p className="mt-3 text-sm font-semibold text-rose-900">{feedback}</p>
+      </div>
 
       <div className="mt-5 grid gap-3">
         {kindPhrases.map((phrase, index) => {
@@ -928,6 +1024,7 @@ function KindWordsGame({ onComplete }: { onComplete?: () => void }) {
 
 function MealTrayGame({ onComplete }: { onComplete?: () => void }) {
   const [pickedItems, setPickedItems] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState("从食物区拖到餐盘的感觉，用点击来完成。");
   const completionReportedRef = useRef(false);
   const pickedCount = pickedItems.length;
   const completed = pickedCount === 3;
@@ -941,10 +1038,17 @@ function MealTrayGame({ onComplete }: { onComplete?: () => void }) {
     }
 
     setPickedItems((current) => [...current, item]);
+    const pickedOption = mealTrayOptions.find((option) => option.label === item);
+    setFeedback(
+      pickedOption?.isHealthy
+        ? `${item}放进餐盘啦，这个选择很适合鼓励尝试。`
+        : `${item}也可以认识，但今天餐盘里要多放一些均衡食物。`,
+    );
   }
 
   function resetGame() {
     setPickedItems([]);
+    setFeedback("从食物区拖到餐盘的感觉，用点击来完成。");
     completionReportedRef.current = false;
   }
 
@@ -959,7 +1063,7 @@ function MealTrayGame({ onComplete }: { onComplete?: () => void }) {
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-orange-700">小游戏 4</p>
+          <p className="text-sm font-semibold text-orange-700">互动小游戏 4</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">午餐小餐盘</h3>
         </div>
         <button
@@ -973,6 +1077,32 @@ function MealTrayGame({ onComplete }: { onComplete?: () => void }) {
       <p className="mt-3 text-sm leading-7 text-slate-600">
         从下面选 3 样食物，帮小朋友搭一个更勇敢、更均衡的小餐盘。
       </p>
+
+      <div className="mt-5 rounded-[1.8rem] bg-orange-50 p-5">
+        <p className="text-sm font-semibold text-orange-900">餐盘格子</p>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {[0, 1, 2].map((slot) => {
+            const item = pickedItems[slot];
+            const option = mealTrayOptions.find((entry) => entry.label === item);
+
+            return (
+              <div
+                key={slot}
+                className={`flex min-h-24 items-center justify-center rounded-[1.4rem] border border-dashed px-3 text-center text-sm font-semibold ${
+                  item
+                    ? option?.isHealthy
+                      ? "border-emerald-200 bg-emerald-100 text-emerald-800"
+                      : "border-amber-200 bg-amber-100 text-amber-900"
+                    : "border-orange-200 bg-white/70 text-slate-400"
+                }`}
+              >
+                {item ?? `空格 ${slot + 1}`}
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-sm font-semibold text-orange-900">{feedback}</p>
+      </div>
 
       <div className="mt-5 flex flex-wrap gap-3">
         {mealTrayOptions.map((item) => (
