@@ -125,7 +125,8 @@ function getVisualReviewRuntimeConfig(): VisualReviewRuntimeConfig | null {
   }
 
   const arkApiKey = process.env.VOLCENGINE_ARK_API_KEY;
-  const arkBaseUrl = process.env.VOLCENGINE_ARK_BASE_URL;
+  const arkBaseUrl =
+    process.env.VOLCENGINE_ARK_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/v3";
   const arkVisionModel = process.env.VOLCENGINE_ARK_VISION_MODEL;
 
   if (arkApiKey && arkBaseUrl && arkVisionModel) {
@@ -133,8 +134,8 @@ function getVisualReviewRuntimeConfig(): VisualReviewRuntimeConfig | null {
       apiKey: arkApiKey,
       baseUrl: arkBaseUrl,
       model: arkVisionModel,
-      providerStyle: "openai-chat",
-      apiPath: "/chat/completions",
+      providerStyle: "openai-responses",
+      apiPath: "/responses",
       source: "ark",
     };
   }

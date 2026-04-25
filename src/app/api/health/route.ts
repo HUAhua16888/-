@@ -37,7 +37,8 @@ export async function GET(request: Request) {
     "true";
   const volcImageConfigured = Boolean(process.env.VOLCENGINE_ARK_API_KEY);
   const volcSpeechConfigured = Boolean(
-    process.env.VOLCENGINE_SPEECH_APP_ID && process.env.VOLCENGINE_SPEECH_ACCESS_TOKEN,
+    process.env.VOLCENGINE_SPEECH_API_KEY ||
+      (process.env.VOLCENGINE_SPEECH_APP_ID && process.env.VOLCENGINE_SPEECH_ACCESS_TOKEN),
   );
   const customVisualConfigured = Boolean(
     process.env.VISUAL_REVIEW_API_KEY &&
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
         ? "需要高质量播报时打开 NEXT_PUBLIC_ENABLE_PREMIUM_TTS。"
         : volcSpeechConfigured
           ? "已接通，保持当前配置。"
-          : "配置 VOLCENGINE_SPEECH_APP_ID 和 ACCESS_TOKEN。",
+          : "配置 VOLCENGINE_SPEECH_API_KEY，或同一应用下的 APP_ID 和 ACCESS_TOKEN。",
     },
   };
   const readyCount = Object.values(capabilities).filter((item) => item.ready).length;

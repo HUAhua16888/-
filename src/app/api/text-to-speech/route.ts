@@ -90,6 +90,12 @@ function extractAudioChunk(value: unknown): string | null {
   return null;
 }
 
+function normalizeSampleRate(value: string | undefined) {
+  const parsed = Number(value ?? "24000");
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 24000;
+}
+
 async function fetchSpeechChunks({ endpoint, headers, body }: SpeechRequestOptions) {
   const response = await fetch(endpoint, {
     method: "POST",
@@ -149,19 +155,20 @@ export async function POST(request: Request) {
 
   const appId = process.env.VOLCENGINE_SPEECH_APP_ID;
   const accessToken = process.env.VOLCENGINE_SPEECH_ACCESS_TOKEN;
+  const apiKey = process.env.VOLCENGINE_SPEECH_API_KEY;
   const secretKey = process.env.VOLCENGINE_SPEECH_SECRET_KEY;
   const endpoint =
     process.env.VOLCENGINE_TTS_ENDPOINT ?? "https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse";
   const resourceId = process.env.VOLCENGINE_TTS_RESOURCE_ID ?? "seed-tts-2.0";
   const voiceType = process.env.VOLCENGINE_TTS_VOICE_TYPE ?? defaultPremiumVoiceType;
   const audioFormat = process.env.VOLCENGINE_TTS_AUDIO_FORMAT ?? "mp3";
-  const sampleRate = Number(process.env.VOLCENGINE_TTS_SAMPLE_RATE ?? "24000");
+  const sampleRate = normalizeSampleRate(process.env.VOLCENGINE_TTS_SAMPLE_RATE);
 
   if (!text) {
     return NextResponse.json({ error: "缺少要播报的文本内容" }, { status: 400 });
   }
 
-  if (!appId || !accessToken) {
+  if (!apiKey && (!appId || !accessToken)) {
     return NextResponse.json(
       { error: "高质量播报暂时不可用，当前先用浏览器播报。" },
       { status: 400 },
@@ -172,14 +179,21 @@ export async function POST(request: Request) {
 
   try {
     const textForSpeech = text.slice(0, 280);
-    const commonHeaders = {
-      Authorization: `Bearer;${accessToken}`,
+    const commonHeaders: Record<string, string> = {
       "Content-Type": "application/json",
-      "X-Api-Access-Key": accessToken,
-      "X-Api-App-Id": appId,
       "X-Api-Resource-Id": resourceId,
       "X-Api-Request-Id": requestId,
     };
+    const v3Headers = apiKey
+      ? {
+          ...commonHeaders,
+          "X-Api-Key": apiKey,
+        }
+      : {
+          ...commonHeaders,
+          "X-Api-App-Id": appId as string,
+          "X-Api-Access-Key": accessToken as string,
+        };
     const v3Body = {
       user: {
         uid: `tongqu-growth-web-${scene}`,
@@ -220,11 +234,11 @@ export async function POST(request: Request) {
     try {
       audioChunks = await fetchSpeechChunks({
         endpoint,
-        headers: commonHeaders,
+        headers: v3Headers,
         body: v3Body,
       });
     } catch (primaryError) {
-      if (!secretKey) {
+      if (!secretKey || !accessToken) {
         throw primaryError;
       }
 
@@ -232,8 +246,8 @@ export async function POST(request: Request) {
         endpoint,
         headers: {
           ...commonHeaders,
-          "X-Api-App-Key": appId,
-          "X-Api-Secret-Key": secretKey,
+          "X-Api-App-Key": secretKey,
+          "X-Api-Access-Key": accessToken,
         },
         body: legacyBody,
       });
