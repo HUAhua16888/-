@@ -1,7 +1,8 @@
 param(
-  [string]$Host = "43.128.25.200",
+  [string]$HostName = "43.128.25.200",
   [string]$User = "ubuntu",
-  [string]$AppDir = "/var/www/tongqu-growth-web"
+  [string]$AppDir = "/var/www/tongqu-growth-web",
+  [string]$SshConfig = ".\deploy\ssh-empty-config"
 )
 
 $command = @"
@@ -10,4 +11,8 @@ chmod +x deploy/server-update.sh && \
 bash deploy/server-update.sh
 "@
 
-ssh "$User@$Host" $command
+if (Test-Path $SshConfig) {
+  ssh -F $SshConfig "$User@$HostName" $command
+} else {
+  ssh "$User@$HostName" $command
+}
