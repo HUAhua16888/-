@@ -12,7 +12,7 @@ bash deploy/server-update.sh
 "@
 
 if (Test-Path $SshConfig) {
-  ssh -F $SshConfig "$User@$HostName" $command
+  ssh -F $SshConfig -o BatchMode=yes "$User@$HostName" $command
 } else {
-  ssh "$User@$HostName" $command
+  ssh -o BatchMode=yes "$User@$HostName" $command
 }
