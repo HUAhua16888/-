@@ -19,8 +19,12 @@ npm install
 echo "==> 构建生产版本"
 npm run build
 
-echo "==> 重启 PM2 服务"
-pm2 restart "$APP_NAME"
+echo "==> 启动或重启 PM2 服务"
+if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
+  pm2 restart "$APP_NAME"
+else
+  pm2 start ecosystem.config.cjs
+fi
 pm2 save
 
 echo "==> 本机健康检查"

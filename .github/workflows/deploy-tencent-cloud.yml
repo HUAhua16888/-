@@ -1,0 +1,55 @@
+name: Deploy to Tencent Cloud
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tencent-cloud-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.TENCENT_CLOUD_SSH_HOST }}
+          DEPLOY_PORT: ${{ secrets.TENCENT_CLOUD_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.TENCENT_CLOUD_SSH_USER }}
+          DEPLOY_KEY: ${{ secrets.TENCENT_CLOUD_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Missing TENCENT_CLOUD_SSH_HOST secret}"
+          : "${DEPLOY_USER:?Missing TENCENT_CLOUD_SSH_USER secret}"
+          : "${DEPLOY_KEY:?Missing TENCENT_CLOUD_SSH_KEY secret}"
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/tencent_cloud_key"
+          chmod 600 "$HOME/.ssh/tencent_cloud_key"
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts"
+
+      - name: Deploy on Tencent Cloud
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.TENCENT_CLOUD_SSH_HOST }}
+          DEPLOY_PORT: ${{ secrets.TENCENT_CLOUD_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.TENCENT_CLOUD_SSH_USER }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          ssh \
+            -i "$HOME/.ssh/tencent_cloud_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -p "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /var/www/tongqu-growth-web && chmod +x deploy/server-update.sh && bash deploy/server-update.sh"
