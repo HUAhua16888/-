@@ -15,7 +15,11 @@ git checkout main
 git pull --ff-only origin main
 
 echo "==> 安装或更新依赖"
-npm install
+if [ -f package-lock.json ]; then
+  npm ci
+else
+  npm install
+fi
 
 echo "==> 构建生产版本"
 npm run build
@@ -35,6 +39,18 @@ else
   echo "No systemd service or PM2 runtime found for $APP_NAME" >&2
   exit 1
 fi
+
+echo "==> 等待服务就绪"
+for attempt in {1..20}; do
+  if curl -fsS "http://127.0.0.1:3000/" >/dev/null; then
+    break
+  fi
+  if [ "$attempt" -eq 20 ]; then
+    echo "Service did not become ready on port 3000" >&2
+    exit 1
+  fi
+  sleep 1
+done
 
 echo "==> 本机健康检查"
 curl -fsS "http://127.0.0.1:3000/api/health" || true
