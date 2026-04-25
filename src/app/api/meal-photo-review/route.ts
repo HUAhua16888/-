@@ -284,7 +284,7 @@ function buildPrompt() {
     "你是一名幼儿园食育与习惯养成辅助助手。",
     "请根据上传的餐盘或闽食照片，判断它是否适合作为“闽食光盘打卡”分析材料。",
     "如果你不确定具体食物名称，请用“某种闽食候选”或“某种餐食候选”，不要乱编。",
-    "必须只返回 JSON，不要返回其他文字。",
+    "不要解释、不要推理过程。必须只返回 JSON，不要返回其他文字。",
     '格式：{"summary":"","plateState":"","confidenceLabel":"","highlightTags":["","",""],"scoreCards":[{"label":"","value":0},{"label":"","value":0},{"label":"","value":0}],"guessedFoods":["","",""],"stickers":["","",""],"nextMission":"","tips":["","",""]}',
     "要求：",
     "- summary 30 字以内",
@@ -349,7 +349,7 @@ export async function POST(request: Request) {
             model: runtimeConfig.model,
             input: [
               {
-                role: "system",
+                role: "user",
                 content: [{ type: "input_text", text: prompt }],
               },
               {
@@ -360,7 +360,7 @@ export async function POST(request: Request) {
                 ],
               },
             ],
-            max_output_tokens: 900,
+            max_output_tokens: 1800,
           }
         : {
             model: runtimeConfig.model,
