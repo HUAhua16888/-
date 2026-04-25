@@ -16,3 +16,5 @@ if (Test-Path $SshConfig) {
 } else {
   ssh -o BatchMode=yes "$User@$HostName" $command
 }
+
+exit $LASTEXITCODE
