@@ -192,6 +192,7 @@ export async function POST(request: Request) {
       : {
           ...commonHeaders,
           "X-Api-App-Id": appId as string,
+          "X-Api-App-Key": appId as string,
           "X-Api-Access-Key": accessToken as string,
         };
     const v3Body = {
@@ -246,7 +247,8 @@ export async function POST(request: Request) {
         endpoint,
         headers: {
           ...commonHeaders,
-          "X-Api-App-Key": secretKey,
+          "X-Api-App-Id": appId as string,
+          "X-Api-App-Key": appId as string,
           "X-Api-Access-Key": accessToken,
         },
         body: legacyBody,
