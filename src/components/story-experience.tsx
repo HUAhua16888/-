@@ -1439,7 +1439,7 @@ export function StoryExperience() {
         return;
       } catch (error) {
         const message =
-          error instanceof Error && error.message ? error.message : "好听的播报暂时没接通，先用本机声音读一读。";
+          error instanceof Error && error.message ? error.message : "高质量播报暂时没接通，当前先用浏览器播报。";
         setStatus(message);
       }
     }
@@ -1827,7 +1827,7 @@ export function StoryExperience() {
       voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionApi) {
-      setStatus("这台设备暂时听不清语音，可以先用打字继续。");
+      setStatus("当前浏览器不支持语音输入，建议用 Chrome 或 Edge。");
       return;
     }
 
@@ -1899,8 +1899,8 @@ export function StoryExperience() {
                 </span>
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-                {activeTheme.subtitle} 这里可以听故事、说一句、重听一遍，也可以玩 4 个轻量小游戏。
-                {imageFeatureEnabled ? " 故事插图功能已开启。" : " 为了让体验更稳定，故事插图当前先关闭。"}
+                {activeTheme.subtitle} 这一版已经支持 AI 对话、浏览器语音输入、语音播报和 4 个轻量小游戏。
+                {imageFeatureEnabled ? " 图片生成功能已开启。" : " 为了保证对外稳定体验，图片生成功能当前先关闭。"}
                 {premiumTtsEnabled ? ` 当前默认幼儿播报音色是 ${premiumVoiceLabel}。` : ""}
               </p>
             </div>
