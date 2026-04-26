@@ -5,7 +5,7 @@ export const maxDuration = 10;
 type CapabilityStatus = {
   label: string;
   ready: boolean;
-  mode: "live" | "demo" | "disabled";
+  mode: "configured" | "demo" | "disabled";
   fallback: string;
   nextAction: string;
 };
@@ -20,9 +20,9 @@ function capability(
   return {
     label,
     ready,
-    mode: ready ? "live" : "demo",
+    mode: ready ? "configured" : "demo",
     fallback: ready ? liveFallback : missingFallback,
-    nextAction: ready ? "已接通，保持当前配置。" : nextAction,
+    nextAction: ready ? "已配置；真实可用需以接口请求结果为准。" : nextAction,
   };
 }
 
@@ -46,9 +46,7 @@ export async function GET(request: Request) {
       process.env.VISUAL_REVIEW_MODEL,
   );
   const arkVisualConfigured = Boolean(
-    process.env.VOLCENGINE_ARK_API_KEY &&
-      process.env.VOLCENGINE_ARK_BASE_URL &&
-      process.env.VOLCENGINE_ARK_VISION_MODEL,
+    process.env.VOLCENGINE_ARK_API_KEY && process.env.VOLCENGINE_ARK_VISION_MODEL,
   );
   const visualReviewConfigured = customVisualConfigured || arkVisualConfigured;
   const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
@@ -63,20 +61,20 @@ export async function GET(request: Request) {
     imageGeneration: {
       label: "章节插图生成",
       ready: imageFeatureEnabled && volcImageConfigured,
-      mode: !imageFeatureEnabled ? "disabled" : volcImageConfigured ? "live" : "demo",
+      mode: !imageFeatureEnabled ? "disabled" : volcImageConfigured ? "configured" : "demo",
       fallback: !imageFeatureEnabled
         ? "前端隐藏生成入口。"
         : volcImageConfigured
           ? "使用火山方舟文生图。"
           : "保留插图区提示，不调用外部出图。",
       nextAction: !imageFeatureEnabled
-        ? "需要出图时打开 ENABLE_IMAGE_GENERATION。"
+          ? "需要出图时打开 ENABLE_IMAGE_GENERATION。"
         : volcImageConfigured
-          ? "已接通，保持当前配置。"
+          ? "已配置；真实可用需以接口请求结果为准。"
           : "配置 VOLCENGINE_ARK_API_KEY 和图片模型。",
     },
     mealPhotoReview: capability(
-      "闽食光盘拍图分析",
+      "闽食餐盘观察",
       visualReviewConfigured,
       customVisualConfigured ? "使用自定义视觉模型。" : "使用火山方舟视觉模型。",
       "使用结构化 demo 分析卡。",
@@ -85,16 +83,16 @@ export async function GET(request: Request) {
     premiumTts: {
       label: "高质量语音播报",
       ready: premiumTtsEnabled && volcSpeechConfigured,
-      mode: !premiumTtsEnabled ? "disabled" : volcSpeechConfigured ? "live" : "demo",
+      mode: !premiumTtsEnabled ? "disabled" : volcSpeechConfigured ? "configured" : "demo",
       fallback: !premiumTtsEnabled
         ? "使用浏览器原生播报。"
         : volcSpeechConfigured
           ? "使用火山语音播报。"
           : "前端会回退到浏览器播报。",
       nextAction: !premiumTtsEnabled
-        ? "需要高质量播报时打开 NEXT_PUBLIC_ENABLE_PREMIUM_TTS。"
+          ? "需要高质量播报时打开 NEXT_PUBLIC_ENABLE_PREMIUM_TTS。"
         : volcSpeechConfigured
-          ? "已接通，保持当前配置。"
+          ? "已配置；真实可用需以接口请求结果为准。"
           : "配置 VOLCENGINE_SPEECH_API_KEY，或同一应用下的 APP_ID 和 ACCESS_TOKEN。",
     },
   };

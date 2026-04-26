@@ -13,13 +13,16 @@ type StoryMessage = {
 type StoryRequest = {
   mode?: "child" | "teacher";
   theme?: ThemeId;
+  storyType?: "chat" | "pictureBook";
   messages?: StoryMessage[];
   userInput?: string;
   teacherTask?: string;
 };
 
+type StoryFallbackReason = "missing_api_key" | "provider_failed" | "invalid_ai_response";
+
 const childInputMaxLength = 120;
-const teacherInputMaxLength = 360;
+const teacherInputMaxLength = 520;
 const teacherTaskMaxLength = 40;
 const messageMaxLength = 180;
 
@@ -91,6 +94,28 @@ function normalizeBadgeName(input: unknown, fallback: string) {
   return input.trim().slice(0, 10) || fallback;
 }
 
+function withFallbackMeta<T extends Record<string, unknown>>(
+  payload: T,
+  reason: StoryFallbackReason,
+  error?: string,
+) {
+  return {
+    ...payload,
+    source: "template",
+    fallbackUsed: true,
+    fallbackReason: reason,
+    ...(error ? { error } : {}),
+  };
+}
+
+function withAiMeta<T extends Record<string, unknown>>(payload: T) {
+  return {
+    ...payload,
+    source: "ai",
+    fallbackUsed: false,
+  };
+}
+
 function buildChildFallback(theme: ThemeId, userInput: string) {
   const currentTheme = themes[theme];
   const wantsFood = /海蛎|紫菜|芥菜|食物|午餐|尝|吃|闽食|看一看|闻一闻/.test(userInput);
@@ -99,7 +124,7 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
   const wantsTidy = /整理|玩具|书|归位|送回家/.test(userInput);
   const reply =
     theme === "food" || wantsFood
-      ? `🦪 海蛎小勇士听见啦：“${userInput}”。我们先看一看、闻一闻，再勇敢尝一小口，给自己点亮闽食小勋章。`
+      ? `🦪 海蛎小勇士听见啦：“${userInput}”。我们先看一看、闻一闻，再勇敢尝一小口，给自己一个尝试小鼓励。`
       : wantsWash
         ? `✨ 习惯小星来帮忙：“${userInput}”。我们先打湿小手，再搓出泡泡，最后把小手擦干净。`
         : wantsQueue
@@ -131,43 +156,65 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
   return {
     reply,
     choices,
-    badge,
+    badge: "",
+    templateBadge: badge,
+    badgeKind: "template",
+  };
+}
+
+function buildPictureBookFallback(theme: ThemeId, userInput: string) {
+  const currentTheme = themes[theme];
+  const topic = userInput
+    .replace(/^我想听/, "")
+    .replace(/的故事$/, "")
+    .trim();
+  const wantsFood = theme === "food" || /海蛎|紫菜|芥菜|食物|午餐|闽食|泉州/.test(topic);
+  const reply = wantsFood
+    ? "绘本故事开始啦。海蛎小勇士带着小朋友来到泉州小厨房，先看见金黄的海蛎煎，又闻到紫菜汤的海味。小朋友说：“我先看一看，再闻一闻，准备好了尝一小口。”海蛎小勇士轻轻点头：“愿意靠近新食物，就是勇敢。”最后，大家把今天认识的食材画进成长小书里。"
+    : "绘本故事开始啦。幼习宝小星在教室门口发现一串闪亮脚印，它邀请小朋友一起找好习惯。第一步，小手遇到清水和泡泡；第二步，玩具排队回到小篮子；第三步，小朋友慢慢喝水、轻轻说话。小星笑着说：“每做好一个小动作，身体和心情都会更舒服。”故事讲完啦，我们也试一个好习惯吧。";
+
+  return {
+    reply: topic ? reply.replace("绘本故事开始啦。", `《${topic}》开始啦。`) : reply,
+    choices: wantsFood ? ["看食材", "闻香味", "尝一口"] : currentTheme.choices,
+    badge: "",
+    templateBadge: "绘本倾听贴纸",
+    badgeKind: "story_progress",
   };
 }
 
 function buildTeacherFallback(task: string, userInput = "") {
   const target = `${task} ${userInput}`;
-  const isMorning = /晨间|入园|接待|早上/.test(target);
+  const isActivity = /活动|课程|方案|流程|目标|材料|观察|延伸/.test(target);
+  const isStory = /故事|绘本|角色|情境|讲/.test(target);
   const isFood = /餐|食|闽|海蛎|紫菜|挑食|尝/.test(target);
-  const isHome = /家园|家长|共育|通知|同步/.test(target);
   const isPraise = /鼓励|表扬|挑食|不愿意|情绪|安抚|紧张/.test(target);
-  const title = isHome
-    ? "家园共育小短讯"
-    : isPraise
-      ? "情绪安抚鼓励语"
-      : isFood
-        ? "餐前食育小卡片"
-        : isMorning
-          ? "晨间接待小卡片"
-          : "课堂引导小卡片";
-  const content = isHome
-    ? "亲爱的家长，今天我们和孩子一起练习了一个小小成长任务。请在家继续用温柔提醒和及时表扬陪伴孩子，看到一点进步就肯定他。"
-    : isPraise
-      ? "你有一点紧张也没关系，老师会陪着你。我们先做一件很小的事，愿意试一试就已经很勇敢啦。"
-      : isFood
-        ? "小朋友们，今天餐盘里藏着一个闽食小秘密。我们先用眼睛看一看颜色，再闻一闻香味，最后勇敢尝一小口。"
-        : isMorning
-          ? "早上好呀，欢迎你来到班级。我们先放好小书包，和老师打个招呼，再一起开始今天的小小成长任务。"
-          : "小朋友们，我们先把小脚放稳，小眼睛看老师，小耳朵听一听。等一下完成任务后，每个人都能点亮自己的成长小星。";
-  const tips = isHome
-    ? ["说清今天练了什么。", "只给一个家庭小任务。", "结尾提醒多鼓励。"]
-    : isPraise
-      ? ["先接住情绪。", "不催促不比较。", "给孩子一个小台阶。"]
-      : isFood
-        ? ["先看闻再品尝。", "允许只尝一小口。", "用闽食故事引入。"]
-        : isMorning
-          ? ["先问候再提醒。", "动作拆成一步。", "给孩子稳定感。"]
-          : ["口令短一点。", "先示范再邀请。", "完成后及时表扬。"];
+  const title = isActivity
+    ? "幼儿活动课程方案"
+    : isStory
+      ? "幼儿互动故事"
+      : isPraise
+        ? "情绪支持活动"
+        : isFood
+          ? "闽南食育活动"
+          : "幼儿故事活动";
+  const content = isActivity
+    ? "活动名称：小小成长任务。适用年龄：4-5岁。目标：愿意观察图片、说出做法，并尝试一个好行为。准备：情境图片、任务卡。流程：故事导入-看图讨论-幼儿操作-分享收束。提问：你看到了什么？怎样做更安全？观察：记录幼儿是否能说出原因并完成一个动作。家园延伸：回家继续练一个小步骤。"
+    : isStory
+      ? "有一颗小星星来到教室，它想请小朋友帮忙完成一个小任务：先看一看图片，再说一说自己的发现，最后一起试一试。"
+      : isPraise
+        ? "活动先接住孩子的情绪，再用角色邀请孩子完成一个很小的动作。教师只给一步提示，完成后说出具体进步。"
+        : isFood
+          ? "活动从闽南食物图片导入，请幼儿看颜色、闻味道、说食材，再选择愿意尝试的一小步。"
+          : "请老师先讲一个短故事，再出示图片提问，最后让幼儿用动作或语言完成一个小任务。";
+  const tips = isActivity
+    ? ["目标只写一两条。", "流程保留操作环节。", "观察点要能记录。"]
+    : isStory
+      ? ["角色要贴近幼儿。", "问题不要太难。", "结尾带一个任务。"]
+      : isPraise
+        ? ["先接住情绪。", "不催促不比较。", "给孩子一个台阶。"]
+        : isFood
+          ? ["先看闻再品尝。", "允许只尝一小口。", "用闽食故事引入。"]
+          : ["语言短一点。", "先示范再邀请。", "完成后及时表扬。"];
 
   return {
     title,
@@ -188,9 +235,10 @@ export async function POST(request: Request) {
 
   const mode = body.mode ?? "child";
   const theme = normalizeTheme(body.theme);
+  const storyType = body.storyType === "pictureBook" ? "pictureBook" : "chat";
   const userInput = normalizePlainText(
     body.userInput,
-    mode === "teacher" ? "请生成一段适合课堂或家园共育使用的内容。" : "陪我继续故事吧",
+    mode === "teacher" ? "请生成适合幼儿园老师使用的故事或活动课程方案。" : "陪我继续故事吧",
     mode === "teacher" ? teacherInputMaxLength : childInputMaxLength,
   );
   const teacherTask = normalizePlainText(body.teacherTask, "课堂引导语", teacherTaskMaxLength);
@@ -202,9 +250,14 @@ export async function POST(request: Request) {
 
   if (!apiKey) {
     return NextResponse.json(
-      mode === "teacher"
-        ? buildTeacherFallback(teacherTask, userInput)
-        : buildChildFallback(theme, userInput),
+      withFallbackMeta(
+        mode === "teacher"
+          ? buildTeacherFallback(teacherTask, userInput)
+          : storyType === "pictureBook"
+            ? buildPictureBookFallback(theme, userInput)
+            : buildChildFallback(theme, userInput),
+        "missing_api_key",
+      ),
     );
   }
 
@@ -213,13 +266,27 @@ export async function POST(request: Request) {
   const systemPrompt =
     mode === "teacher"
       ? [
-          "你是一名面向中国幼儿园老师和家长的教育助手。",
-          "你需要生成简洁、温柔、正向、可直接拿去使用的中文内容。",
+          "你是一名面向中国幼儿园老师的备课助手。",
+          "你需要生成简洁、温柔、正向、适合老师备课和课堂活动使用的中文内容。",
           "请严格返回 JSON，格式如下：",
           '{"title":"", "content":"", "tips":["", "", ""]}',
-          "要求：content 在 120 字以内，tips 恰好 3 条，每条不超过 18 字。",
+          "要求：如果是课堂活动方案，content 必须包含活动名称、年龄、目标、准备、流程、教师提问、观察要点、家园延伸；content 在 420 字以内；tips 恰好 3 条，每条不超过 18 字。",
         ].join("\n")
-      : [
+      : storyType === "pictureBook"
+        ? [
+            "你是“童趣成长乐园”的幼儿绘本故事伙伴。",
+            `当前主题是：${themeConfig.label}。`,
+            "面向 3-6 岁儿童，遵循生活化、游戏化、正向支持和尊重个体差异的幼儿教育原则。",
+            "请根据孩子想听的内容生成一段可以直接语音播放的中文绘本故事。",
+            theme === "food"
+              ? "故事要融入泉州闽南食育元素，可出现海蛎煎、紫菜汤、芥菜饭、看一看、闻一闻、尝一小口。"
+              : "故事要围绕幼儿生活习惯或安全经验，可出现洗手、喝水、整理、排队、如厕、交通或防火安全。",
+            "语言要短句、温柔、有画面感，不批评、不吓唬、不小学化。",
+            "请严格返回 JSON，格式如下：",
+            '{"reply":"", "choices":["", "", ""], "progressSticker":""}',
+            "要求：reply 是完整绘本故事，160-240 字；choices 恰好 3 条，每条不超过 10 个字；progressSticker 填“绘本倾听贴纸”。",
+          ].join("\n")
+        : [
           "你是“童趣成长乐园”的儿童互动故事伙伴。",
           `当前主题是：${themeConfig.label}。`,
           "面向 3-6 岁儿童，语言要温柔、简短、鼓励式、绘本感，绝不批评孩子。",
@@ -229,14 +296,16 @@ export async function POST(request: Request) {
             : "后续选项必须围绕习惯养成，例如洗手、排队、整理玩具、喝水或礼貌表达。",
           "choices 要像孩子能直接点击的小任务，每条不超过 10 个字，不要写成成人视角。",
           "请严格返回 JSON，格式如下：",
-          '{"reply":"", "choices":["", "", ""], "badge":""}',
-          "要求：reply 控制在 90 字以内；choices 恰好 3 条；badge 是一个很短的勋章名。",
+          '{"reply":"", "choices":["", "", ""], "progressSticker":""}',
+          "要求：reply 控制在 90 字以内；choices 恰好 3 条；progressSticker 是故事进度贴纸名，不作为真实成长勋章。",
         ].join("\n");
 
   const userPrompt =
     mode === "teacher"
       ? `老师想生成的内容类型：${teacherTask}。补充说明：${userInput}`
-      : `孩子刚刚说：${userInput}`;
+      : storyType === "pictureBook"
+        ? `孩子想听的绘本故事内容：${userInput}`
+        : `孩子刚刚说：${userInput}`;
 
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -288,39 +357,65 @@ export async function POST(request: Request) {
         typeof parsed.content === "string" &&
         Array.isArray(parsed.tips)
       ) {
-        return NextResponse.json({
-          title: normalizePlainText(parsed.title, "老师辅助小卡片", 32),
-          content: normalizePlainText(
-            parsed.content,
-            buildTeacherFallback(teacherTask, userInput).content,
-            180,
-          ),
-          tips: normalizeShortList(
-            parsed.tips,
-            buildTeacherFallback(teacherTask, userInput).tips,
-            3,
-            18,
-          ),
-        });
+        return NextResponse.json(
+          withAiMeta({
+            title: normalizePlainText(parsed.title, "老师辅助小卡片", 32),
+            content: normalizePlainText(
+              parsed.content,
+              buildTeacherFallback(teacherTask, userInput).content,
+              420,
+            ),
+            tips: normalizeShortList(
+              parsed.tips,
+              buildTeacherFallback(teacherTask, userInput).tips,
+              3,
+              18,
+            ),
+          }),
+        );
       }
 
-      return NextResponse.json(buildTeacherFallback(teacherTask, userInput));
+      return NextResponse.json(
+        withFallbackMeta(buildTeacherFallback(teacherTask, userInput), "invalid_ai_response"),
+      );
     }
 
     if (
       parsed &&
       typeof parsed.reply === "string" &&
-      Array.isArray(parsed.choices) &&
-      typeof parsed.badge === "string"
+      Array.isArray(parsed.choices)
     ) {
+      const badge = normalizeBadgeName(
+        typeof parsed.progressSticker === "string" ? parsed.progressSticker : parsed.badge,
+        "",
+      );
+
       return NextResponse.json({
-        reply: normalizePlainText(parsed.reply, buildChildFallback(theme, userInput).reply, 110),
-        choices: normalizeChildChoices(parsed.choices, themeConfig.choices),
-        badge: normalizeBadgeName(parsed.badge, themeConfig.badgePool[0]),
+        ...withAiMeta({
+          reply: normalizePlainText(
+            parsed.reply,
+            storyType === "pictureBook"
+              ? buildPictureBookFallback(theme, userInput).reply
+              : buildChildFallback(theme, userInput).reply,
+            storyType === "pictureBook" ? 260 : 110,
+          ),
+          choices: normalizeChildChoices(parsed.choices, themeConfig.choices),
+          badge: "",
+          templateBadge: badge,
+          badgeKind: badge ? "story_progress" : "none",
+          awardBadge: false,
+        }),
       });
     }
 
-    return NextResponse.json(buildChildFallback(theme, userInput));
+    return NextResponse.json(
+      withFallbackMeta(
+        storyType === "pictureBook"
+          ? buildPictureBookFallback(theme, userInput)
+          : buildChildFallback(theme, userInput),
+        "invalid_ai_response",
+      ),
+    );
   } catch {
     const message =
       mode === "teacher"
@@ -328,15 +423,15 @@ export async function POST(request: Request) {
         : "故事伙伴有点忙，已先接上可继续互动的故事。";
 
     return NextResponse.json(
-      mode === "teacher"
-        ? {
-            ...buildTeacherFallback(teacherTask, userInput),
-            error: message,
-          }
-        : {
-            ...buildChildFallback(theme, userInput),
-            error: message,
-          },
+      withFallbackMeta(
+        mode === "teacher"
+          ? buildTeacherFallback(teacherTask, userInput)
+          : storyType === "pictureBook"
+            ? buildPictureBookFallback(theme, userInput)
+            : buildChildFallback(theme, userInput),
+        "provider_failed",
+        message,
+      ),
     );
   }
 }

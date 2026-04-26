@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 
 const introMusicNotes = [392, 523.25, 659.25];
 const introBass = 196;
+const premiumIntroEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
 
 function getIntroText(pathname: string) {
   if (pathname.startsWith("/teachers")) {
@@ -55,10 +56,44 @@ function playIntroTone(
   oscillator.stop(startAt + duration + 0.05);
 }
 
+function pickMandarinVoice() {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    return null;
+  }
+
+  return (
+    window.speechSynthesis
+      .getVoices()
+      .find((voice) => voice.lang.toLowerCase().startsWith("zh")) ?? null
+  );
+}
+
+function speakIntroWithBrowser(text: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    return false;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voice = pickMandarinVoice();
+
+  utterance.lang = "zh-CN";
+  utterance.rate = 0.92;
+  utterance.pitch = 1.05;
+
+  if (voice) {
+    utterance.voice = voice;
+  }
+
+  window.speechSynthesis.speak(utterance);
+  return true;
+}
+
 export function SiteSoundIntro() {
   const pathname = usePathname();
-  const [needsGesture, setNeedsGesture] = useState(false);
-  const [status, setStatus] = useState("声音准备中");
+  const [needsGesture, setNeedsGesture] = useState(true);
+  const [status, setStatus] = useState("开启声音介绍");
   const startedRef = useRef(false);
   const contextRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
@@ -81,6 +116,10 @@ export function SiteSoundIntro() {
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = null;
+    }
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
     }
   }
 
@@ -118,8 +157,8 @@ export function SiteSoundIntro() {
     const context = contextRef.current ?? getAudioContext();
 
     if (!context) {
-      setStatus("当前浏览器不支持网页声音");
-      setNeedsGesture(false);
+      setStatus("声音不可用，可继续无声体验");
+      setNeedsGesture(true);
       return;
     }
 
@@ -135,14 +174,14 @@ export function SiteSoundIntro() {
       await context.resume();
     } catch {
       startedRef.current = false;
-      setStatus("点一下开启声音");
+      setStatus("声音未开启，可继续无声体验");
       setNeedsGesture(true);
       return;
     }
 
     if (context.state !== "running") {
       startedRef.current = false;
-      setStatus("点一下开启声音");
+      setStatus("声音未开启，可继续无声体验");
       setNeedsGesture(true);
       return;
     }
@@ -171,21 +210,32 @@ export function SiteSoundIntro() {
     intervalRef.current = window.setInterval(playLoop, 2400);
     const controller = new AbortController();
     speechAbortRef.current = controller;
+    const introText = getIntroText(pathname);
+    let speechPlayed = false;
 
-    try {
-      const audioBlob = await fetchPremiumSpeechAudio(getIntroText(pathname), "child", controller.signal);
+    if (premiumIntroEnabled) {
+      try {
+        const audioBlob = await fetchPremiumSpeechAudio(introText, "child", controller.signal);
 
-      if (!controller.signal.aborted) {
-        const nextUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(nextUrl);
+        if (!controller.signal.aborted) {
+          const nextUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(nextUrl);
 
-        audio.volume = 0.92;
-        audioUrlRef.current = nextUrl;
-        audioRef.current = audio;
-        await audio.play();
+          audio.volume = 0.92;
+          audioUrlRef.current = nextUrl;
+          audioRef.current = audio;
+          await audio.play();
+          speechPlayed = true;
+        }
+      } catch {
+        speechPlayed = speakIntroWithBrowser(introText);
       }
-    } catch {
-      setStatus("好习惯语音介绍没有播放，背景音乐已开启。");
+    } else {
+      speechPlayed = speakIntroWithBrowser(introText);
+    }
+
+    if (!speechPlayed) {
+      setStatus("语音介绍没有播放，背景音乐已开启。");
     }
 
     fadeTimerRef.current = window.setTimeout(() => {
@@ -195,30 +245,29 @@ export function SiteSoundIntro() {
     }, 12000);
   }
 
+  const startIntroFromEffect = useEffectEvent((kind: "auto" | "gesture") => {
+    void startIntro(kind);
+  });
+
   useEffect(() => {
-    const autoTimer = window.setTimeout(() => {
-      void startIntro("auto");
-    }, 300);
-
-    const startFromGesture = () => {
-      void startIntro("gesture");
-    };
-
-    window.addEventListener("pointerdown", startFromGesture, { once: true });
-    window.addEventListener("keydown", startFromGesture, { once: true });
+    const timer = window.setTimeout(() => {
+      startIntroFromEffect("auto");
+    }, 500);
 
     return () => {
-      window.clearTimeout(autoTimer);
-      window.removeEventListener("pointerdown", startFromGesture);
-      window.removeEventListener("keydown", startFromGesture);
+      window.clearTimeout(timer);
+    };
+    // The browser may block autoplay; the visible button remains as the fallback.
+  }, []);
+
+  useEffect(() => {
+    return () => {
       if (fadeTimerRef.current) {
         window.clearTimeout(fadeTimerRef.current);
       }
       cleanupIntroSpeech();
       stopIntroMusic();
     };
-    // The intro is intentionally one-shot per page load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!needsGesture) {

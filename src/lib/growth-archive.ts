@@ -1,8 +1,31 @@
 import type { ThemeId } from "@/lib/site-data";
 
 export const growthArchiveStorageKey = "tongqu-growth-web-growth-archive";
+export const childRosterStorageKey = "tongqu-growth-web-child-roster";
+export const selectedChildStorageKey = "tongqu-growth-web-selected-child";
 
-export type MiniGameKey = "washSteps" | "queue" | "kindWords" | "mealTray";
+export type ChildProfile = {
+  id: string;
+  name: string;
+  rosterNumber?: string;
+  createdAt: string;
+};
+
+export type ChildRecordFields = {
+  childId?: string;
+  childName?: string;
+};
+
+export type MiniGameKey =
+  | "washSteps"
+  | "queue"
+  | "habitJudge"
+  | "kindWords"
+  | "foodObserve"
+  | "foodClue"
+  | "foodPreference"
+  | "peerEncourage"
+  | "mealTray";
 export type BadgeSource = "story" | "meal-review" | "mini-game";
 
 export type BadgeRecord = {
@@ -10,7 +33,7 @@ export type BadgeRecord = {
   themeId: ThemeId;
   earnedAt: string;
   source: BadgeSource;
-};
+} & ChildRecordFields;
 
 export type MealReviewRecord = {
   reviewedAt: string;
@@ -20,7 +43,23 @@ export type MealReviewRecord = {
   stickers: string[];
   plateState: string;
   imageName: string;
-};
+} & ChildRecordFields;
+
+export type FoodPreferenceRecord = {
+  recordedAt: string;
+  foodLabel: string;
+  reasonLabel: string;
+  strategy: string;
+  gentleTryTip: string;
+} & ChildRecordFields;
+
+export type MiniGameRecord = {
+  gameKey: MiniGameKey;
+  badgeName: string;
+  themeId: ThemeId;
+  completedAt: string;
+  pickedItems: string[];
+} & ChildRecordFields;
 
 export type MiniGameProgress = Record<MiniGameKey, number>;
 
@@ -28,6 +67,8 @@ export type GrowthArchive = {
   version: 1;
   badgeRecords: BadgeRecord[];
   mealReviews: MealReviewRecord[];
+  foodPreferenceRecords: FoodPreferenceRecord[];
+  miniGameRecords: MiniGameRecord[];
   miniGameProgress: MiniGameProgress;
   themeVisits: Record<ThemeId, number>;
   lastUpdated: string;
@@ -38,10 +79,17 @@ export function createEmptyGrowthArchive(): GrowthArchive {
     version: 1,
     badgeRecords: [],
     mealReviews: [],
+    foodPreferenceRecords: [],
+    miniGameRecords: [],
     miniGameProgress: {
       washSteps: 0,
       queue: 0,
+      habitJudge: 0,
       kindWords: 0,
+      foodObserve: 0,
+      foodClue: 0,
+      foodPreference: 0,
+      peerEncourage: 0,
       mealTray: 0,
     },
     themeVisits: {
@@ -50,6 +98,10 @@ export function createEmptyGrowthArchive(): GrowthArchive {
     },
     lastUpdated: new Date().toISOString(),
   };
+}
+
+function normalizeMiniGameCount(value: unknown) {
+  return typeof value === "number" && value > 0 ? 1 : 0;
 }
 
 export function parseGrowthArchive(raw: string | null): GrowthArchive {
@@ -96,21 +148,48 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
             )
             .slice(0, 12)
         : empty.mealReviews,
+      foodPreferenceRecords: Array.isArray(parsed.foodPreferenceRecords)
+        ? parsed.foodPreferenceRecords
+            .filter(
+              (item): item is FoodPreferenceRecord =>
+                Boolean(
+                  item &&
+                    typeof item === "object" &&
+                    typeof item.recordedAt === "string" &&
+                    typeof item.foodLabel === "string" &&
+                    typeof item.reasonLabel === "string" &&
+                    typeof item.strategy === "string" &&
+                    typeof item.gentleTryTip === "string",
+                ),
+            )
+            .slice(0, 16)
+        : empty.foodPreferenceRecords,
+      miniGameRecords: Array.isArray(parsed.miniGameRecords)
+        ? parsed.miniGameRecords
+            .filter(
+              (item): item is MiniGameRecord =>
+                Boolean(
+                  item &&
+                    typeof item === "object" &&
+                    typeof item.gameKey === "string" &&
+                    typeof item.badgeName === "string" &&
+                    typeof item.themeId === "string" &&
+                    typeof item.completedAt === "string" &&
+                    Array.isArray(item.pickedItems),
+                ),
+            )
+            .slice(0, 32)
+        : empty.miniGameRecords,
       miniGameProgress: {
-        washSteps:
-          typeof parsed.miniGameProgress?.washSteps === "number"
-            ? parsed.miniGameProgress.washSteps
-            : 0,
-        queue:
-          typeof parsed.miniGameProgress?.queue === "number" ? parsed.miniGameProgress.queue : 0,
-        kindWords:
-          typeof parsed.miniGameProgress?.kindWords === "number"
-            ? parsed.miniGameProgress.kindWords
-            : 0,
-        mealTray:
-          typeof parsed.miniGameProgress?.mealTray === "number"
-            ? parsed.miniGameProgress.mealTray
-            : 0,
+        washSteps: normalizeMiniGameCount(parsed.miniGameProgress?.washSteps),
+        queue: normalizeMiniGameCount(parsed.miniGameProgress?.queue),
+        habitJudge: normalizeMiniGameCount(parsed.miniGameProgress?.habitJudge),
+        kindWords: normalizeMiniGameCount(parsed.miniGameProgress?.kindWords),
+        foodObserve: normalizeMiniGameCount(parsed.miniGameProgress?.foodObserve),
+        foodClue: normalizeMiniGameCount(parsed.miniGameProgress?.foodClue),
+        foodPreference: normalizeMiniGameCount(parsed.miniGameProgress?.foodPreference),
+        peerEncourage: normalizeMiniGameCount(parsed.miniGameProgress?.peerEncourage),
+        mealTray: normalizeMiniGameCount(parsed.miniGameProgress?.mealTray),
       },
       themeVisits: {
         habit: typeof parsed.themeVisits?.habit === "number" ? parsed.themeVisits.habit : 0,
@@ -140,13 +219,28 @@ export function recordThemeVisit(archive: GrowthArchive, themeId: ThemeId): Grow
 export function recordMiniGameCompletion(
   archive: GrowthArchive,
   gameKey: MiniGameKey,
+  detail?: Omit<MiniGameRecord, "completedAt" | "gameKey">,
 ): GrowthArchive {
+  const alreadyCompleted = archive.miniGameProgress[gameKey] > 0;
+
   return {
     ...archive,
-    miniGameProgress: {
-      ...archive.miniGameProgress,
-      [gameKey]: archive.miniGameProgress[gameKey] + 1,
-    },
+    miniGameProgress: alreadyCompleted
+      ? archive.miniGameProgress
+      : {
+          ...archive.miniGameProgress,
+          [gameKey]: 1,
+        },
+    miniGameRecords: detail
+      ? [
+          {
+            ...detail,
+            gameKey,
+            completedAt: new Date().toISOString(),
+          },
+          ...archive.miniGameRecords,
+        ].slice(0, 32)
+      : archive.miniGameRecords,
     lastUpdated: new Date().toISOString(),
   };
 }
@@ -156,6 +250,7 @@ export function recordBadge(
   badge: string,
   themeId: ThemeId,
   source: BadgeSource,
+  child?: ChildRecordFields,
 ): GrowthArchive {
   const normalizedBadge = badge.trim();
 
@@ -164,7 +259,10 @@ export function recordBadge(
   }
 
   const exists = archive.badgeRecords.some(
-    (item) => item.name === normalizedBadge && item.themeId === themeId,
+    (item) =>
+      item.name === normalizedBadge &&
+      item.themeId === themeId &&
+      (child?.childId ? item.childId === child.childId : !item.childId),
   );
 
   if (exists) {
@@ -178,6 +276,8 @@ export function recordBadge(
         name: normalizedBadge,
         themeId,
         source,
+        childId: child?.childId,
+        childName: child?.childName,
         earnedAt: new Date().toISOString(),
       },
       ...archive.badgeRecords,
@@ -197,10 +297,74 @@ export function recordMealReview(
   };
 }
 
+export function recordFoodPreference(
+  archive: GrowthArchive,
+  preference: FoodPreferenceRecord,
+): GrowthArchive {
+  const normalizedFood = preference.foodLabel.trim();
+  const normalizedReason = preference.reasonLabel.trim();
+
+  if (!normalizedFood || !normalizedReason) {
+    return archive;
+  }
+
+  return {
+    ...archive,
+    foodPreferenceRecords: [
+      {
+        ...preference,
+        foodLabel: normalizedFood,
+        reasonLabel: normalizedReason,
+      },
+      ...archive.foodPreferenceRecords,
+    ].slice(0, 16),
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
 export function countUniqueBadges(archive: GrowthArchive) {
   return new Set(archive.badgeRecords.map((item) => item.name)).size;
 }
 
 export function getMiniGameCompletionTotal(archive: GrowthArchive) {
   return Object.values(archive.miniGameProgress).reduce((sum, value) => sum + value, 0);
+}
+
+export function parseChildRoster(raw: string | null): ChildProfile[] {
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter(
+        (item): item is ChildProfile =>
+          Boolean(
+            item &&
+              typeof item === "object" &&
+              typeof item.id === "string" &&
+              typeof item.name === "string" &&
+              typeof item.createdAt === "string",
+          ),
+      )
+      .map((item) => ({
+        id: item.id,
+        name: item.name.trim(),
+        rosterNumber:
+          "rosterNumber" in item && typeof item.rosterNumber === "string"
+            ? item.rosterNumber.trim().slice(0, 8)
+            : undefined,
+        createdAt: item.createdAt,
+      }))
+      .filter((item) => item.id.trim() && item.name)
+      .slice(0, 60);
+  } catch {
+    return [];
+  }
 }

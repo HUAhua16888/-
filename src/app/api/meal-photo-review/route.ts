@@ -16,7 +16,7 @@ const supportedImageTypes = new Set([
 
 type ReviewCard = {
   label: string;
-  value: number;
+  value: string;
 };
 
 type ReviewResult = {
@@ -35,6 +35,9 @@ type ReviewResult = {
   nextMission: string;
   tips: string[];
   fallbackUsed?: boolean;
+  source?: "ai-vision" | "demo-template";
+  awardBadge?: boolean;
+  badgeKind?: "verified_meal_review" | "experience_sticker";
   warning?: string;
   warningCode?: "vision_provider_failed" | "vision_response_invalid";
 };
@@ -80,26 +83,28 @@ function buildFallbackReview(
 }
 
 function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
-  const baseScore = Math.max(62, Math.min(94, 70 + (sizeKb % 18)));
-
   return {
     ok: true,
     mode: "demo",
     filename,
     sizeKb,
-    message: "照片已经上传成功，已经生成观察记录卡。",
-    summary: "这张照片构图比较完整，适合继续做闽食光盘观察和餐盘介绍。",
-    plateState: "餐盘主体清楚",
-    confidenceLabel: "基础观察",
-    highlightTags: ["整盘入镜", "适合观察", "可继续介绍"],
+    fallbackUsed: true,
+    source: "demo-template",
+    awardBadge: false,
+    badgeKind: "experience_sticker",
+    message: "照片已经上传成功，当前是演示观察卡，不包含真实识图结论。",
+    summary: "已收到照片，可练习拍清餐盘和说出观察。",
+    plateState: "待现场确认",
+    confidenceLabel: "模板演示",
+    highlightTags: ["上传成功", "练习观察", "现场确认"],
     scoreCards: [
-      { label: "光盘观察分", value: baseScore },
-      { label: "闽食识别分", value: Math.max(58, baseScore - 6) },
-      { label: "勇敢尝试分", value: Math.min(96, baseScore + 4) },
+      { label: "画面范围", value: "看整盘是否入镜" },
+      { label: "食物名称", value: "请现场确认" },
+      { label: "孩子表达", value: "可说一小句" },
     ],
-    guessedFoods: ["海蛎煎候选", "紫菜蛋汤候选", "南瓜小块候选"],
-    stickers: ["闽食小寻宝", "勇敢品尝章", "光盘观察员"],
-    nextMission: "请孩子说一句：这是我今天最想介绍的闽食。",
+    guessedFoods: ["餐盘主体待确认", "食物名称待确认", "现场观察为准"],
+    stickers: ["拍照练习卡", "观察小贴纸", "表达小鼓励"],
+    nextMission: "请孩子说一句：我看到了什么。",
     tips: [
       "建议拍整张餐盘，别只拍局部。",
       "餐盘边缘和食物都要在画面里。",
@@ -143,14 +148,6 @@ function getVisualReviewRuntimeConfig(): VisualReviewRuntimeConfig | null {
   return null;
 }
 
-function clampScore(input: unknown, fallback: number) {
-  if (typeof input !== "number" || Number.isNaN(input)) {
-    return fallback;
-  }
-
-  return Math.max(0, Math.min(100, Math.round(input)));
-}
-
 function normalizeShortText(input: unknown, fallback: string, maxLength: number) {
   if (typeof input !== "string") {
     return fallback;
@@ -174,6 +171,77 @@ function normalizeStringList(input: unknown, fallback: string[], limit: number, 
   return cleaned.length > 0 ? cleaned : fallback;
 }
 
+function normalizeObservationValue(input: unknown, fallback: string) {
+  if (typeof input === "number" && !Number.isNaN(input)) {
+    if (input >= 80) {
+      return "较清楚";
+    }
+
+    if (input >= 50) {
+      return "可参考";
+    }
+
+    return "需确认";
+  }
+
+  const cleaned = normalizeShortText(input, fallback, 12);
+
+  return isScoreLikeText(cleaned) ? fallback : cleaned;
+}
+
+function isScoreLikeText(value: string) {
+  const cleaned = value.trim();
+
+  return (
+    /^\d+$/.test(cleaned) ||
+    /\d+\s*(分|%|％|\/\s*\d+)/.test(cleaned) ||
+    /[A-D][+-]?/.test(cleaned) ||
+    /星级|等级/.test(cleaned)
+  );
+}
+
+function hasNonEmptyText(input: unknown): input is string {
+  return typeof input === "string" && input.trim().length > 0;
+}
+
+function hasStringList(input: unknown, minimumLength: number) {
+  return (
+    Array.isArray(input) &&
+    input.filter((item) => typeof item === "string" && item.trim().length > 0).length >= minimumLength
+  );
+}
+
+function hasValidScoreCards(input: unknown) {
+  if (!Array.isArray(input) || input.length < 3) {
+    return false;
+  }
+
+  return input.slice(0, 3).every((item) => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+
+    const record = item as Record<string, unknown>;
+    const value = record.value;
+
+    return hasNonEmptyText(record.label) && hasNonEmptyText(value) && !isScoreLikeText(value.trim());
+  });
+}
+
+function isValidVisionPayload(parsed: Record<string, unknown>) {
+  return (
+    hasNonEmptyText(parsed.summary) &&
+    hasNonEmptyText(parsed.plateState) &&
+    hasNonEmptyText(parsed.confidenceLabel) &&
+    hasStringList(parsed.highlightTags, 3) &&
+    hasValidScoreCards(parsed.scoreCards) &&
+    hasStringList(parsed.guessedFoods, 3) &&
+    hasStringList(parsed.stickers, 3) &&
+    hasNonEmptyText(parsed.nextMission) &&
+    hasStringList(parsed.tips, 3)
+  );
+}
+
 function normalizeScoreCards(input: unknown, fallback: ReviewCard[]) {
   if (!Array.isArray(input)) {
     return fallback;
@@ -188,8 +256,11 @@ function normalizeScoreCards(input: unknown, fallback: ReviewCard[]) {
       const label =
         "label" in item && typeof item.label === "string" && item.label.trim()
           ? item.label.trim().slice(0, 10)
-          : fallback[index]?.label ?? `观察分 ${index + 1}`;
-      const value = clampScore("value" in item ? item.value : undefined, fallback[index]?.value ?? 72);
+          : fallback[index]?.label ?? `观察项 ${index + 1}`;
+      const value = normalizeObservationValue(
+        "value" in item ? item.value : undefined,
+        fallback[index]?.value ?? "需确认",
+      );
 
       return { label, value };
     })
@@ -206,9 +277,9 @@ function normalizeScoreCards(input: unknown, fallback: ReviewCard[]) {
 function normalizeReviewPayload(
   parsed: Record<string, unknown> | null,
   fallback: ReviewResult,
-): ReviewResult {
-  if (!parsed) {
-    return fallback;
+): ReviewResult | null {
+  if (!parsed || !isValidVisionPayload(parsed)) {
+    return null;
   }
 
   const summary = normalizeShortText(parsed.summary, fallback.summary, 40);
@@ -219,6 +290,10 @@ function normalizeReviewPayload(
   return {
     ...fallback,
     mode: "ai",
+    fallbackUsed: false,
+    source: "ai-vision",
+    awardBadge: true,
+    badgeKind: "verified_meal_review",
     message: "照片已经上传成功，已经生成餐盘观察卡。",
     summary,
     nextMission,
@@ -282,16 +357,16 @@ function extractVisionText(payload: unknown) {
 function buildPrompt() {
   return [
     "你是一名幼儿园食育与习惯养成辅助助手。",
-    "请根据上传的餐盘或闽食照片，判断它是否适合作为“闽食光盘打卡”分析材料。",
+    "请根据上传的餐盘或闽食照片，判断它是否适合作为“闽食餐盘观察”材料。",
     "如果你不确定具体食物名称，请用“某种闽食候选”或“某种餐食候选”，不要乱编。",
     "不要解释、不要推理过程。必须只返回 JSON，不要返回其他文字。",
-    '格式：{"summary":"","plateState":"","confidenceLabel":"","highlightTags":["","",""],"scoreCards":[{"label":"","value":0},{"label":"","value":0},{"label":"","value":0}],"guessedFoods":["","",""],"stickers":["","",""],"nextMission":"","tips":["","",""]}',
+    '格式：{"summary":"","plateState":"","confidenceLabel":"","highlightTags":["","",""],"scoreCards":[{"label":"","value":""},{"label":"","value":""},{"label":"","value":""}],"guessedFoods":["","",""],"stickers":["","",""],"nextMission":"","tips":["","",""]}',
     "要求：",
     "- summary 30 字以内",
     "- plateState 12 字以内",
     "- confidenceLabel 12 字以内",
     "- highlightTags 恰好 3 个，适合做图卡标签",
-    "- scoreCards 恰好 3 个，value 取 0-100 整数",
+    "- scoreCards 恰好 3 个，value 必须是描述性观察短语，不要给 0-100 分数或百分制评价",
     "- guessedFoods 恰好 3 个",
     "- stickers 恰好 3 个，风格适合幼儿",
     "- nextMission 25 字以内",
@@ -415,12 +490,22 @@ export async function POST(request: Request) {
         buildFallbackReview(
           fallback,
           "vision_response_invalid",
-          "这张照片已生成观察记录，请结合现场情况判断。",
+          "视觉结果不稳定，先展示演示观察卡。",
         ),
       );
     }
 
     const normalized = normalizeReviewPayload(parsed, fallback);
+
+    if (!normalized) {
+      return NextResponse.json(
+        buildFallbackReview(
+          fallback,
+          "vision_response_invalid",
+          "视觉结果不完整，先展示演示观察卡。",
+        ),
+      );
+    }
 
     return NextResponse.json({
       ...normalized,
@@ -438,7 +523,7 @@ export async function POST(request: Request) {
       buildFallbackReview(
         fallback,
         "vision_provider_failed",
-        "这张照片已生成观察记录，请结合现场情况判断。",
+        "视觉分析暂不可用，先展示演示观察卡。",
       ),
     );
   }

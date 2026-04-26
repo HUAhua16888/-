@@ -15,6 +15,17 @@ const habitMusicProfile = {
   description: "全站统一使用洗手、排队、整理主题的温和音色",
   notes: [392, 523.25, 659.25],
   bass: 196,
+  intervalMs: 2200,
+  style: "habit" as const,
+};
+
+const quanzhouNanyinMusicProfile = {
+  label: "泉州南音非遗风背景乐",
+  description: "原创网页合成，使用慢速五声音阶、拨弦感和洞箫感长音，贴近泉州闽南食育氛围",
+  notes: [293.66, 329.63, 392, 440, 493.88, 587.33],
+  bass: 146.83,
+  intervalMs: 5600,
+  style: "nanyin" as const,
 };
 
 const sceneConfig: Record<
@@ -24,11 +35,13 @@ const sceneConfig: Record<
     description: string;
     notes: number[];
     bass: number;
+    intervalMs: number;
+    style: "habit" | "nanyin";
   }
 > = {
   home: habitMusicProfile,
   habit: habitMusicProfile,
-  food: habitMusicProfile,
+  food: quanzhouNanyinMusicProfile,
   teacher: habitMusicProfile,
 };
 
@@ -41,11 +54,12 @@ function playTone(
   startAt: number,
   duration: number,
   gainValue: number,
+  oscillatorType: OscillatorType = "sine",
 ) {
   const oscillator = context.createOscillator();
   const gain = context.createGain();
 
-  oscillator.type = "sine";
+  oscillator.type = oscillatorType;
   oscillator.frequency.setValueAtTime(frequency, startAt);
   gain.gain.setValueAtTime(0.0001, startAt);
   gain.gain.exponentialRampToValueAtTime(gainValue, startAt + 0.05);
@@ -63,10 +77,13 @@ function startBackingPad(context: AudioContext, masterGain: GainNode, config: (t
   const highTone = context.createOscillator();
 
   padGain.gain.setValueAtTime(0.0001, context.currentTime);
-  padGain.gain.exponentialRampToValueAtTime(0.018, context.currentTime + 0.2);
+  padGain.gain.exponentialRampToValueAtTime(
+    config.style === "nanyin" ? 0.012 : 0.018,
+    context.currentTime + 0.2,
+  );
 
-  lowTone.type = "triangle";
-  highTone.type = "sine";
+  lowTone.type = config.style === "nanyin" ? "sine" : "triangle";
+  highTone.type = config.style === "nanyin" ? "triangle" : "sine";
   lowTone.frequency.setValueAtTime(config.bass, context.currentTime);
   highTone.frequency.setValueAtTime(config.notes[0], context.currentTime);
 
@@ -175,6 +192,25 @@ export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggle
 
       const baseTime = context.currentTime + 0.02;
 
+      if (config.style === "nanyin") {
+        const phrase = [0, 2, 1, 3, 4, 2, 5, 3];
+
+        phrase.forEach((noteIndex, index) => {
+          playTone(
+            context,
+            masterGain,
+            config.notes[noteIndex],
+            baseTime + index * 0.56,
+            1.1,
+            index % 2 === 0 ? 0.052 : 0.038,
+            index % 3 === 0 ? "triangle" : "sine",
+          );
+        });
+        playTone(context, masterGain, config.bass, baseTime, 4.4, 0.026, "sine");
+        playTone(context, masterGain, config.notes[0] / 2, baseTime + 2.25, 2.8, 0.018, "triangle");
+        return;
+      }
+
       config.notes.forEach((note, index) => {
         playTone(context, masterGain, note, baseTime + index * 0.32, 1.2, 0.08);
       });
@@ -187,7 +223,7 @@ export function AmbientMusicToggle({ scene, className = "" }: AmbientMusicToggle
     }
 
     playLoop();
-    intervalRef.current = window.setInterval(playLoop, 2200);
+    intervalRef.current = window.setInterval(playLoop, config.intervalMs);
     window.localStorage.setItem(musicStorageKey, "on");
     setIsPlaying(true);
     setStatus(`${config.label}播放中`);

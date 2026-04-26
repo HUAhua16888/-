@@ -26,22 +26,22 @@ function normalizeSpeechError(message: string) {
   const lower = message.toLowerCase();
 
   if (lower.includes("appid") || lower.includes("grant")) {
-    return "高质量播报暂时不可用，当前先用浏览器播报。";
+    return "高质量播报暂时不可用，前端会尝试浏览器播报。";
   }
 
   if (lower.includes("access") || lower.includes("token") || lower.includes("auth")) {
-    return "高质量播报暂时不可用，当前先用浏览器播报。";
+    return "高质量播报暂时不可用，前端会尝试浏览器播报。";
   }
 
   if (lower.includes("resource")) {
-    return "高质量播报暂时不可用，当前先用浏览器播报。";
+    return "高质量播报暂时不可用，前端会尝试浏览器播报。";
   }
 
   if (lower.includes("timeout")) {
     return "高质量播报有点慢，刚才超时了，请稍后再试。";
   }
 
-  return "高质量播报暂时不可用，当前先用浏览器播报。";
+  return "高质量播报暂时不可用，前端会尝试浏览器播报。";
 }
 
 function parseSseEvents(source: string) {
@@ -141,6 +141,7 @@ async function fetchSpeechChunks({ endpoint, headers, body }: SpeechRequestOptio
 }
 
 export async function POST(request: Request) {
+  const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
   let body: TextToSpeechRequest = {};
 
   try {
@@ -168,9 +169,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "缺少要播报的文本内容" }, { status: 400 });
   }
 
+  if (!premiumTtsEnabled) {
+    return NextResponse.json(
+      { error: "高质量播报开关未开启，前端会尝试浏览器播报。" },
+      { status: 400 },
+    );
+  }
+
   if (!apiKey && (!appId || !accessToken)) {
     return NextResponse.json(
-      { error: "高质量播报暂时不可用，当前先用浏览器播报。" },
+      { error: "高质量播报暂时不可用，前端会尝试浏览器播报。" },
       { status: 400 },
     );
   }
@@ -262,6 +270,8 @@ export async function POST(request: Request) {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "no-store",
+        "X-TTS-Voice-Type": voiceType,
+        "X-TTS-Resource-Id": resourceId,
       },
     });
   } catch (error) {
