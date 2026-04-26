@@ -23,9 +23,13 @@ export type MiniGameKey =
   | "kindWords"
   | "foodObserve"
   | "foodClue"
+  | "foodTrain"
+  | "foodGuess"
   | "foodPreference"
   | "peerEncourage"
-  | "mealTray";
+  | "mealTray"
+  | "mealManners"
+  | "habitTrafficLight";
 export type BadgeSource = "story" | "meal-review" | "mini-game";
 
 export type BadgeRecord = {
@@ -88,9 +92,13 @@ export function createEmptyGrowthArchive(): GrowthArchive {
       kindWords: 0,
       foodObserve: 0,
       foodClue: 0,
+      foodTrain: 0,
+      foodGuess: 0,
       foodPreference: 0,
       peerEncourage: 0,
       mealTray: 0,
+      mealManners: 0,
+      habitTrafficLight: 0,
     },
     themeVisits: {
       habit: 0,
@@ -187,9 +195,13 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
         kindWords: normalizeMiniGameCount(parsed.miniGameProgress?.kindWords),
         foodObserve: normalizeMiniGameCount(parsed.miniGameProgress?.foodObserve),
         foodClue: normalizeMiniGameCount(parsed.miniGameProgress?.foodClue),
+        foodTrain: normalizeMiniGameCount(parsed.miniGameProgress?.foodTrain),
+        foodGuess: normalizeMiniGameCount(parsed.miniGameProgress?.foodGuess),
         foodPreference: normalizeMiniGameCount(parsed.miniGameProgress?.foodPreference),
         peerEncourage: normalizeMiniGameCount(parsed.miniGameProgress?.peerEncourage),
         mealTray: normalizeMiniGameCount(parsed.miniGameProgress?.mealTray),
+        mealManners: normalizeMiniGameCount(parsed.miniGameProgress?.mealManners),
+        habitTrafficLight: normalizeMiniGameCount(parsed.miniGameProgress?.habitTrafficLight),
       },
       themeVisits: {
         habit: typeof parsed.themeVisits?.habit === "number" ? parsed.themeVisits.habit : 0,
@@ -328,6 +340,73 @@ export function countUniqueBadges(archive: GrowthArchive) {
 
 export function getMiniGameCompletionTotal(archive: GrowthArchive) {
   return Object.values(archive.miniGameProgress).reduce((sum, value) => sum + value, 0);
+}
+
+export type BadgeLevelSummary = {
+  level: string;
+  description: string;
+  badgeCount: number;
+  nextLevel: string;
+  remainingToNext: number;
+  latestBadges: BadgeRecord[];
+};
+
+const badgeLevels = [
+  {
+    min: 0,
+    level: "成长启航",
+    description: "已经开始认识好习惯和泉州美食啦。",
+  },
+  {
+    min: 5,
+    level: "进餐小明星",
+    description: "能完成多个进餐好习惯，也愿意认识新食物。",
+  },
+  {
+    min: 10,
+    level: "闽食小当家",
+    description: "认识更多泉州美食，还能把好习惯带到生活里。",
+  },
+  {
+    min: 15,
+    level: "成长岛小主人",
+    description: "能坚持打卡，愿意照顾自己，也能把发现分享给家人。",
+  },
+];
+
+export function getBadgeLevelSummary(
+  archive: GrowthArchive,
+  childId?: string,
+): BadgeLevelSummary {
+  const childBadges = childId
+    ? archive.badgeRecords.filter((record) => record.childId === childId)
+    : archive.badgeRecords;
+  const uniqueBadges = new Map<string, BadgeRecord>();
+
+  for (const record of childBadges) {
+    const current = uniqueBadges.get(record.name);
+
+    if (!current || new Date(record.earnedAt).getTime() > new Date(current.earnedAt).getTime()) {
+      uniqueBadges.set(record.name, record);
+    }
+  }
+
+  const latestBadges = Array.from(uniqueBadges.values()).sort(
+    (left, right) => new Date(right.earnedAt).getTime() - new Date(left.earnedAt).getTime(),
+  );
+  const badgeCount = latestBadges.length;
+  const currentLevel =
+    [...badgeLevels].reverse().find((level) => badgeCount >= level.min) ?? badgeLevels[0];
+  const nextLevel = badgeLevels.find((level) => level.min > badgeCount);
+
+  return {
+    level: currentLevel.level,
+    description: currentLevel.description,
+    badgeCount,
+    nextLevel: nextLevel?.level ?? "已到最高等级",
+    remainingToNext: nextLevel ? Math.max(0, nextLevel.min - badgeCount) : 0,
+    latestBadges: latestBadges.slice(0, 3),
+  };
 }
 
 export function parseChildRoster(raw: string | null): ChildProfile[] {

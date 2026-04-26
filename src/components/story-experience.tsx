@@ -21,6 +21,7 @@ import {
   childRosterStorageKey,
   countUniqueBadges,
   createEmptyGrowthArchive,
+  getBadgeLevelSummary,
   getMiniGameCompletionTotal,
   growthArchiveStorageKey,
   parseChildRoster,
@@ -41,8 +42,12 @@ import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
   foodBadgeCards,
+  foodGuessRounds,
   foodPreferenceReasons,
+  foodTrainStations,
+  habitTrafficLightCards,
   habitSkillCards,
+  mealMannerActions,
   mealTrayOptions,
   mealPhotoChecklist,
   minnanFoodClues,
@@ -127,9 +132,13 @@ const miniGameThemeMap: Record<MiniGameKey, ThemeId> = {
   kindWords: "food",
   foodObserve: "food",
   foodClue: "food",
+  foodTrain: "food",
+  foodGuess: "food",
   foodPreference: "food",
   peerEncourage: "food",
   mealTray: "food",
+  mealManners: "habit",
+  habitTrafficLight: "habit",
 };
 const minnanTasteSteps = "逛泉州美食摊、找食材卡、听小故事、说出一个发现";
 
@@ -300,6 +309,20 @@ function buildMiniGameCompletionCopy(
     };
   }
 
+  if (gameKey === "mealManners") {
+    return {
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "文明进餐操"}`,
+      status: configuredReminder || "文明进餐操完成啦：扶好碗、坐稳、细嚼慢咽、按需取餐和餐后整理都练习到了。",
+    };
+  }
+
+  if (gameKey === "habitTrafficLight") {
+    return {
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "好习惯红绿牌"}`,
+      status: configuredReminder || "好习惯红绿牌完成啦：能分清好习惯和需要调整的做法。",
+    };
+  }
+
   if (gameKey === "kindWords") {
     return {
       feedback: `刚刚点亮：${badgeName} · 闽食三步完成`,
@@ -318,6 +341,20 @@ function buildMiniGameCompletionCopy(
     return {
       feedback: `刚刚点亮：${badgeName} · 闽食摊位寻宝`,
       status: "你找到了泉州美食摊位宝藏，也认识了更多家乡食材。",
+    };
+  }
+
+  if (gameKey === "foodTrain") {
+    return {
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "闽食小列车"}`,
+      status: configuredReminder || "闽食小列车到站啦：认识了多个泉州美食名字，也练习了小小播报。",
+    };
+  }
+
+  if (gameKey === "foodGuess") {
+    return {
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "美食猜猜乐"}`,
+      status: configuredReminder || "美食猜猜乐完成啦：你能根据线索找到食材，也能做小小美食播报员。",
     };
   }
 
@@ -372,6 +409,14 @@ function buildRepeatedMiniGameStatus(gameKey: MiniGameKey, contentConfig?: Edita
     return `${configuredTitle || "看图判断做法"}已经记录过啦，可以继续练习分辨正确习惯和安全做法。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
+  if (gameKey === "mealManners") {
+    return `${configuredTitle || "文明进餐操"}已经记录过啦，可以继续跟口令练习扶碗、坐稳、轻声用餐和餐后整理。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+  }
+
+  if (gameKey === "habitTrafficLight") {
+    return `${configuredTitle || "好习惯红绿牌"}已经记录过啦，可以继续听行为、举红绿牌、说正确做法。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+  }
+
   if (gameKey === "kindWords") {
     return "闽食探索已经记录过啦，可以继续练习认名字、找食材、说发现。";
   }
@@ -382,6 +427,14 @@ function buildRepeatedMiniGameStatus(gameKey: MiniGameKey, contentConfig?: Edita
 
   if (gameKey === "foodClue") {
     return "闽食摊位寻宝已经记录过啦，可以继续认一认这些泉州闽南食物。";
+  }
+
+  if (gameKey === "foodTrain") {
+    return `${configuredTitle || "闽食小列车"}已经记录过啦，可以继续听站名、认美食、练习小小播报。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+  }
+
+  if (gameKey === "foodGuess") {
+    return `${configuredTitle || "美食猜猜乐"}已经记录过啦，可以继续根据线索找食材。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "peerEncourage") {
@@ -1928,6 +1981,567 @@ function HabitJudgeGame({
   );
 }
 
+function MealMannersGame({
+  contentConfig,
+  onComplete,
+  onSpeak,
+}: {
+  contentConfig?: EditableGameContent;
+  onComplete?: (pickedItems: string[]) => void;
+  onSpeak?: SpeakHandler;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [completedActions, setCompletedActions] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState("听一个动作口令，做到了就点“我做到了”。");
+  const completionReportedRef = useRef(false);
+  const completed = completedActions.length === mealMannerActions.length;
+  const currentAction = mealMannerActions[currentIndex];
+  const introText =
+    contentConfig?.childGoal.trim() ||
+    "跟着 AI 口令做进餐好习惯动作：扶好碗、脚放稳、轻轻嚼、按需取餐、餐后整理。";
+
+  function completeCurrentAction() {
+    if (completed || !currentAction) {
+      return;
+    }
+
+    const nextActions = [...completedActions, currentAction.label];
+    const allDone = nextActions.length === mealMannerActions.length;
+    const message = allDone
+      ? "文明进餐操全部完成啦。轻声用餐、按需取餐、珍惜食物和餐后整理都练到了。"
+      : `做得稳稳的。下一句口令：${mealMannerActions[currentIndex + 1].command}`;
+
+    setCompletedActions(nextActions);
+    setFeedback(message);
+    onSpeak?.(message);
+
+    if (allDone && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.(nextActions);
+    }
+
+    if (!allDone) {
+      setCurrentIndex((index) => index + 1);
+    }
+  }
+
+  function resetGame() {
+    setCurrentIndex(0);
+    setCompletedActions([]);
+    setFeedback("听一个动作口令，做到了就点“我做到了”。");
+    completionReportedRef.current = false;
+    onSpeak?.("文明进餐操重新开始。先听第一句口令，再做动作。");
+  }
+
+  return (
+    <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-amber-700">互动小游戏</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">
+            {contentConfig?.title || "文明进餐操"}
+          </h3>
+        </div>
+        <button
+          onClick={resetGame}
+          className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-200"
+          type="button"
+        >
+          重新开始
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm leading-7 text-slate-600">{introText}</p>
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="amber" />
+      </div>
+
+      <div className="mt-5 rounded-[1.7rem] bg-amber-50 p-5">
+        <div className="rounded-[1.5rem] bg-white/90 p-5 shadow-sm">
+          <p className="text-xs font-semibold text-amber-800">
+            第 {Math.min(currentIndex + 1, mealMannerActions.length)} 组动作
+          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex h-20 w-20 items-center justify-center rounded-[1.4rem] bg-amber-100 text-5xl">
+                {currentAction?.icon ?? "🌟"}
+              </div>
+              <h4 className="mt-4 text-xl font-semibold text-slate-900">
+                {currentAction?.label ?? "全部完成"}
+              </h4>
+              <p className="mt-2 text-sm leading-7 font-semibold text-amber-950">
+                {completed ? "进餐操完成啦。" : currentAction.command}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <SpeechCueButton
+                text={completed ? feedback : currentAction.command}
+                onSpeak={onSpeak}
+                label="听口令"
+                tone="amber"
+              />
+              <button
+                onClick={completeCurrentAction}
+                disabled={completed}
+                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+              >
+                我做到了
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {mealMannerActions.map((action) => {
+            const done = completedActions.includes(action.label);
+
+            return (
+              <span
+                key={action.label}
+                className={`rounded-full px-3 py-2 text-sm font-semibold ${
+                  done ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-600"
+                }`}
+              >
+                {done ? "✓ " : ""}
+                {action.icon} {action.label}
+              </span>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] bg-white/80 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-950">{feedback}</p>
+          <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听反馈" tone="amber" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HabitTrafficLightGame({
+  contentConfig,
+  onComplete,
+  onSpeak,
+}: {
+  contentConfig?: EditableGameContent;
+  onComplete?: (pickedItems: string[]) => void;
+  onSpeak?: SpeakHandler;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState("听一个行为，好习惯选绿牌，需要调整选红牌。");
+  const [mistakeCount, setMistakeCount] = useState(0);
+  const completionReportedRef = useRef(false);
+  const completed = answers.length === habitTrafficLightCards.length;
+  const currentCard = habitTrafficLightCards[currentIndex];
+  const introText =
+    contentConfig?.childGoal.trim() ||
+    "听一个行为，觉得是好习惯就选绿牌；需要调整就选红牌，再听正确做法。";
+
+  function answer(cardColor: "green" | "red") {
+    if (completed || !currentCard) {
+      return;
+    }
+
+    if (cardColor !== currentCard.answer) {
+      const message = `再听一次。${currentCard.goodPractice}`;
+      setMistakeCount((count) => count + 1);
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const nextAnswers = [
+      ...answers,
+      `${currentCard.behavior}:${cardColor === "green" ? "绿牌" : "红牌"}`,
+    ];
+    const allDone = nextAnswers.length === habitTrafficLightCards.length;
+    const message = allDone
+      ? "红绿牌全部完成啦。你能判断好习惯，也知道需要调整时怎么做。"
+      : `选对啦。${currentCard.goodPractice} 下一题：${habitTrafficLightCards[currentIndex + 1].behavior}。`;
+
+    setAnswers(nextAnswers);
+    setFeedback(message);
+    onSpeak?.(message);
+
+    if (allDone && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.(nextAnswers);
+    }
+
+    if (!allDone) {
+      setCurrentIndex((index) => index + 1);
+    }
+  }
+
+  function resetGame() {
+    setCurrentIndex(0);
+    setAnswers([]);
+    setMistakeCount(0);
+    setFeedback("听一个行为，好习惯选绿牌，需要调整选红牌。");
+    completionReportedRef.current = false;
+    onSpeak?.("好习惯红绿牌重新开始。听行为，选绿牌或红牌。");
+  }
+
+  return (
+    <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-rose-700">互动小游戏</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">
+            {contentConfig?.title || "好习惯红绿牌"}
+          </h3>
+        </div>
+        <button
+          onClick={resetGame}
+          className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800 transition hover:bg-rose-200"
+          type="button"
+        >
+          重新开始
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm leading-7 text-slate-600">{introText}</p>
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="rose" />
+      </div>
+
+      <div className="mt-5 rounded-[1.7rem] bg-rose-50 p-5">
+        <div className="rounded-[1.5rem] bg-white/90 p-5 shadow-sm">
+          <p className="text-xs font-semibold text-rose-700">
+            第 {Math.min(currentIndex + 1, habitTrafficLightCards.length)} 题
+          </p>
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex h-20 w-20 items-center justify-center rounded-[1.4rem] bg-rose-100 text-5xl">
+                {currentCard?.icon ?? "🌟"}
+              </div>
+              <h4 className="mt-4 text-xl font-semibold text-slate-900">
+                {currentCard?.behavior ?? "全部完成"}
+              </h4>
+              <p className="mt-2 text-sm leading-7 text-slate-700">
+                {completed ? "红绿牌完成啦。" : "这个行为应该举绿牌，还是红牌？"}
+              </p>
+            </div>
+            <SpeechCueButton
+              text={
+                completed
+                  ? feedback
+                  : `${currentCard.behavior}。这是好习惯选绿牌，需要调整选红牌。`
+              }
+              onSpeak={onSpeak}
+              label="听行为"
+              tone="rose"
+            />
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <button
+              onClick={() => answer("green")}
+              disabled={completed}
+              className="rounded-[1.4rem] bg-emerald-100 px-5 py-4 text-left font-semibold text-emerald-900 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+            >
+              🟢 绿牌
+              <span className="mt-1 block text-xs leading-5 text-emerald-800">这是可以保持的好习惯。</span>
+            </button>
+            <button
+              onClick={() => answer("red")}
+              disabled={completed}
+              className="rounded-[1.4rem] bg-rose-100 px-5 py-4 text-left font-semibold text-rose-900 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+            >
+              🔴 红牌
+              <span className="mt-1 block text-xs leading-5 text-rose-800">这个做法需要换一换。</span>
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] bg-white/80 px-4 py-3">
+          <p className="text-sm font-semibold text-rose-900">
+            已判断 {answers.length}/{habitTrafficLightCards.length} 题，重新听 {mistakeCount} 次。
+          </p>
+          <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听反馈" tone="rose" />
+        </div>
+        <p className="mt-2 text-sm font-semibold text-rose-800">{feedback}</p>
+      </div>
+    </div>
+  );
+}
+
+function FoodTrainGame({
+  contentConfig,
+  onComplete,
+  onSpeak,
+}: {
+  contentConfig?: EditableGameContent;
+  onComplete?: (pickedItems: string[]) => void;
+  onSpeak?: SpeakHandler;
+}) {
+  const [stationIndex, setStationIndex] = useState(0);
+  const [arrivedStations, setArrivedStations] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState("小列车准备出发。先听进站口令，再点正确的美食站。");
+  const [mistakeCount, setMistakeCount] = useState(0);
+  const completionReportedRef = useRef(false);
+  const completed = arrivedStations.length === foodTrainStations.length;
+  const currentStation = foodTrainStations[stationIndex];
+  const introText =
+    contentConfig?.childGoal.trim() ||
+    "小列车到站啦。听站名和短儿歌，点击正确的泉州美食站，全部到站后可以把一种美食介绍给家人。";
+
+  function pickStation(label: string) {
+    if (completed || !currentStation) {
+      return;
+    }
+
+    if (label !== currentStation.label) {
+      const message = `这次还没到${label}站。再听一遍：${currentStation.command}`;
+      setMistakeCount((count) => count + 1);
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const nextStations = [...arrivedStations, label];
+    const allDone = nextStations.length === foodTrainStations.length;
+    const message = allDone
+      ? "闽食小列车全部到站啦。你认识了好多泉州美食，可以选一种介绍给家人。"
+      : `到站成功。${currentStation.chant} 下一站：${foodTrainStations[stationIndex + 1].station}。`;
+
+    setArrivedStations(nextStations);
+    setFeedback(message);
+    onSpeak?.(message);
+
+    if (allDone && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.(nextStations);
+    }
+
+    if (!allDone) {
+      setStationIndex((index) => index + 1);
+    }
+  }
+
+  function resetGame() {
+    setStationIndex(0);
+    setArrivedStations([]);
+    setMistakeCount(0);
+    setFeedback("小列车准备出发。先听进站口令，再点正确的美食站。");
+    completionReportedRef.current = false;
+    onSpeak?.("闽食小列车重新出发。先听第一站口令。");
+  }
+
+  return (
+    <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-teal-700">闽食小游戏</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">
+            {contentConfig?.title || "闽食小列车"}
+          </h3>
+        </div>
+        <button
+          onClick={resetGame}
+          className="rounded-full bg-teal-100 px-4 py-2 text-sm font-semibold text-teal-800 transition hover:bg-teal-200"
+          type="button"
+        >
+          重新发车
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm leading-7 text-slate-600">{introText}</p>
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="teal" />
+      </div>
+
+      <div className="mt-5 rounded-[1.7rem] bg-teal-50 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-[1.5rem] bg-white/90 p-5 shadow-sm">
+          <div>
+            <p className="text-xs font-semibold text-teal-700">
+              第 {Math.min(stationIndex + 1, foodTrainStations.length)} 站 · {currentStation?.station ?? "全部到站"}
+            </p>
+            <h4 className="mt-2 text-xl font-semibold text-slate-900">
+              🚂 {completed ? "小列车休息站" : currentStation.command}
+            </h4>
+            <p className="mt-2 text-sm leading-7 text-slate-700">
+              {completed ? "可以把一种泉州美食介绍给家人。" : currentStation.chant}
+            </p>
+          </div>
+          <SpeechCueButton
+            text={completed ? feedback : `${currentStation.command}${currentStation.chant}`}
+            onSpeak={onSpeak}
+            label="听进站"
+            tone="teal"
+          />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          {foodTrainStations.map((station) => {
+            const done = arrivedStations.includes(station.label);
+
+            return (
+              <button
+                key={station.label}
+                onClick={() => pickStation(station.label)}
+                disabled={done || completed}
+                className={`rounded-[1.3rem] px-3 py-4 text-center text-sm font-semibold transition ${
+                  done
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-white text-slate-800 hover:-translate-y-0.5 hover:bg-teal-100"
+                }`}
+                type="button"
+              >
+                <span className="block text-3xl">{station.icon}</span>
+                <span className="mt-2 block">{station.label}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">
+                  {done ? "已到站" : station.station}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] bg-white/80 px-4 py-3">
+          <p className="text-sm font-semibold text-teal-900">
+            已到站 {arrivedStations.length}/{foodTrainStations.length}，重新听 {mistakeCount} 次。
+          </p>
+          <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听反馈" tone="teal" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FoodGuessGame({
+  contentConfig,
+  onComplete,
+  onSpeak,
+}: {
+  contentConfig?: EditableGameContent;
+  onComplete?: (pickedItems: string[]) => void;
+  onSpeak?: SpeakHandler;
+}) {
+  const [roundIndex, setRoundIndex] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState("打开美食宝箱，听线索猜食材。");
+  const [mistakeCount, setMistakeCount] = useState(0);
+  const completionReportedRef = useRef(false);
+  const completed = answers.length === foodGuessRounds.length;
+  const currentRound = foodGuessRounds[roundIndex];
+  const introText =
+    contentConfig?.childGoal.trim() ||
+    "打开美食宝箱，听颜色、形状、来源和能做成什么菜，从食材卡中猜出答案。";
+
+  function pickAnswer(label: string) {
+    if (completed || !currentRound) {
+      return;
+    }
+
+    if (label !== currentRound.answer) {
+      const message = `再找一找。线索是：${currentRound.hints.join("，")}。`;
+      setMistakeCount((count) => count + 1);
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const nextAnswers = [...answers, label];
+    const allDone = nextAnswers.length === foodGuessRounds.length;
+    const message = allDone
+      ? "美食猜猜乐完成啦。你已经是小小美食播报员。"
+      : `${currentRound.praise} 下一只宝箱：${foodGuessRounds[roundIndex + 1].treasure}。`;
+
+    setAnswers(nextAnswers);
+    setFeedback(message);
+    onSpeak?.(message);
+
+    if (allDone && !completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.(nextAnswers);
+    }
+
+    if (!allDone) {
+      setRoundIndex((index) => index + 1);
+    }
+  }
+
+  function resetGame() {
+    setRoundIndex(0);
+    setAnswers([]);
+    setMistakeCount(0);
+    setFeedback("打开美食宝箱，听线索猜食材。");
+    completionReportedRef.current = false;
+    onSpeak?.("美食猜猜乐重新开始。听宝箱线索，找到食材卡。");
+  }
+
+  return (
+    <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-cyan-700">闽食小游戏</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">
+            {contentConfig?.title || "美食猜猜乐"}
+          </h3>
+        </div>
+        <button
+          onClick={resetGame}
+          className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-cyan-200"
+          type="button"
+        >
+          重新开箱
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm leading-7 text-slate-600">{introText}</p>
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="cyan" />
+      </div>
+
+      <div className="mt-5 rounded-[1.7rem] bg-cyan-50 p-5">
+        <div className="rounded-[1.5rem] bg-white/90 p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-cyan-700">
+                第 {Math.min(roundIndex + 1, foodGuessRounds.length)} 个宝箱 · {currentRound?.treasure ?? "全部完成"}
+              </p>
+              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-[1.4rem] bg-cyan-100 text-5xl">
+                {currentRound?.icon ?? "🎁"}
+              </div>
+              <h4 className="mt-4 text-xl font-semibold text-slate-900">食材藏在哪里？</h4>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(currentRound?.hints ?? []).map((hint) => (
+                  <span key={hint} className="rounded-full bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-900">
+                    {hint}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <SpeechCueButton
+              text={completed ? feedback : `宝箱线索：${currentRound.hints.join("，")}。请找食材卡。`}
+              onSpeak={onSpeak}
+              label="听线索"
+              tone="cyan"
+            />
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-4">
+            {(currentRound?.options ?? []).map((option) => (
+              <button
+                key={option}
+                onClick={() => pickAnswer(option)}
+                disabled={completed}
+                className="rounded-[1.3rem] bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-800 transition hover:-translate-y-0.5 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] bg-white/80 px-4 py-3">
+          <p className="text-sm font-semibold text-cyan-900">
+            已猜中 {answers.length}/{foodGuessRounds.length} 个，重新听 {mistakeCount} 次。
+          </p>
+          <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听反馈" tone="cyan" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FoodTreasureQuestGame({
   contentConfig,
   onComplete,
@@ -2800,12 +3414,19 @@ function MealTrayGame({
   );
 }
 
-function GrowthArchivePanel({ archive }: { archive: GrowthArchive }) {
+function GrowthArchivePanel({
+  archive,
+  childId,
+}: {
+  archive: GrowthArchive;
+  childId?: string;
+}) {
   const uniqueBadgeCount = countUniqueBadges(archive);
   const totalMiniGames = getMiniGameCompletionTotal(archive);
   const latestBadges = archive.badgeRecords.slice(0, 4);
   const latestReviews = archive.mealReviews.slice(0, 2);
   const latestMiniGameBadge = archive.badgeRecords.find((item) => item.source === "mini-game");
+  const badgeLevel = getBadgeLevelSummary(archive, childId);
   const nextFocus =
     totalMiniGames < 2
       ? "先完成一个小游戏"
@@ -2846,6 +3467,38 @@ function GrowthArchivePanel({ archive }: { archive: GrowthArchive }) {
         <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
           <p className="text-xs font-semibold text-slate-500">闽食岛进入</p>
           <p className="mt-2 text-3xl font-semibold text-slate-900">{archive.themeVisits.food}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-amber-700">奖章升级</p>
+            <h4 className="mt-1 text-2xl font-semibold text-slate-900">{badgeLevel.level}</h4>
+            <p className="mt-2 text-sm leading-7 text-slate-600">{badgeLevel.description}</p>
+          </div>
+          <div className="rounded-[1.5rem] bg-amber-50 px-5 py-4 text-center">
+            <p className="text-xs font-semibold text-amber-900">已获得奖章</p>
+            <p className="mt-2 text-3xl font-semibold text-slate-950">{badgeLevel.badgeCount}</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800">
+            下一等级：{badgeLevel.nextLevel}
+          </span>
+          <span className="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
+            {badgeLevel.remainingToNext > 0
+              ? `还差 ${badgeLevel.remainingToNext} 枚`
+              : "已经到达当前最高等级"}
+          </span>
+          {badgeLevel.latestBadges.map((badge) => (
+            <span
+              key={`${badge.name}-${badge.earnedAt}`}
+              className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+            >
+              最近：{badge.name}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -3382,7 +4035,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   }
 
   function logFoodPreferenceObservation(record: FoodPreferenceRecord) {
-    const badgeName = "饮食观察章";
+    const badgeName = "美食认识观察章";
     const gameContent = getConfiguredGameContent("foodPreference");
     const recordWithChild = {
       ...record,
@@ -4301,7 +4954,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
 
       <section className="grid gap-6">
         <RewardStickerShelf badges={badges} />
-        <GrowthArchivePanel archive={growthArchive} />
+        <GrowthArchivePanel archive={growthArchive} childId={selectedChild?.id} />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
@@ -4364,9 +5017,45 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 logMiniGameCompletion("habitJudge", "安全知识判断章", pickedItems)
               }
             />
+            <MealMannersGame
+              contentConfig={getConfiguredGameContent("mealManners")}
+              onSpeak={(text) => {
+                void startSpeechPlayback(text);
+              }}
+              onComplete={(pickedItems) =>
+                logMiniGameCompletion("mealManners", "文明进餐章", pickedItems)
+              }
+            />
+            <HabitTrafficLightGame
+              contentConfig={getConfiguredGameContent("habitTrafficLight")}
+              onSpeak={(text) => {
+                void startSpeechPlayback(text);
+              }}
+              onComplete={(pickedItems) =>
+                logMiniGameCompletion("habitTrafficLight", "好习惯判断章", pickedItems)
+              }
+            />
           </>
         ) : (
           <>
+            <FoodTrainGame
+              contentConfig={getConfiguredGameContent("foodTrain")}
+              onSpeak={(text) => {
+                void startSpeechPlayback(text);
+              }}
+              onComplete={(pickedItems) =>
+                logMiniGameCompletion("foodTrain", "闽食小勇士章", pickedItems)
+              }
+            />
+            <FoodGuessGame
+              contentConfig={getConfiguredGameContent("foodGuess")}
+              onSpeak={(text) => {
+                void startSpeechPlayback(text);
+              }}
+              onComplete={(pickedItems) =>
+                logMiniGameCompletion("foodGuess", "食材发现章", pickedItems)
+              }
+            />
             <FoodTreasureQuestGame
               contentConfig={getConfiguredGameContent("foodObserve")}
               onSpeak={(text) => {

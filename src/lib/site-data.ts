@@ -137,6 +137,26 @@ export const rewardStickerCards = [
     tone: "bg-emerald-100 text-emerald-900",
   },
   {
+    title: "闽食小勇士章",
+    icon: "🚂",
+    tone: "bg-amber-100 text-amber-900",
+  },
+  {
+    title: "食材发现章",
+    icon: "🧺",
+    tone: "bg-cyan-100 text-cyan-900",
+  },
+  {
+    title: "文明进餐章",
+    icon: "🍽️",
+    tone: "bg-emerald-100 text-emerald-900",
+  },
+  {
+    title: "好习惯判断章",
+    icon: "🟢",
+    tone: "bg-teal-100 text-teal-900",
+  },
+  {
     title: "闽食宣传员",
     icon: "📣",
     tone: "bg-cyan-100 text-cyan-900",
@@ -339,6 +359,169 @@ export const minnanFoodClues = [
   },
 ];
 
+export const foodTrainStations = [
+  {
+    label: "泉州海蛎煎",
+    icon: "🦪",
+    station: "海边金黄站",
+    chant: "海蛎煎，金黄边，海味香香进小店。",
+    command: "小列车进站，请找到海蛎煎。",
+    ingredients: ["海蛎", "鸡蛋", "地瓜粉"],
+  },
+  {
+    label: "面线糊",
+    icon: "🥣",
+    station: "古城暖汤站",
+    chant: "面线糊，细又柔，热热一碗慢慢瞅。",
+    command: "小列车进站，请找到面线糊。",
+    ingredients: ["面线", "清汤", "葱花"],
+  },
+  {
+    label: "紫菜汤",
+    icon: "🌊",
+    station: "海风紫菜站",
+    chant: "紫菜汤，海风香，小勺轻轻尝一尝。",
+    command: "小列车进站，请找到紫菜汤。",
+    ingredients: ["紫菜", "清汤", "虾米"],
+  },
+  {
+    label: "芥菜饭",
+    icon: "🥬",
+    station: "家常绿叶站",
+    chant: "芥菜饭，绿叶香，米粒粒粒有力量。",
+    command: "小列车进站，请找到芥菜饭。",
+    ingredients: ["芥菜", "米饭", "香菇"],
+  },
+  {
+    label: "蛏子",
+    icon: "🦪",
+    station: "海边贝壳站",
+    chant: "小蛏子，住海边，贝壳开合像小船。",
+    command: "小列车进站，请找到蛏子。",
+    ingredients: ["蛏子", "姜丝", "清汤"],
+  },
+  {
+    label: "炸枣",
+    icon: "🟠",
+    station: "甜甜糕点站",
+    chant: "炸枣圆，香又甜，先看圆圆小笑脸。",
+    command: "小列车进站，请找到炸枣。",
+    ingredients: ["糯米粉", "豆沙", "芝麻"],
+  },
+  {
+    label: "润饼菜",
+    icon: "🌯",
+    station: "古城卷卷站",
+    chant: "润饼菜，卷起来，蔬菜朋友排成排。",
+    command: "小列车进站，请找到润饼菜。",
+    ingredients: ["薄饼皮", "包菜", "花生碎"],
+  },
+  {
+    label: "石花膏",
+    icon: "🍧",
+    station: "清凉甜甜站",
+    chant: "石花膏，透明亮，清清凉凉慢慢尝。",
+    command: "小列车进站，请找到石花膏。",
+    ingredients: ["石花膏", "蜂蜜水", "水果丁"],
+  },
+];
+
+export const foodGuessRounds = [
+  {
+    answer: "海蛎",
+    icon: "🦪",
+    treasure: "海边宝箱",
+    hints: ["来自海边", "小小软软", "可以做成泉州海蛎煎"],
+    options: ["海蛎", "芥菜", "面线", "鱼肉"],
+    praise: "你找到海蛎啦，可以播报：海蛎是海边来的鲜味食材。",
+  },
+  {
+    answer: "面线",
+    icon: "🥣",
+    treasure: "古城宝箱",
+    hints: ["细细长长", "放进热汤里软软的", "可以做成面线糊"],
+    options: ["紫菜", "面线", "虾米", "地瓜粉"],
+    praise: "你找到面线啦，可以播报：面线细细软软，是面线糊里的主角。",
+  },
+  {
+    answer: "芥菜",
+    icon: "🥬",
+    treasure: "绿叶宝箱",
+    hints: ["绿绿叶子", "有一点清香", "可以和米饭做成芥菜饭"],
+    options: ["芥菜", "海蛎", "蛏子", "鱼肉"],
+    praise: "你找到芥菜啦，可以播报：芥菜是绿叶食材，能做家常芥菜饭。",
+  },
+  {
+    answer: "地瓜粉",
+    icon: "⭐",
+    treasure: "小厨师宝箱",
+    hints: ["白白细细", "能让边边软糯", "海蛎煎里常见它"],
+    options: ["面线", "紫菜", "地瓜粉", "虾米"],
+    praise: "你找到地瓜粉啦，可以播报：地瓜粉能让海蛎煎有软糯口感。",
+  },
+];
+
+export const mealMannerActions = [
+  {
+    label: "小手扶好碗",
+    icon: "🥣",
+    command: "小手扶好碗，饭菜不乱跑。",
+  },
+  {
+    label: "小脚放稳",
+    icon: "🪑",
+    command: "小脚放稳稳，身体坐舒服。",
+  },
+  {
+    label: "嘴巴轻轻嚼",
+    icon: "🥢",
+    command: "嘴巴轻轻嚼，细嚼慢慢咽。",
+  },
+  {
+    label: "残渣不乱丢",
+    icon: "🧻",
+    command: "小骨小渣放好，桌面干净笑一笑。",
+  },
+  {
+    label: "餐后会整理",
+    icon: "🧺",
+    command: "餐后收一收，碗筷桌面都有家。",
+  },
+];
+
+export const habitTrafficLightCards = [
+  {
+    behavior: "饭前洗手",
+    icon: "🧼",
+    answer: "green",
+    goodPractice: "饭前洗手是好习惯，小手干净再用餐。",
+  },
+  {
+    behavior: "边吃边玩",
+    icon: "🧸",
+    answer: "red",
+    goodPractice: "吃饭时先照顾小肚子，玩具等一等。",
+  },
+  {
+    behavior: "细嚼慢咽",
+    icon: "🥢",
+    answer: "green",
+    goodPractice: "慢慢嚼、轻轻咽，身体更舒服。",
+  },
+  {
+    behavior: "撒饭不收拾",
+    icon: "🍚",
+    answer: "red",
+    goodPractice: "不小心撒了饭，可以请老师帮忙一起整理。",
+  },
+  {
+    behavior: "按需取餐",
+    icon: "🍽️",
+    answer: "green",
+    goodPractice: "吃多少取多少，是珍惜粮食的好办法。",
+  },
+];
+
 export const foodPreferenceReasons = [
   {
     label: "味道陌生",
@@ -384,8 +567,8 @@ export const peerEncouragementPrompts = [
 ];
 
 export const storyMissionMap: Record<ThemeId, string[]> = {
-  habit: ["完成小手清洁任务", "完成一日好习惯路线", "判断做法对不对"],
-  food: ["逛泉州美食摊", "记录还在认识的食物", "陪同伴认识新美食", "认识午餐小餐盘"],
+  habit: ["饭前洗手", "文明进餐", "好习惯红绿牌", "餐后整理"],
+  food: ["闽食小列车", "美食猜猜乐", "逛泉州美食摊", "介绍一种家乡美食"],
 };
 
 export const themeVideoCards: Record<
@@ -462,6 +645,75 @@ export const teacherWorkflowCards = [
     title: "观察延伸",
     icon: "📝",
     description: "把儿童互动记录转成观察要点和下一次活动延伸建议。",
+  },
+];
+
+export const teacherGroupActivityCards = [
+  {
+    title: "闽食小列车",
+    themeId: "food" as const,
+    scene: "餐前谈话、泉州美食主题周、家乡味导入",
+    goal: "幼儿能听站名找到对应美食，并说出一种食材或一句小播报。",
+    steps: ["听进站口令", "找到美食站点", "说一种食材", "给家人介绍一个名字"],
+    aiCanGenerate: "站点口令、短儿歌、进站播报、表扬语、家园同步话术",
+  },
+  {
+    title: "美食猜猜乐",
+    themeId: "food" as const,
+    scene: "食材观察、区域游戏、餐前经验唤醒",
+    goal: "幼儿能根据颜色、形状、来源和用途线索猜食材。",
+    steps: ["打开宝箱", "听三条线索", "选择食材卡", "做小小美食播报员"],
+    aiCanGenerate: "猜谜线索、食材儿歌、播报员台词、温和鼓励语",
+  },
+  {
+    title: "美食小厨师",
+    themeId: "food" as const,
+    scene: "美工区、生活区、亲子食育活动延伸",
+    goal: "幼儿能用图片或模型搭配一道泉州美食，说出主要食材。",
+    steps: ["选一道美食", "找食材卡", "摆一摆小餐盘", "说一句我发现了"],
+    aiCanGenerate: "小厨师任务卡、操作口令、亲子介绍话术、家园小任务",
+  },
+  {
+    title: "文明进餐操",
+    themeId: "habit" as const,
+    scene: "午餐前、点心前、过渡环节",
+    goal: "幼儿能跟随口令模仿扶碗、坐稳、细嚼慢咽和餐后整理动作。",
+    steps: ["听动作口令", "模仿一个动作", "说出好习惯", "迁移到午餐环节"],
+    aiCanGenerate: "动作口令、节奏儿歌、打卡话术、家园同步建议",
+  },
+  {
+    title: "好习惯红绿牌",
+    themeId: "habit" as const,
+    scene: "生活习惯集体游戏、安全判断活动",
+    goal: "幼儿能判断进餐和生活行为，看到需要调整的做法时说出替代动作。",
+    steps: ["听行为", "举绿牌或红牌", "听正确做法", "演一演替代动作"],
+    aiCanGenerate: "判断题、正确做法提示、表扬语、家庭复习话术",
+  },
+  {
+    title: "珍惜粮食小列车",
+    themeId: "habit" as const,
+    scene: "进餐习惯、劳动教育、家园共育",
+    goal: "幼儿能理解按需取餐、感谢劳动、餐后整理是珍惜粮食的小行动。",
+    steps: ["听粮食旅行故事", "选按需取餐", "感谢劳动", "餐后整理打卡"],
+    aiCanGenerate: "粮食旅行故事、进餐口号、感谢语、家庭小管家任务",
+  },
+];
+
+export const parentHomeTaskCards = [
+  {
+    title: "家庭美食小管家",
+    icon: "🏠",
+    tasks: ["饭前洗手", "摆碗筷", "尝试一小步", "餐后整理"],
+  },
+  {
+    title: "亲子尝新小挑战",
+    icon: "🥢",
+    tasks: ["看一看", "闻一闻", "尝一点", "说发现"],
+  },
+  {
+    title: "睡前美食小回顾",
+    icon: "🌙",
+    tasks: ["今天认识了什么食物", "它是什么颜色或味道", "明天愿意尝试哪一小步"],
   },
 ];
 

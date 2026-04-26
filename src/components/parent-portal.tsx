@@ -7,6 +7,7 @@ import { findChildIdentitySuggestions, formatChildLabel } from "@/lib/child-iden
 import {
   childRosterStorageKey,
   createEmptyGrowthArchive,
+  getBadgeLevelSummary,
   growthArchiveStorageKey,
   parseChildRoster,
   parseGrowthArchive,
@@ -16,6 +17,7 @@ import {
   type GrowthArchive,
   type MiniGameRecord,
 } from "@/lib/growth-archive";
+import { parentHomeTaskCards } from "@/lib/site-data";
 import {
   addParentFeedbackRecord,
   formatParentSyncTime,
@@ -93,7 +95,7 @@ function getBadgeVisual(record: BadgeRecord) {
     };
   }
 
-  if (/排队|整理|习惯|路线|掌握/.test(name)) {
+  if (/排队|整理|习惯|路线|掌握|文明进餐|粮食|餐后/.test(name)) {
     return {
       icon: "🌟",
       label: "生活习惯",
@@ -130,9 +132,13 @@ function getMiniGameDisplayName(gameKey: MiniGameRecord["gameKey"]) {
     kindWords: "闽食三步练习",
     foodObserve: "泉州美食摊位寻宝",
     foodClue: "泉州美食线索寻宝",
+    foodTrain: "闽食小列车",
+    foodGuess: "美食猜猜乐",
     foodPreference: "美食认识观察卡",
     peerEncourage: "陪同伴认识新美食",
     mealTray: "午餐小餐盘",
+    mealManners: "文明进餐操",
+    habitTrafficLight: "好习惯红绿牌",
   };
 
   return labelMap[gameKey];
@@ -260,6 +266,10 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   );
   const uniqueBadgeCards = useMemo(() => getUniqueBadgeCards(childBadges), [childBadges]);
   const uniqueBadgeCount = selectedChild ? uniqueBadgeCards.length : 0;
+  const badgeLevel = useMemo(
+    () => getBadgeLevelSummary(archive, selectedChild?.id),
+    [archive, selectedChild],
+  );
   const miniGameTotal = childMiniGames.length;
   const miniGameAnalysis = useMemo(() => buildMiniGameAnalysis(childMiniGames), [childMiniGames]);
 
@@ -505,6 +515,38 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               </div>
             </div>
 
+            <div className="mt-5 rounded-[1.8rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_58%,#e6fbfa_100%)] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-amber-700">奖章升级</p>
+                  <h3 className="mt-1 text-2xl font-semibold text-slate-900">{badgeLevel.level}</h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">{badgeLevel.description}</p>
+                </div>
+                <div className="rounded-[1.4rem] bg-white/85 px-5 py-4 text-center shadow-sm">
+                  <p className="text-xs font-semibold text-slate-500">距离下一等级</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-900">
+                    {badgeLevel.remainingToNext > 0 ? `${badgeLevel.remainingToNext} 枚` : "已达成"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {badgeLevel.latestBadges.length > 0 ? (
+                  badgeLevel.latestBadges.map((badge) => (
+                    <span
+                      key={`${badge.name}-${badge.earnedAt}`}
+                      className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+                    >
+                      {badge.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-500 shadow-sm">
+                    完成一个小任务，就会开始点亮奖章。
+                  </span>
+                )}
+              </div>
+            </div>
+
             <div className="mt-5 rounded-[1.8rem] bg-slate-50 p-5">
               <p className="font-semibold text-slate-900">已获得勋章</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -582,6 +624,43 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               老师还没有给该幼儿同步反馈与家庭建议。请等待老师端确认后同步。
             </p>
           )}
+        </div>
+      </section>
+
+      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_54%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-amber-700">居家延续任务</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">回家可以轻轻做</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              这些任务不要求一次全部完成。家长只选一个小步骤，记录孩子愿意认识、愿意靠近和愿意整理的过程。
+            </p>
+          </div>
+          <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+            {parentHomeTaskCards.length} 类
+          </span>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          {parentHomeTaskCards.map((card) => (
+            <article key={card.title} className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-amber-100 text-2xl">
+                  {card.icon}
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">{card.title}</h3>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {card.tasks.map((taskItem) => (
+                  <span
+                    key={taskItem}
+                    className="rounded-full bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                  >
+                    {taskItem}
+                  </span>
+                ))}
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 

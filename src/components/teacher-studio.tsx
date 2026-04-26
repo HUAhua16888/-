@@ -44,6 +44,7 @@ import {
   type TeacherVideoResource,
 } from "@/lib/video-library";
 import {
+  teacherGroupActivityCards,
   teacherPitchCards,
   teacherTasks,
   teacherWorkflowCards,
@@ -160,7 +161,7 @@ function buildTeacherClientFallback(task: string, userInput = ""): TeacherRespon
   const isPraise = /鼓励|表扬|挑食|不愿意|情绪|安抚|紧张/.test(target);
   const ageGroup = resolveTeacherAgeGroup(target);
   const ageFocus = getTeacherAgeFocus(ageGroup);
-  const activityName = isFood ? "家乡美食小发现" : "小手泡泡按顺序";
+  const activityName = isFood ? "泉州美食探索小列车" : "文明进餐好习惯操";
   const title = isActivity
     ? "幼儿活动课程方案"
     : isStory
@@ -175,12 +176,20 @@ function buildTeacherClientFallback(task: string, userInput = ""): TeacherRespon
         `活动名称：${activityName}`,
         `适用年龄：${ageGroup}`,
         "活动时长：15-20 分钟",
-        `活动目标：1. 愿意观察图片或实物，说出一个发现。2. 能用动作或短句完成一个小任务。3. 在生活中尝试迁移一步做法。`,
-        `准备材料：情境图片、实物或模型、小任务卡、贴纸。`,
-        `活动流程：导入 2 分钟，用角色或图片引出问题；感知/操作 6 分钟，让幼儿看、摸、摆或模仿；互动表达 5 分钟，请幼儿说一句发现或演示一个动作；生活迁移 3 分钟，说说今天在哪里能用到；收束 2 分钟，用贴纸肯定具体行为。`,
+        isFood
+          ? `活动目标：1. 能说出一种泉州美食名称。2. 能从图片或实物中找到一种食材。3. 愿意用短句介绍一个发现或选择靠近一小步。`
+          : `活动目标：1. 能模仿一个进餐好习惯动作。2. 能判断一种行为是好习惯还是需要调整。3. 愿意把一个小步骤带到午餐或家庭生活里。`,
+        isFood
+          ? `准备材料：泉州美食站点图、食材卡、美食宝箱、贴纸。`
+          : `准备材料：红绿牌、进餐动作图卡、碗筷模型、贴纸。`,
+        isFood
+          ? `活动流程：导入 2 分钟，用闽食小列车口令进站；感知/操作 6 分钟，幼儿看图找美食和食材卡；互动表达 5 分钟，请幼儿做小小美食播报员；生活迁移 3 分钟，选择回家介绍的一种美食；收束 2 分钟，用贴纸肯定具体发现。`
+          : `活动流程：导入 2 分钟，用文明进餐操口令热身；感知/操作 6 分钟，幼儿模仿扶碗、坐稳、细嚼慢咽、整理动作；互动表达 5 分钟，用红绿牌判断行为；生活迁移 3 分钟，说说午餐或家里可以做哪一步；收束 2 分钟，肯定一个具体好习惯。`,
         `教师提问：你看到了什么？下一步可以怎么做？你愿意试哪一小步？`,
         `观察要点：是否能参与操作；是否能说出一个可观察发现；是否愿意尝试或模仿目标动作。`,
-        `家园延伸：回家和家长完成一个很小的同主题任务，并说一句“我今天发现了……”。`,
+        isFood
+          ? `家园延伸：回家完成睡前美食小回顾，说一种今天认识的美食、一个颜色或食材，以及明天愿意靠近哪一小步。`
+          : `家园延伸：回家做家庭美食小管家，饭前洗手、摆碗筷、按需取餐，餐后整理一个小地方。`,
         `注意事项：${ageFocus} 不考试、不背诵、不要求全部幼儿同一速度完成。`,
       ].join("\n")
     : isStory
@@ -263,8 +272,8 @@ function buildMiniGameExtensionScenario(themeId: ThemeId, ageGroup: string = def
 
 function buildHomePlanScenario(themeId: ThemeId, ageGroup: string = defaultTeacherAgeGroup) {
   return themeId === "food"
-    ? `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：泉州美食小发现。幼儿已有经验：认识少量家乡食物，但对食材、颜色和味道表达还不充分。希望目标：能说出一种泉州美食名称，找一找食材或外形特征，选择一个愿意靠近的小步骤。`
-    : `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：饭前洗手。幼儿已有经验：知道要洗手，但步骤容易漏。希望目标：能按顺序说出并模仿洗手步骤，在餐前主动尝试。`;
+    ? `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：泉州美食探索。幼儿已有经验：认识少量家乡食物，但对食材、颜色和味道表达还不充分。希望目标：能说出一种泉州美食名称，找一找食材或外形特征，选择一个愿意靠近的小步骤。`
+    : `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：文明进餐好习惯。幼儿已有经验：知道饭前要洗手，但坐姿、轻声用餐、细嚼慢咽、按需取餐和餐后整理还需要图卡和动作提示。希望目标：能模仿一个进餐好习惯动作，并在午餐或家庭生活里尝试迁移。`;
 }
 
 function buildPreferenceInterventionScenario(record: FoodPreferenceRecord, ageGroup: string = defaultTeacherAgeGroup) {
@@ -297,12 +306,16 @@ function hasThemeMiniGameRecord(rawArchive: string | null, themeId: ThemeId) {
     ? archive.miniGameProgress.foodObserve > 0 ||
         archive.miniGameProgress.foodClue > 0 ||
         archive.miniGameProgress.kindWords > 0 ||
+        archive.miniGameProgress.foodTrain > 0 ||
+        archive.miniGameProgress.foodGuess > 0 ||
         archive.miniGameProgress.foodPreference > 0 ||
         archive.miniGameProgress.peerEncourage > 0 ||
         archive.miniGameProgress.mealTray > 0
     : archive.miniGameProgress.washSteps > 0 ||
         archive.miniGameProgress.queue > 0 ||
-        archive.miniGameProgress.habitJudge > 0;
+        archive.miniGameProgress.habitJudge > 0 ||
+        archive.miniGameProgress.mealManners > 0 ||
+        archive.miniGameProgress.habitTrafficLight > 0;
 }
 
 function parseRosterImportText(text: string) {
@@ -338,9 +351,13 @@ function getGameDisplayName(gameKey: MiniGameRecord["gameKey"]) {
     kindWords: "闽食三步练习",
     foodObserve: "泉州美食摊位寻宝",
     foodClue: "闽食摊位寻宝",
+    foodTrain: "闽食小列车",
+    foodGuess: "美食猜猜乐",
     foodPreference: "美食认识观察卡",
     peerEncourage: "陪同伴认识新美食",
     mealTray: "午餐小餐盘",
+    mealManners: "文明进餐操",
+    habitTrafficLight: "好习惯红绿牌",
   };
 
   return labelMap[gameKey];
@@ -360,6 +377,22 @@ function buildMiniGameInterventionScenario(record: MiniGameRecord) {
 
   if (record.gameKey === "habitJudge") {
     return `${childName}完成了“看图判断做法对不对”，判断记录：${pickedText}。${classroomPlanRequirement}帮助幼儿看图说出正确做法和不安全原因。`;
+  }
+
+  if (record.gameKey === "mealManners") {
+    return `${childName}完成了“文明进餐操”，动作记录：${pickedText}。${classroomPlanRequirement}重点帮助幼儿练习正确坐姿、轻声用餐、细嚼慢咽、按需取餐和餐后整理。`;
+  }
+
+  if (record.gameKey === "habitTrafficLight") {
+    return `${childName}完成了“好习惯红绿牌”，判断记录：${pickedText}。${classroomPlanRequirement}帮助幼儿判断进餐行为是否合适，并说出可以替代的正确做法。`;
+  }
+
+  if (record.gameKey === "foodTrain") {
+    return `${childName}完成了“闽食小列车”，到站记录：${pickedText}。${classroomPlanRequirement}设计泉州美食站点游戏，帮助幼儿认识美食名称、食材和一句小小播报。`;
+  }
+
+  if (record.gameKey === "foodGuess") {
+    return `${childName}完成了“美食猜猜乐”，食材记录：${pickedText}。${classroomPlanRequirement}围绕颜色、形状、来源和能做成什么菜设计食材发现活动。`;
   }
 
   if (record.gameKey === "foodPreference") {
@@ -390,8 +423,24 @@ function buildLocalInterventionTips(record: MiniGameRecord) {
     return ["继续用图片让孩子说“哪里对、哪里要换”。", "把错误做法转成正确动作示范。", "安全知识用短句重复，不用吓唬式提醒。"];
   }
 
+  if (record.gameKey === "mealManners") {
+    return ["午餐前用同一套动作口令。", "完成一个动作就及时肯定。", "家里同步扶碗、坐稳和餐后整理。"];
+  }
+
+  if (record.gameKey === "habitTrafficLight") {
+    return ["用红绿牌复习进餐行为。", "看到红牌行为时说替代动作。", "不批评孩子，只示范正确做法。"];
+  }
+
+  if (record.gameKey === "foodTrain") {
+    return ["保留站点图卡复述美食名字。", "请孩子选一种美食介绍给家人。", "搭配短儿歌帮助记忆。"];
+  }
+
+  if (record.gameKey === "foodGuess") {
+    return ["继续用颜色形状线索猜食材。", "让孩子做一句小播报。", "把猜中食材放进美食故事里。"];
+  }
+
   if (record.gameKey === "foodPreference") {
-    return ["先接纳不喜欢的理由。", "从看一看、闻一闻开始，不直接要求吃完。", "只给一小口尝试目标。"];
+    return ["先接纳正在认识的理由。", "从看一看、闻一闻开始，不催促入口。", "只推进一个靠近小步骤。"];
   }
 
   if (record.gameKey === "mealTray") {
@@ -1195,6 +1244,30 @@ export function TeacherStudio() {
     setCopyStatus("");
     setVoiceStatus("");
     setDraftStatus("已带入儿童端美食认识记录，可以生成一节泉州食育课堂活动方案。");
+  }
+
+  function applyGroupActivityCard(card: (typeof teacherGroupActivityCards)[number]) {
+    const homeTask = teacherTasks.find((item) => item.id === "home") ?? teacherTasks[0];
+
+    setThemeId(card.themeId);
+    setTask(homeTask.label);
+    setScenario(
+      [
+        `年龄段：${teacherAgeGroup}。`,
+        "活动时长：15-20 分钟。",
+        `主题：${card.title}。`,
+        `适合场景：${card.scene}。`,
+        `活动目标：${card.goal}。`,
+        `游戏步骤：${card.steps.join("；")}。`,
+        `AI 可生成内容：${card.aiCanGenerate}。`,
+        classroomPlanRequirement,
+        "要求活动游戏化、短句提问、可操作，不强迫孩子吃完，不用小学化讲解。",
+      ].join(""),
+    );
+    setResult(null);
+    setCopyStatus("");
+    setVoiceStatus("");
+    setDraftStatus(`已带入“${card.title}”，请确认后点击“开始生成”。`);
   }
 
   function saveParentSyncRecord(record: ParentSyncRecord) {
@@ -2019,6 +2092,71 @@ export function TeacherStudio() {
           <p className="mt-4 rounded-[1.2rem] bg-white/75 px-4 py-3 text-sm leading-7 text-slate-600">
             最近明细 {recentMiniGameRecords.length} 条仍保留在下方干预策略池；这里优先显示可用于班级分析和家园沟通的数据汇总。
           </p>
+        </div>
+      </section>
+
+      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_52%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-amber-700">集体游戏活动卡</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">一键带入活动课程方案</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              老师先选活动卡，系统会把主题、目标、步骤和可生成内容写进左侧方案输入区；不会自动调用接口，确认后再点“开始生成”。
+            </p>
+          </div>
+          <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+            {teacherGroupActivityCards.length} 张
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          {teacherGroupActivityCards.map((card) => (
+            <article
+              key={card.title}
+              className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p
+                    className={`text-sm font-semibold ${
+                      card.themeId === "food" ? "text-orange-700" : "text-teal-700"
+                    }`}
+                  >
+                    {card.themeId === "food" ? "闽食成长岛" : "幼习宝"}
+                  </p>
+                  <h3 className="mt-1 text-xl font-semibold text-slate-900">{card.title}</h3>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                  集体游戏
+                </span>
+              </div>
+              <div className="mt-4 space-y-3 text-sm leading-7 text-slate-700">
+                <p>
+                  <span className="font-semibold text-slate-900">适合场景：</span>
+                  {card.scene}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-900">活动目标：</span>
+                  {card.goal}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-900">游戏步骤：</span>
+                  {card.steps.join(" → ")}
+                </p>
+                <p className="rounded-[1.2rem] bg-slate-50 px-4 py-3">
+                  <span className="font-semibold text-slate-900">AI 可生成：</span>
+                  {card.aiCanGenerate}
+                </p>
+              </div>
+              <button
+                onClick={() => applyGroupActivityCard(card)}
+                className="mt-4 rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                type="button"
+              >
+                带入活动方案
+              </button>
+            </article>
+          ))}
         </div>
       </section>
 
