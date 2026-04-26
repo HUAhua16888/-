@@ -676,9 +676,85 @@ export const peerEncouragementPrompts = [
   },
 ];
 
+export const foodReporterFoods = [
+  {
+    label: "泉州海蛎煎",
+    icon: "🦪",
+    ingredientText: "里面有海蛎、鸡蛋、地瓜粉和小葱。",
+    discoveryText: "金黄金黄，边边香香，像海边来的小饼。",
+    reporterLine: "大家好，我介绍的是泉州海蛎煎。它金黄金黄，里面有海蛎和鸡蛋，是泉州海边的香香味道。",
+  },
+  {
+    label: "面线糊",
+    icon: "🥣",
+    ingredientText: "里面有细细的面线、热汤和葱花。",
+    discoveryText: "细细软软，热乎乎，常在早餐时候出现。",
+    reporterLine: "大家好，我介绍的是面线糊。它细细软软，里面有面线和葱花，是泉州早餐里的暖暖味道。",
+  },
+  {
+    label: "润饼菜",
+    icon: "🌯",
+    ingredientText: "里面有薄饼皮、蔬菜和一点点家常配料。",
+    discoveryText: "卷起来像小被子，能看到很多颜色。",
+    reporterLine: "大家好，我介绍的是润饼菜。它用薄饼皮卷起蔬菜，颜色很多，是泉州家常的清爽味道。",
+  },
+  {
+    label: "石花膏",
+    icon: "🍧",
+    ingredientText: "用石花草做成透明清凉的小甜品。",
+    discoveryText: "透明、凉凉、会轻轻晃，夏天很常见。",
+    reporterLine: "大家好，我介绍的是石花膏。它透明凉凉，是泉州夏天常见的清凉甜品。",
+  },
+  {
+    label: "土笋冻",
+    icon: "🧊",
+    ingredientText: "来自海边食材，做成透明弹弹的小冻。",
+    discoveryText: "圆圆透明，凉凉弹弹，可以先看样子。",
+    reporterLine: "大家好，我介绍的是土笋冻。它透明弹弹，是泉州海边常见的特别小吃。",
+  },
+  {
+    label: "崇武鱼卷",
+    icon: "🐟",
+    ingredientText: "里面有鱼肉，卷成圆圆长长的样子。",
+    discoveryText: "白白圆圆，切开像小圆片，常放在汤里。",
+    reporterLine: "大家好，我介绍的是崇武鱼卷。它用鱼肉做成，圆圆白白，是泉州海边的鲜味。",
+  },
+];
+
+export const foodKitchenRecipes = [
+  {
+    label: "泉州海蛎煎",
+    icon: "🦪",
+    area: "海边鲜味小厨房",
+    actions: ["洗一洗海蛎", "拌一拌鸡蛋和地瓜粉", "煎一煎金黄边", "摆一摆小盘子"],
+    chant: "洗一洗，拌一拌，煎出金黄边，小厨师请上盘。",
+  },
+  {
+    label: "面线糊",
+    icon: "🥣",
+    area: "古城早餐小厨房",
+    actions: ["看一看细面线", "搅一搅热汤", "盛一盛小碗", "说一句暖暖的"],
+    chant: "细面线，热汤汤，慢慢搅，轻轻尝。",
+  },
+  {
+    label: "润饼菜",
+    icon: "🌯",
+    area: "家常卷卷小厨房",
+    actions: ["铺一铺薄饼皮", "放一放蔬菜", "卷一卷食材", "介绍一下颜色"],
+    chant: "薄饼皮，蔬菜彩，卷一卷，介绍来。",
+  },
+  {
+    label: "石花膏",
+    icon: "🍧",
+    area: "甜甜清凉小厨房",
+    actions: ["舀一舀石花膏", "加一加清甜水", "拌一拌小勺子", "分享一句发现"],
+    chant: "透明冻，轻轻晃，拌一拌，清凉香。",
+  },
+];
+
 export const storyMissionMap: Record<ThemeId, string[]> = {
   habit: ["生活习惯", "进餐习惯", "阅读表达", "安全与情绪"],
-  food: ["闽食小列车", "美食猜猜乐", "逛泉州美食摊", "介绍一种家乡美食"],
+  food: ["闽食小列车", "美食猜猜乐", "闽食小小播报员", "泉州小厨房"],
 };
 
 export const themeVideoCards: Record<
@@ -791,6 +867,22 @@ export const teacherGroupActivityCards: TeacherGroupActivityCard[] = [
     goal: "幼儿能听完短故事，说出一个角色、一个画面或一个喜欢的地方，并愿意把图书归位。",
     steps: ["听短故事", "选答案卡", "说一个发现", "图书归位打卡"],
     aiCanGenerate: "短绘本故事、阅读提问、表达句式、亲子共读话术、表扬语",
+  },
+  {
+    title: "闽食小小播报员",
+    themeId: "food" as const,
+    scene: "语言区、表演区、班级展示",
+    goal: "幼儿能选择一种泉州美食，用名字、食材和发现组成一句小小播报词。",
+    steps: ["选一种美食", "听提示卡", "组合介绍句", "上台播报或同伴分享"],
+    aiCanGenerate: "播报示范、上台口令、表扬语、家园介绍任务",
+  },
+  {
+    title: "泉州小厨房",
+    themeId: "food" as const,
+    scene: "生活区、角色区、食育区域活动",
+    goal: "幼儿能按顺序点制作动作卡，参与泉州美食角色扮演，理解帮忙和整理。",
+    steps: ["选一道美食", "按步骤做动作", "念小厨师口令", "分享完成感受"],
+    aiCanGenerate: "小厨师口令、步骤儿歌、区域材料建议、家庭小任务",
   },
   {
     title: "珍惜粮食小列车",

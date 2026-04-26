@@ -27,6 +27,8 @@ export type MiniGameKey =
   | "foodTrain"
   | "foodGuess"
   | "foodPreference"
+  | "foodReporter"
+  | "foodKitchen"
   | "peerEncourage"
   | "mealTray"
   | "mealManners"
@@ -97,6 +99,8 @@ export function createEmptyGrowthArchive(): GrowthArchive {
       foodTrain: 0,
       foodGuess: 0,
       foodPreference: 0,
+      foodReporter: 0,
+      foodKitchen: 0,
       peerEncourage: 0,
       mealTray: 0,
       mealManners: 0,
@@ -201,6 +205,8 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
         foodTrain: normalizeMiniGameCount(parsed.miniGameProgress?.foodTrain),
         foodGuess: normalizeMiniGameCount(parsed.miniGameProgress?.foodGuess),
         foodPreference: normalizeMiniGameCount(parsed.miniGameProgress?.foodPreference),
+        foodReporter: normalizeMiniGameCount(parsed.miniGameProgress?.foodReporter),
+        foodKitchen: normalizeMiniGameCount(parsed.miniGameProgress?.foodKitchen),
         peerEncourage: normalizeMiniGameCount(parsed.miniGameProgress?.peerEncourage),
         mealTray: normalizeMiniGameCount(parsed.miniGameProgress?.mealTray),
         mealManners: normalizeMiniGameCount(parsed.miniGameProgress?.mealManners),
@@ -337,11 +343,19 @@ export function recordFoodPreference(
   };
 }
 
-export function countUniqueBadges(archive: GrowthArchive) {
-  return new Set(archive.badgeRecords.map((item) => item.name)).size;
+export function countUniqueBadges(archive: GrowthArchive, childId?: string) {
+  const records = childId
+    ? archive.badgeRecords.filter((item) => item.childId === childId)
+    : archive.badgeRecords;
+
+  return new Set(records.map((item) => item.name)).size;
 }
 
-export function getMiniGameCompletionTotal(archive: GrowthArchive) {
+export function getMiniGameCompletionTotal(archive: GrowthArchive, childId?: string) {
+  if (childId) {
+    return archive.miniGameRecords.filter((item) => item.childId === childId).length;
+  }
+
   return Object.values(archive.miniGameProgress).reduce((sum, value) => sum + value, 0);
 }
 

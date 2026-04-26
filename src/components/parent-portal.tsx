@@ -115,7 +115,7 @@ function getBadgeVisual(record: BadgeRecord) {
     };
   }
 
-  if (/饮食|闽食|餐|食|海蛎|紫菜|尝|观察/.test(name)) {
+  if (/饮食|闽食|餐|食|海蛎|紫菜|尝|观察|播报|厨师|主厨|寻宝/.test(name)) {
     return {
       icon: "🥣",
       label: "闽食探索",
@@ -146,8 +146,10 @@ function getMiniGameDisplayName(gameKey: MiniGameRecord["gameKey"]) {
     foodTrain: "闽食小列车",
     foodGuess: "美食猜猜乐",
     foodPreference: "美食认识观察卡",
-    peerEncourage: "陪同伴认识新美食",
-    mealTray: "午餐小餐盘",
+    foodReporter: "闽食小小播报员",
+    foodKitchen: "泉州小厨房",
+    peerEncourage: "历史同伴鼓励记录",
+    mealTray: "历史午餐小餐盘记录",
     mealManners: "文明进餐操",
     habitTrafficLight: "好习惯红绿牌",
   };

@@ -200,6 +200,130 @@ export function getParentFeedbackCategoryLabel(category: ParentFeedbackCategory)
   return "家长疑惑";
 }
 
+export function getMiniGameFollowUp(record: MiniGameRecord) {
+  const pickedText = record.pickedItems.length > 0 ? record.pickedItems.join("、") : "已完成互动任务";
+  const fallback = {
+    displayName: record.badgeName,
+    observation: "孩子完成了一项儿童互动任务。",
+    activityScenario: `儿童端互动记录：${pickedText}。请生成一节幼儿园活动方案，帮助幼儿把本次经验迁移到一日生活中。`,
+    homeTask: "今晚请孩子说一说今天完成了什么小任务，家长只追问一个小步骤。",
+    encouragement: "你愿意试一试这个小任务，已经有新的进步啦。",
+    focus: false,
+  };
+
+  const map: Partial<Record<MiniGameRecord["gameKey"], typeof fallback>> = {
+    readingCheckin: {
+      displayName: "阅读小书虫打卡",
+      observation: "孩子完成了阅读表达任务，能听故事并说出一个角色、画面或喜欢的地方。",
+      activityScenario: `阅读小书虫打卡记录：${pickedText}。请生成阅读延伸活动，包含听故事、故事复述、讲一个画面和图书整理。`,
+      homeTask: "亲子共读 5 分钟，请孩子说一句“我看到了……”，看完书放回原位。",
+      encouragement: "你认真听故事，还能说出自己的发现，阅读小书虫亮起来啦。",
+      focus: false,
+    },
+    habitTrafficLight: {
+      displayName: "好习惯红绿牌",
+      observation: "孩子参与了好习惯判断，可继续练习把需要调整的做法换成正确动作。",
+      activityScenario: `好习惯红绿牌记录：${pickedText}。请生成红绿牌情境游戏和好习惯替代动作练习。`,
+      homeTask: "在家找一个好习惯，请孩子说给家长听，或拍一张完成好习惯的照片。",
+      encouragement: "你会用红绿牌想一想，还能把做法换一换，真会照顾自己。",
+      focus: true,
+    },
+    mealManners: {
+      displayName: "文明进餐操",
+      observation: "孩子练习了文明进餐动作，可继续关注坐姿、轻声用餐、细嚼慢咽和餐后整理。",
+      activityScenario: `文明进餐操记录：${pickedText}。请生成文明进餐操、餐前口令和餐后整理练习活动。`,
+      homeTask: "饭前洗手、摆碗筷，餐后整理一个小地方；完成一个步骤就具体表扬。",
+      encouragement: "你的小手、小脚和小嘴巴都在练习文明进餐，完成一步也值得记录。",
+      focus: true,
+    },
+    foodTrain: {
+      displayName: "闽食小列车",
+      observation: "孩子认识了泉州美食站点，可继续从名称、食材和一句播报延伸。",
+      activityScenario: `闽食小列车记录：${pickedText}。请生成闽食小列车集体游戏，帮助幼儿认识泉州美食名称和食材。`,
+      homeTask: "和家长找一种家里或街边见过的泉州美食，说出它的名字。",
+      encouragement: "你坐上闽食小列车，认识了新的泉州美食站点。",
+      focus: false,
+    },
+    foodGuess: {
+      displayName: "美食猜猜乐",
+      observation: "孩子能根据线索认识食材，可继续用颜色、形状和来源做食材发现。",
+      activityScenario: `美食猜猜乐记录：${pickedText}。请生成美食宝箱猜猜乐，围绕颜色、形状、来源和用途认识食材。`,
+      homeTask: "和家长找一种食材，说一说它的颜色或形状。",
+      encouragement: "你会听线索找食材，像小小美食侦探一样认真。",
+      focus: false,
+    },
+    foodObserve: {
+      displayName: "泉州美食摊位寻宝",
+      observation: "孩子完成泉州美食摊位寻宝，能从名字、食材和小故事靠近家乡美食。",
+      activityScenario: `泉州美食摊位寻宝记录：${pickedText}。请生成泉州美食小发现活动，包含认名字、找食材、听小故事和说发现。`,
+      homeTask: "介绍一种泉州美食名字和一个食材。",
+      encouragement: "你找到泉州美食摊位，还愿意听它的小故事。",
+      focus: false,
+    },
+    foodPreference: {
+      displayName: "美食认识观察卡",
+      observation: "孩子正在认识一种暂时陌生的食物，需要温和小步靠近。",
+      activityScenario: `美食认识观察记录：${pickedText}。请生成亲近美食小步任务，不贴标签，从看一看、闻一闻、说发现开始。`,
+      homeTask: "看一看、闻一闻、尝一点、说发现；不催促，不比较。",
+      encouragement: "愿意靠近一点点，就是很棒的尝试。",
+      focus: true,
+    },
+    foodReporter: {
+      displayName: "闽食小小播报员",
+      observation: "孩子尝试介绍一种泉州美食，能用名字、食材或发现组成表达。",
+      activityScenario: `闽食小小播报员记录：${pickedText}。请生成小小闽食主播语言区活动，包含播报示范、同伴展示和表扬语。`,
+      homeTask: "请孩子向家人介绍一种泉州美食，说出名字和一个食材或发现。",
+      encouragement: "你已经能介绍一种家乡美食，像小小播报员一样自信。",
+      focus: false,
+    },
+    foodKitchen: {
+      displayName: "泉州小厨房",
+      observation: "孩子愿意参与泉州美食制作步骤和角色扮演，可继续发展顺序表达和生活参与。",
+      activityScenario: `泉州小厨房记录：${pickedText}。请生成区域活动方案，包含食材图片、锅铲玩具、步骤卡、围裙和家园延伸。`,
+      homeTask: "在家参与一个小步骤：摆碗筷、洗菜、搅拌、端盘或餐后整理。",
+      encouragement: "你会按步骤做小厨师任务，也懂得帮忙和整理。",
+      focus: false,
+    },
+    mealTray: {
+      displayName: "历史午餐小餐盘记录",
+      observation: "这是旧版午餐小餐盘历史记录，可查看和同步，但当前主线建议转为泉州小厨房。",
+      activityScenario: `历史午餐小餐盘记录：${pickedText}。请转化为泉州小厨房区域活动，围绕步骤卡和角色扮演延伸。`,
+      homeTask: "在家参与一个小厨房步骤，如摆碗筷或餐后整理。",
+      encouragement: "你认识过餐盘里的食物，现在可以继续当泉州小厨师。",
+      focus: false,
+    },
+    peerEncourage: {
+      displayName: "历史同伴鼓励记录",
+      observation: "这是旧版同伴鼓励历史记录，可查看和同步，但当前主线建议转为闽食小小播报员。",
+      activityScenario: `历史同伴鼓励记录：${pickedText}。请转化为小小闽食主播活动，鼓励幼儿介绍一种家乡美食。`,
+      homeTask: "请孩子向家人介绍一种泉州美食，说出名字和一个发现。",
+      encouragement: "你愿意把认识美食的方法说出来，可以继续练习小小播报。",
+      focus: false,
+    },
+    habitJudge: {
+      displayName: "历史安全判断记录",
+      observation: "这是旧版安全判断历史记录，可查看和同步，但不作为当前推荐主线。",
+      activityScenario: `历史安全判断记录：${pickedText}。请转化为好习惯红绿牌复习活动，帮助幼儿说出正确替代做法。`,
+      homeTask: "在家复习一个安全做法，用短句说“我可以这样做”。",
+      encouragement: "你能回想正确做法，这条历史记录还可以继续帮助我们复习。",
+      focus: false,
+    },
+  };
+
+  return map[record.gameKey] ?? fallback;
+}
+
+export function getFoodPreferenceFollowUp(record: FoodPreferenceRecord) {
+  return {
+    displayName: "美食认识观察卡",
+    observation: `孩子正在认识“${record.foodLabel}”，感受原因是“${record.reasonLabel}”。`,
+    activityScenario: `儿童端美食认识观察：孩子正在认识“${record.foodLabel}”，原因选择为“${record.reasonLabel}”。已有温和策略：${record.strategy}${record.gentleTryTip}。请生成亲近美食小步任务，不贴标签，围绕看一看、闻一闻、说发现和选择靠近一小步设计。`,
+    homeTask: record.gentleTryTip || "看一看、闻一闻、尝一点、说发现；不催促，不比较。",
+    encouragement: `你愿意靠近${record.foodLabel}一点点，就是很棒的尝试。`,
+    focus: true,
+  };
+}
+
 export function buildParentSyncFromMiniGame(record: MiniGameRecord): ParentSyncRecord | null {
   if (!record.childId || !record.childName) {
     return null;
@@ -207,31 +331,7 @@ export function buildParentSyncFromMiniGame(record: MiniGameRecord): ParentSyncR
 
   const pickedText = record.pickedItems.length > 0 ? record.pickedItems.join("、") : "已完成互动任务";
   const themeName = record.themeId === "habit" ? "幼习宝" : "闽食成长岛";
-  const isFoodTrain = record.gameKey === "foodTrain";
-  const isFoodGuess = record.gameKey === "foodGuess";
-  const isFoodTask = record.themeId === "food";
-  const isReadingTask = record.gameKey === "readingCheckin";
-  const isMealHabit =
-    record.gameKey === "mealManners" || record.gameKey === "habitTrafficLight";
-
-  const strategy = isFoodTask
-    ? "在家延续认识、靠近、说发现的节奏，先接纳孩子的感受，再邀请孩子找食材或介绍一种泉州美食。"
-    : isReadingTask
-      ? "在家延续听故事、说角色、讲画面和图书归位的轻松节奏，先听孩子说一句发现。"
-    : isMealHabit
-      ? "在家继续用短口令复习进餐动作，不比较、不催促；孩子完成一个小步骤时，说出具体行为进行肯定。"
-      : "在家继续用短句提醒和图卡复习，不比较、不催促；孩子做对一个动作时，说出具体行为进行肯定。";
-  const homePractice = isFoodTrain
-    ? "睡前美食小回顾：请孩子说一种今天到站的泉州美食，它有什么颜色或食材，明天愿意靠近哪一小步。"
-    : isFoodGuess
-      ? "亲子尝新小挑战：看一看食材、闻一闻气味、说一个发现；愿意时再尝一点，不需要催促。"
-      : isFoodTask
-        ? "家庭美食小管家：饭前洗手、摆碗筷、介绍一种今天认识的食物，餐后一起整理。"
-        : isReadingTask
-          ? "阅读小书虫居家任务：亲子共读 5 分钟，请孩子说一句“我看到了……”，看完书放回原位。"
-        : isMealHabit
-          ? "家庭美食小管家：饭前洗手、摆碗筷、轻声用餐、按需取餐，餐后整理一个小地方。"
-          : "今晚可以请孩子说一说：今天我做对了哪个好习惯？家长只追问一个小步骤。";
+  const followUp = getMiniGameFollowUp(record);
 
   return {
     id: `game-${record.completedAt}-${record.gameKey}-${record.childId}`,
@@ -239,9 +339,9 @@ export function buildParentSyncFromMiniGame(record: MiniGameRecord): ParentSyncR
     childName: record.childName,
     title: `${record.childName}的${record.badgeName}`,
     themeId: record.themeId,
-    summary: `${record.childName}今天完成了“${themeName}”中的${record.badgeName}。互动记录：${pickedText}。`,
-    strategy,
-    homePractice,
+    summary: `${record.childName}今天完成了“${themeName}”中的${followUp.displayName}。互动记录：${pickedText}。老师观察：${followUp.observation}`,
+    strategy: followUp.observation,
+    homePractice: followUp.homeTask,
     sourceLabel: "幼儿游戏记录",
     syncedAt: new Date().toISOString(),
   };
@@ -254,15 +354,17 @@ export function buildParentSyncFromFoodPreference(
     return null;
   }
 
+  const followUp = getFoodPreferenceFollowUp(record);
+
   return {
     id: `food-${record.recordedAt}-${record.foodLabel}-${record.childId}`,
     childId: record.childId,
     childName: record.childName,
     title: `${record.childName}的美食认识观察`,
     themeId: "food",
-    summary: `${record.childName}今天正在认识“${record.foodLabel}”，选择的感受原因是“${record.reasonLabel}”。`,
-    strategy: record.strategy || "先接纳孩子的感受，不贴挑食标签，再从认名字、找食材、说发现开始温和靠近。",
-    homePractice: record.gentleTryTip || "回家可以先介绍这道家乡美食的名字，找一找食材或说一说颜色，不要求马上吃完。",
+    summary: `${record.childName}今天正在认识“${record.foodLabel}”，选择的感受原因是“${record.reasonLabel}”。老师观察：${followUp.observation}`,
+    strategy: followUp.observation,
+    homePractice: followUp.homeTask,
     sourceLabel: "美食认识观察",
     syncedAt: new Date().toISOString(),
   };
