@@ -128,10 +128,10 @@ function getMiniGameDisplayName(gameKey: MiniGameRecord["gameKey"]) {
     queue: "一日好习惯路线",
     habitJudge: "看图判断做法",
     kindWords: "闽食三步练习",
-    foodObserve: "闽食探味寻宝",
-    foodClue: "闽食摊位寻宝",
-    foodPreference: "饮食偏好观察卡",
-    peerEncourage: "同伴鼓励",
+    foodObserve: "泉州美食摊位寻宝",
+    foodClue: "泉州美食线索寻宝",
+    foodPreference: "美食认识观察卡",
+    peerEncourage: "陪同伴认识新美食",
     mealTray: "午餐小餐盘",
   };
 
@@ -195,7 +195,7 @@ function buildMiniGameAnalysis(records: MiniGameRecord[]) {
     habitCount === foodCount
       ? "幼习宝和闽食成长岛参与比较均衡。"
       : habitCount > foodCount
-        ? "幼习宝打卡更多，可继续补充闽食观察和尝试活动。"
+        ? "幼习宝打卡更多，可继续补充泉州美食探索、找食材和说发现活动。"
         : "闽食成长岛打卡更多，可同步巩固洗手、整理、排队等生活习惯。";
 
   return {
@@ -726,7 +726,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               value={feedbackText}
               onChange={(event) => setFeedbackText(event.target.value)}
               maxLength={320}
-              placeholder="例如：孩子回家说不想吃紫菜，想知道可以怎么慢慢引导。"
+              placeholder="例如：孩子回家提到一种还在认识的美食，想知道可以怎么陪他找食材、说发现。"
               className="mt-4 min-h-32 w-full rounded-[1.3rem] border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition focus:border-rose-300"
             />
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -823,8 +823,8 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         </div>
 
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-orange-700">饮食观察</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">偏好与尝试记录</h2>
+          <p className="text-sm font-semibold text-orange-700">闽食观察</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">美食认识记录</h2>
           <div className="mt-5 grid gap-3">
             {childFoodPreferences.length > 0 ? (
               childFoodPreferences.slice(0, 6).map((record) => (
@@ -840,7 +840,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               ))
             ) : (
               <p className="rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
-                暂无绑定到该幼儿账号的饮食偏好观察。
+                暂无绑定到该幼儿账号的美食认识观察。
               </p>
             )}
           </div>

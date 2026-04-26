@@ -131,6 +131,16 @@ function normalizeConfig(value: unknown, fallback: EditableGameContent): Editabl
   };
 }
 
+function isUserEditedConfig(value: unknown): value is Partial<EditableGameContent> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const updatedAt = (value as Partial<EditableGameContent>).updatedAt;
+
+  return typeof updatedAt === "string" && updatedAt !== nowLabel && !Number.isNaN(Date.parse(updatedAt));
+}
+
 export function parseGameContentConfigs(raw: string | null): EditableGameContent[] {
   if (!raw) {
     return defaultGameContentConfigs;
@@ -150,7 +160,7 @@ export function parseGameContentConfigs(raw: string | null): EditableGameContent
           item.gameKey === fallback.gameKey,
       );
 
-      return normalizeConfig(saved, fallback);
+      return isUserEditedConfig(saved) ? normalizeConfig(saved, fallback) : fallback;
     });
   } catch {
     return defaultGameContentConfigs;

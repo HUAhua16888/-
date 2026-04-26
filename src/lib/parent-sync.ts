@@ -242,12 +242,12 @@ export function buildParentSyncFromFoodPreference(
     id: `food-${record.recordedAt}-${record.foodLabel}-${record.childId}`,
     childId: record.childId,
     childName: record.childName,
-    title: `${record.childName}的饮食偏好观察`,
+    title: `${record.childName}的美食认识观察`,
     themeId: "food",
-    summary: `${record.childName}今天对“${record.foodLabel}”暂时不太想吃，选择的原因是“${record.reasonLabel}”。`,
-    strategy: record.strategy || "先接纳孩子的感受，不贴挑食标签，再从看一看、闻一闻开始温和推进。",
-    homePractice: record.gentleTryTip || "回家可以把这份食物放在旁边，先闻一闻或说一说颜色，不要求马上吃完。",
-    sourceLabel: "饮食偏好观察",
+    summary: `${record.childName}今天正在认识“${record.foodLabel}”，选择的感受原因是“${record.reasonLabel}”。`,
+    strategy: record.strategy || "先接纳孩子的感受，不贴挑食标签，再从认名字、找食材、说发现开始温和靠近。",
+    homePractice: record.gentleTryTip || "回家可以先介绍这道家乡美食的名字，找一找食材或说一说颜色，不要求马上吃完。",
+    sourceLabel: "美食认识观察",
     syncedAt: new Date().toISOString(),
   };
 }

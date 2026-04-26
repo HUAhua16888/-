@@ -730,9 +730,11 @@ export function TeacherStudio() {
             setTask(parsed.task);
           }
 
-          if (parsed.ageGroup && teacherAgeOptions.some((item) => item.label === parsed.ageGroup)) {
-            setTeacherAgeGroup(parsed.ageGroup);
-          }
+          setTeacherAgeGroup(
+            parsed.ageGroup && teacherAgeOptions.some((item) => item.label === parsed.ageGroup)
+              ? parsed.ageGroup
+              : defaultTeacherAgeGroup,
+          );
 
           if (parsed.scenario) {
             setScenario(parsed.scenario);
