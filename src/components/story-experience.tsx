@@ -3797,7 +3797,18 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
-      <section className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+      <section>
+        <ChildIdentityPanel
+          childRoster={childRoster}
+          selectedChildId={selectedChildId}
+          onSelectChild={(child) => {
+            setSelectedChildId(child.id);
+            setStatus(`${formatChildLabel(child)} 的学习身份已启动。`);
+          }}
+        />
+      </section>
+
+      <section>
         <div className="overflow-hidden rounded-[2.5rem] bg-[linear-gradient(135deg,#fff6d6_0%,#ffffff_48%,#dff8f7_100%)] p-8 shadow-[0_28px_90px_rgba(49,93,104,0.18)]">
           <div className="flex flex-wrap items-center gap-3">
             {Object.values(themes).map((theme) => (
@@ -3818,7 +3829,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
           <div className="mt-6 flex flex-wrap items-start justify-between gap-6">
             <div className="max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">
-                成长探险岛
+                儿童互动
               </p>
               <h1 className="mt-4 text-4xl leading-tight font-semibold text-slate-900 md:text-6xl">
                 {activeTheme.label}
@@ -3848,7 +3859,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                   <p className="mt-2 text-sm font-semibold text-slate-900">{unlockedChapterCount}</p>
                 </div>
                 <div className="rounded-[1.2rem] bg-slate-50 px-3 py-3 text-center">
-                  <p className="text-xs font-semibold text-slate-500">本岛勋章</p>
+                  <p className="text-xs font-semibold text-slate-500">本主题勋章</p>
                   <p className="mt-2 text-sm font-semibold text-slate-900">
                     {activeThemeBadges.length}
                   </p>
@@ -3935,57 +3946,6 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
             <AmbientMusicToggle scene={themeId} />
           </div>
         </div>
-
-        <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-cyan-700">绘本插图区</p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-900">故事画面</h2>
-            </div>
-            <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-800">
-              绘本贴纸
-            </span>
-          </div>
-          <div className="mt-5 overflow-hidden rounded-[2rem] bg-[linear-gradient(180deg,#e6fbfa_0%,#fff7dc_100%)] p-4">
-            {imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={imageUrl}
-                alt="故事插图"
-                className="h-[320px] w-full rounded-[1.5rem] object-cover"
-              />
-            ) : (
-              <div className="flex h-[320px] flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-teal-200 bg-white/70 text-center">
-                {imageFeatureEnabled ? (
-                  <>
-                    <p className="text-lg font-semibold text-slate-700">说一句想画什么</p>
-                    <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
-                      我会结合当前故事和孩子说的话，画一张绘本风插图，漂亮的画面会多等一小会儿。
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-lg font-semibold text-slate-700">先听故事和玩小游戏</p>
-                    <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
-                      今天先用声音、故事和小游戏完成探险，贴纸会在成长册里点亮。
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <ChildIdentityPanel
-          childRoster={childRoster}
-          selectedChildId={selectedChildId}
-          onSelectChild={(child) => {
-            setSelectedChildId(child.id);
-            setStatus(`${formatChildLabel(child)} 的学习身份已启动。`);
-          }}
-        />
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -4047,6 +4007,46 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
               <span className="text-xs font-semibold text-slate-500">
                 还可输入 {storyInputMaxLength - storyDraft.length} 字
               </span>
+            </div>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-[1.8rem] bg-[linear-gradient(180deg,#e6fbfa_0%,#fff7dc_100%)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-cyan-700">故事画面</p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-900">边聊边看绘本画面</h3>
+              </div>
+              <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-800">
+                绘本贴纸
+              </span>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-[1.5rem]">
+              {imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={imageUrl}
+                  alt="故事插图"
+                  className="h-[280px] w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-[280px] flex-col items-center justify-center border border-dashed border-teal-200 bg-white/70 text-center">
+                  {imageFeatureEnabled ? (
+                    <>
+                      <p className="text-lg font-semibold text-slate-700">说一句想画什么</p>
+                      <p className="mt-2 max-w-sm text-sm leading-7 text-slate-500">
+                        我会结合当前故事和孩子说的话，画一张绘本风插图，漂亮的画面会多等一小会儿。
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-semibold text-slate-700">先听故事和玩小游戏</p>
+                      <p className="mt-2 max-w-sm text-sm leading-7 text-slate-500">
+                        今天先用声音、故事和小游戏完成任务，贴纸会在成长册里点亮。
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
