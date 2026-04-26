@@ -53,6 +53,7 @@ import {
   minnanFoodClues,
   minnanFoodObserveSteps,
   peerEncouragementPrompts,
+  readingCheckinTasks,
   rewardStickerCards,
   storyMissionMap,
   themeVideoCards,
@@ -129,6 +130,7 @@ const miniGameThemeMap: Record<MiniGameKey, ThemeId> = {
   washSteps: "habit",
   queue: "habit",
   habitJudge: "habit",
+  readingCheckin: "habit",
   kindWords: "food",
   foodObserve: "food",
   foodClue: "food",
@@ -212,53 +214,10 @@ const habitRoutineScenarios = [
   },
 ];
 
-const habitJudgeCards = [
-  {
-    title: "饭前先洗手",
-    icon: "🧼",
-    scene: "小朋友准备吃点心前，先走到洗手池洗手。",
-    isCorrect: true,
-    habit: "行为习惯",
-    cue: "饭前洗手能把小手变干净，是正确做法。",
-  },
-  {
-    title: "拿着水杯追跑",
-    icon: "🥤",
-    scene: "小朋友一边拿着水杯，一边在教室里追跑。",
-    isCorrect: false,
-    habit: "安全知识",
-    cue: "拿着水杯追跑容易摔倒或洒水，要坐好慢慢喝。",
-  },
-  {
-    title: "玩具按标记送回家",
-    icon: "🧺",
-    scene: "游戏结束后，把积木放回积木盒，把图书放回书架。",
-    isCorrect: true,
-    habit: "行为习惯",
-    cue: "玩具按标记送回家，教室更整齐，也更安全。",
-  },
-  {
-    title: "排队时推同伴",
-    icon: "🚩",
-    scene: "去操场时，有小朋友用手推前面的同伴。",
-    isCorrect: false,
-    habit: "安全知识",
-    cue: "排队时推同伴不安全，要一个跟着一个慢慢走。",
-  },
-  {
-    title: "想上厕所告诉老师",
-    icon: "🚻",
-    scene: "身体想上厕所时，先告诉老师，再去整理，回来洗手。",
-    isCorrect: true,
-    habit: "行为习惯",
-    cue: "及时告诉老师，回来洗手，是照顾身体的好习惯。",
-  },
-];
-
 function getThemeReadyStatus(themeId: ThemeId) {
   return themeId === "food"
     ? "闽食成长岛准备好了：今天像逛泉州美食小岛一样，认识名字、食材和小故事。"
-    : `${themes[themeId].label}准备好了。`;
+    : "幼习宝成长任务中心准备好了：今天可以练习生活习惯、进餐动作、阅读表达和红绿牌判断。";
 }
 
 function formatFoodList(items: string[]) {
@@ -304,8 +263,15 @@ function buildMiniGameCompletionCopy(
 
   if (gameKey === "habitJudge") {
     return {
-      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "看图判断做法"}`,
-      status: configuredReminder || "看图判断完成啦：你能分清哪些做法正确，哪些做法需要换成更安全的方式。",
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "历史安全判断记录"}`,
+      status: configuredReminder || "历史安全判断完成啦：你能分清哪些做法正确，哪些做法需要换成更安全的方式。",
+    };
+  }
+
+  if (gameKey === "readingCheckin") {
+    return {
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "阅读小书虫打卡"}`,
+      status: configuredReminder || "阅读小书虫打卡完成啦：你认真听故事，也说出了自己的发现。",
     };
   }
 
@@ -406,7 +372,11 @@ function buildRepeatedMiniGameStatus(gameKey: MiniGameKey, contentConfig?: Edita
   }
 
   if (gameKey === "habitJudge") {
-    return `${configuredTitle || "看图判断做法"}已经记录过啦，可以继续练习分辨正确习惯和安全做法。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "历史安全判断记录"}已经记录过啦，可以继续用好习惯红绿牌练习分辨正确习惯和安全做法。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+  }
+
+  if (gameKey === "readingCheckin") {
+    return `${configuredTitle || "阅读小书虫打卡"}已经记录过啦，可以继续听故事、说角色、讲画面和把图书归位。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "mealManners") {
@@ -461,7 +431,7 @@ function SpeechCueButton({
   text: string;
   onSpeak?: SpeakHandler;
   label?: string;
-  tone?: "slate" | "teal" | "cyan" | "rose" | "orange" | "amber" | "emerald";
+  tone?: "slate" | "teal" | "cyan" | "rose" | "orange" | "amber" | "emerald" | "violet";
 }) {
   const toneClassMap = {
     slate: "bg-slate-900 text-white hover:bg-slate-800",
@@ -471,6 +441,7 @@ function SpeechCueButton({
     orange: "bg-orange-700 text-white hover:bg-orange-800",
     amber: "bg-amber-100 text-amber-950 hover:bg-amber-200",
     emerald: "bg-emerald-700 text-white hover:bg-emerald-800",
+    violet: "bg-violet-700 text-white hover:bg-violet-800",
   };
 
   if (!onSpeak || !text.trim()) {
@@ -569,6 +540,22 @@ function getStoryOptionVisual(text: string, themeId: ThemeId) {
     };
   }
 
+  if (/阅读|故事|绘本|图书|角色|画面|书虫|看到/.test(text)) {
+    return {
+      icon: "📚",
+      title: text,
+      description: "听一个短故事，说一个角色、画面或喜欢的地方。",
+    };
+  }
+
+  if (/红绿牌|绿牌|红牌/.test(text)) {
+    return {
+      icon: "🟢",
+      title: text,
+      description: "听行为，举绿牌或红牌，再听正确做法。",
+    };
+  }
+
   return {
     icon: themeId === "food" ? "🍽️" : "✨",
     title: text,
@@ -612,10 +599,24 @@ function getMissionOptionVisual(text: string, themeId: ThemeId) {
     };
   }
 
+  if (/阅读|故事|图书/.test(text)) {
+    return {
+      icon: "📚",
+      description: "听故事、说角色、讲画面，并把图书归位。",
+    };
+  }
+
+  if (/红绿牌/.test(text)) {
+    return {
+      icon: "🟢",
+      description: "听一个行为，判断好习惯或需要调整的做法。",
+    };
+  }
+
   if (/判断|对不对|正确/.test(text)) {
     return {
       icon: "✅",
-      description: "看图判断这个做法是否正确，练习行为习惯和安全知识。",
+      description: "练习分辨好习惯和需要调整的安全做法。",
     };
   }
 
@@ -742,24 +743,50 @@ function isReliableStoryBadgeResponse(data: StoryApiResponse) {
   return data.awardBadge === true;
 }
 
-function HabitVisualBoard() {
+function HabitVisualBoard({
+  onSpeak,
+  onTaskComplete,
+}: {
+  onSpeak?: SpeakHandler;
+  onTaskComplete?: (gameKey: MiniGameKey, badgeName: string, pickedItems: string[]) => void;
+}) {
+  const [activeTaskTitle, setActiveTaskTitle] = useState(habitSkillCards[0]?.title ?? "");
+  const activeTask =
+    habitSkillCards.find((item) => item.title === activeTaskTitle) ?? habitSkillCards[0];
+
+  function startTask(item: (typeof habitSkillCards)[number]) {
+    setActiveTaskTitle(item.title);
+    onSpeak?.(`${item.taskName}。${item.command}${item.rhyme} ${item.question}`);
+  }
+
+  function completeTask(item: (typeof habitSkillCards)[number]) {
+    const pickedItems = [item.taskName, item.question, item.actionLabel];
+
+    onTaskComplete?.(item.gameKey as MiniGameKey, item.badgeName, pickedItems);
+    onSpeak?.(`${item.badgeName}点亮啦。${item.rhyme}`);
+  }
+
   return (
     <div className="rounded-[2.2rem] border border-white/70 bg-white/88 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-amber-700">行为习惯与安全知识</p>
-          <h3 className="mt-1 text-2xl font-semibold text-slate-900">幼习宝勋章图卡</h3>
+          <p className="text-sm font-semibold text-amber-700">幼习宝·班级成长任务中心</p>
+          <h3 className="mt-1 text-2xl font-semibold text-slate-900">幼习宝成长任务地图</h3>
         </div>
         <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
-          行为 + 安全
+          点卡片开始任务
         </div>
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {habitSkillCards.map((item) => (
-          <article
+          <button
             key={item.title}
-            className="story-card rounded-[1.7rem] bg-[linear-gradient(180deg,#fffdf7_0%,#f5fffe_100%)] p-4 shadow-sm"
+            onClick={() => startTask(item)}
+            className={`story-card rounded-[1.7rem] bg-[linear-gradient(180deg,#fffdf7_0%,#f5fffe_100%)] p-4 text-left shadow-sm transition hover:-translate-y-0.5 ${
+              activeTask?.title === item.title ? "ring-2 ring-teal-300" : ""
+            }`}
+            type="button"
           >
             <div
               className={`inline-flex h-12 w-12 items-center justify-center rounded-[1.1rem] text-2xl ${item.tone}`}
@@ -768,22 +795,44 @@ function HabitVisualBoard() {
             </div>
             <h4 className="mt-4 text-lg font-semibold text-slate-900">{item.title}</h4>
             <p className="mt-2 text-sm leading-7 text-slate-600">{item.hint}</p>
-          </article>
+            <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-teal-800 shadow-sm">
+              {activeTask?.title === item.title ? "正在玩" : "点我开始"}
+            </span>
+          </button>
         ))}
       </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {[
-          { title: "行为习惯掌握章", icon: "🧼", text: "洗手、喝水、整理、如厕等一日生活习惯。" },
-          { title: "生活安全实践章", icon: "🚩", text: "排队、慢走、收纳、照顾身体的安全做法。" },
-          { title: "安全知识判断章", icon: "✅", text: "看图判断做法是否正确，知道哪里需要调整。" },
-        ].map((item) => (
-          <div key={item.title} className="rounded-[1.5rem] bg-emerald-50 p-4">
-            <p className="text-3xl">{item.icon}</p>
-            <p className="mt-2 font-semibold text-slate-900">{item.title}</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600">{item.text}</p>
+      {activeTask ? (
+        <div className="mt-5 rounded-[1.8rem] bg-emerald-50 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-emerald-800">现在的小任务</p>
+              <h4 className="mt-1 text-xl font-semibold text-slate-900">
+                {activeTask.icon} {activeTask.taskName}
+              </h4>
+              <p className="mt-2 text-sm leading-7 text-slate-700">{activeTask.command}</p>
+              <p className="mt-2 rounded-[1.2rem] bg-white/85 px-4 py-3 text-sm font-semibold text-emerald-900">
+                {activeTask.rhyme}
+              </p>
+              <p className="mt-2 text-sm font-semibold text-slate-800">{activeTask.question}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <SpeechCueButton
+                text={`${activeTask.taskName}。${activeTask.command}${activeTask.rhyme} ${activeTask.question}`}
+                onSpeak={onSpeak}
+                label="听任务"
+                tone="emerald"
+              />
+              <button
+                onClick={() => completeTask(activeTask)}
+                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                type="button"
+              >
+                {activeTask.actionLabel}
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -793,8 +842,8 @@ function HabitMissionPoster({ badges, missions }: { badges: string[]; missions: 
 
   return (
     <div className="rounded-[2.2rem] border border-white/70 bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_55%,#dff8f7_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
-      <p className="text-sm font-semibold text-teal-700">今日任务海报</p>
-      <h3 className="mt-1 text-2xl font-semibold text-slate-900">今日习惯闯关</h3>
+      <p className="text-sm font-semibold text-teal-700">今日成长任务</p>
+      <h3 className="mt-1 text-2xl font-semibold text-slate-900">今天想点亮哪一项</h3>
       <div className="mt-5 rounded-[2rem] bg-white/80 p-5">
         <div className="flex flex-wrap gap-3">
           {missions.map((mission, index) => (
@@ -808,15 +857,15 @@ function HabitMissionPoster({ badges, missions }: { badges: string[]; missions: 
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <div className="rounded-[1.6rem] bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-800">上课图示</p>
+            <p className="text-sm font-semibold text-amber-800">进餐动作</p>
             <p className="mt-2 text-sm leading-7 text-slate-700">
-              先坐好，再看老师，再举小手，最后认真听任务。
+              先坐稳，再扶好碗，慢慢嚼，最后餐后整理。
             </p>
           </div>
           <div className="rounded-[1.6rem] bg-sky-50 p-4">
-            <p className="text-sm font-semibold text-sky-800">喝水打卡</p>
+            <p className="text-sm font-semibold text-sky-800">阅读表达</p>
             <p className="mt-2 text-sm leading-7 text-slate-700">
-              一口一口慢慢喝，喝完记得放回小水杯。
+              听一个短故事，说一个角色、画面或喜欢的地方。
             </p>
           </div>
         </div>
@@ -1810,7 +1859,7 @@ function QueueGame({
   );
 }
 
-function HabitJudgeGame({
+function ReadingCheckinGame({
   contentConfig,
   onComplete,
   onSpeak,
@@ -1821,35 +1870,32 @@ function HabitJudgeGame({
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
-  const [feedback, setFeedback] = useState("先看图片和文字，再判断这个做法对不对。");
-  const [mistakeCount, setMistakeCount] = useState(0);
+  const [feedback, setFeedback] = useState("先听一个短绘本故事，再选一张答案卡。");
   const completionReportedRef = useRef(false);
-  const completed = answers.length === habitJudgeCards.length;
-  const currentCard = habitJudgeCards[currentIndex];
+  const completed = answers.length === readingCheckinTasks.length;
+  const currentTask = readingCheckinTasks[currentIndex];
   const introText =
     contentConfig?.childGoal.trim() ||
-    "看图判断做法对不对。看到正确做法点“正确”，看到不安全或不合适的做法点“不正确”。";
+    "听一个短绘本故事，选择或说出一个角色、一个画面、一个喜欢的地方，再把图书归位。";
+  const storyText =
+    "《小星的图书角》开始啦。幼习宝小星轻轻翻开一本图画书，书里有会整理图书的小朋友，也有认真听故事的小耳朵。故事结束时，小星说：我听到了朋友的名字，我看到了整齐的书架，我喜欢大家把图书送回家的样子。现在轮到你说一说啦。";
 
-  function answerCard(answer: boolean) {
-    if (completed) {
+  function playStory() {
+    setFeedback("短绘本讲完啦，请选一张答案卡，或者说给老师听。");
+    onSpeak?.(storyText);
+  }
+
+  function pickAnswer(answer: string) {
+    if (completed || !currentTask) {
       return;
     }
 
-    const right = answer === currentCard.isCorrect;
-
-    if (!right) {
-      const message = `再想一想。${currentCard.cue}`;
-      setMistakeCount((current) => current + 1);
-      setFeedback(message);
-      onSpeak?.(message);
-      return;
-    }
-
-    const nextAnswers = [...answers, `${currentCard.title}:${answer ? "正确" : "不正确"}`];
-    const allDone = nextAnswers.length === habitJudgeCards.length;
+    const nextAnswers = [...answers, `${currentTask.title}:${answer}`];
+    const allDone = nextAnswers.length === readingCheckinTasks.length;
     const message = allDone
-      ? "看图判断全部完成啦。你能分清正确习惯和安全做法。"
-      : `判断正确。${currentCard.cue} 下一张图：${habitJudgeCards[currentIndex + 1].title}。`;
+      ? "阅读小书虫打卡完成啦。你听了故事，也说出了自己的发现。"
+      : `${currentTask.praise} 下一步：${readingCheckinTasks[currentIndex + 1].title}。`;
+
     setAnswers(nextAnswers);
     setFeedback(message);
     onSpeak?.(message);
@@ -1867,116 +1913,108 @@ function HabitJudgeGame({
   function resetGame() {
     setCurrentIndex(0);
     setAnswers([]);
-    setMistakeCount(0);
-    setFeedback("先看图片和文字，再判断这个做法对不对。");
+    setFeedback("先听一个短绘本故事，再选一张答案卡。");
     completionReportedRef.current = false;
-    onSpeak?.("看图判断重新开始。先看第一张图，再判断这个做法对不对。");
+    onSpeak?.("阅读小书虫打卡重新开始。先听故事，再说一个发现。");
   }
-
-  useEffect(() => {
-    if (completed && !completionReportedRef.current) {
-      completionReportedRef.current = true;
-      onComplete?.(answers);
-    }
-  }, [answers, completed, onComplete]);
 
   return (
     <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-emerald-700">互动小游戏 3</p>
+          <p className="text-sm font-semibold text-violet-700">阅读表达任务</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">
-            {contentConfig?.title || "看图判断做法对不对"}
+            {contentConfig?.title || "阅读小书虫打卡"}
           </h3>
         </div>
         <button
           onClick={resetGame}
-          className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200"
+          className="rounded-full bg-violet-100 px-4 py-2 text-sm font-semibold text-violet-900 transition hover:bg-violet-200"
+          type="button"
         >
           重新开始
         </button>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="emerald" />
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="violet" />
       </div>
 
-      <div className="mt-5 rounded-[1.7rem] bg-emerald-50 p-4">
+      <div className="mt-5 rounded-[1.7rem] bg-violet-50 p-5">
         <div className="rounded-[1.5rem] bg-white/90 p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold text-emerald-700">
-                第 {Math.min(currentIndex + 1, habitJudgeCards.length)} 张 · {currentCard.habit}
+              <p className="text-xs font-semibold text-violet-700">
+                第 {Math.min(currentIndex + 1, readingCheckinTasks.length)} 步
               </p>
-              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-amber-100 text-5xl">
-                {currentCard.icon}
+              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-[1.4rem] bg-violet-100 text-5xl">
+                {currentTask?.icon ?? "📚"}
               </div>
-              <h4 className="mt-4 text-xl font-semibold text-slate-900">{currentCard.title}</h4>
-              <p className="mt-2 text-sm leading-7 text-slate-700">{currentCard.scene}</p>
+              <h4 className="mt-4 text-xl font-semibold text-slate-900">
+                {currentTask?.title ?? "全部完成"}
+              </h4>
+              <p className="mt-2 text-sm leading-7 text-slate-700">
+                {completed ? "阅读打卡完成啦。" : currentTask.prompt}
+              </p>
             </div>
-            <SpeechCueButton
-              text={`${currentCard.title}。${currentCard.scene} 请判断这个做法对不对。`}
-              onSpeak={onSpeak}
-              label="听图片"
-              tone="emerald"
-            />
+            <div className="flex flex-wrap gap-2">
+              <SpeechCueButton text={storyText} onSpeak={onSpeak} label="听短绘本" tone="violet" />
+              <button
+                onClick={playStory}
+                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                type="button"
+              >
+                播放故事
+              </button>
+            </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <button
-              onClick={() => answerCard(true)}
-              disabled={completed}
-              className="rounded-[1.4rem] bg-emerald-100 px-5 py-4 text-left font-semibold text-emerald-900 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-            >
-              ✅ 正确
-              <span className="mt-1 block text-xs leading-5 text-emerald-800">这个做法可以继续保持。</span>
-            </button>
-            <button
-              onClick={() => answerCard(false)}
-              disabled={completed}
-              className="rounded-[1.4rem] bg-rose-100 px-5 py-4 text-left font-semibold text-rose-900 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-            >
-              ✋ 不正确
-              <span className="mt-1 block text-xs leading-5 text-rose-800">这个做法需要换成更安全的方式。</span>
-            </button>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {(currentTask?.answerCards ?? []).map((answer) => (
+              <button
+                key={answer}
+                onClick={() => pickAnswer(answer)}
+                disabled={completed}
+                className="rounded-[1.4rem] bg-violet-100 px-4 py-4 text-left text-sm font-semibold text-violet-950 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+              >
+                {answer}
+                <span className="mt-1 block text-xs leading-5 text-violet-800">点我说发现</span>
+              </button>
+            ))}
           </div>
+          <button
+            onClick={() => pickAnswer("我说给老师听")}
+            disabled={completed}
+            className="mt-4 rounded-full bg-white px-4 py-3 text-sm font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+            type="button"
+          >
+            我说给老师听
+          </button>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] bg-white/80 px-4 py-3">
-          <p className="text-sm font-semibold text-emerald-900">
-            已判断 {answers.length}/{habitJudgeCards.length} 张，纠正 {mistakeCount} 次。
-          </p>
-          <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听反馈" tone="emerald" />
-        </div>
-        <p className="mt-2 text-sm font-semibold text-emerald-800">{feedback}</p>
-      </div>
-
-      <div className="mt-5 rounded-[1.5rem] bg-slate-50 p-4">
-        <p className="text-sm font-semibold text-slate-700">判断记录</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {habitJudgeCards.map((card) => {
-            const done = answers.some((answer) => answer.startsWith(`${card.title}:`));
+        <div className="mt-4 flex flex-wrap gap-2">
+          {readingCheckinTasks.map((task) => {
+            const done = answers.some((answer) => answer.startsWith(`${task.title}:`));
 
             return (
               <span
-                key={card.title}
+                key={task.title}
                 className={`rounded-full px-3 py-2 text-sm font-semibold ${
-                  done ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-500"
+                  done ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-600"
                 }`}
               >
                 {done ? "✓ " : ""}
-                {card.icon} {card.title}
+                {task.icon} {task.title}
               </span>
             );
           })}
         </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] bg-white/80 px-4 py-3">
+          <p className="text-sm font-semibold text-violet-950">{feedback}</p>
+          <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听反馈" tone="violet" />
+        </div>
       </div>
-
-      {completed ? (
-        <p className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-800">
-          你已经点亮行为习惯和安全知识判断能力啦。
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -4858,7 +4896,14 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       {themeId === "habit" ? (
         <>
           <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <HabitVisualBoard />
+            <HabitVisualBoard
+              onSpeak={(text) => {
+                void startSpeechPlayback(text);
+              }}
+              onTaskComplete={(gameKey, badgeName, pickedItems) =>
+                logMiniGameCompletion(gameKey, badgeName, pickedItems)
+              }
+            />
             <HabitMissionPoster badges={badges} missions={activeMissions} />
           </section>
 
@@ -5008,13 +5053,13 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 )
               }
             />
-            <HabitJudgeGame
-              contentConfig={getConfiguredGameContent("habitJudge")}
+            <ReadingCheckinGame
+              contentConfig={getConfiguredGameContent("readingCheckin")}
               onSpeak={(text) => {
                 void startSpeechPlayback(text);
               }}
               onComplete={(pickedItems) =>
-                logMiniGameCompletion("habitJudge", "安全知识判断章", pickedItems)
+                logMiniGameCompletion("readingCheckin", "阅读小书虫", pickedItems)
               }
             />
             <MealMannersGame

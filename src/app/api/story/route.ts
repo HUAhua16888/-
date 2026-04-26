@@ -139,6 +139,7 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
   const wantsQueue = /排队|队长|不挤|站好|慢慢走/.test(userInput);
   const wantsWash = /洗手|泡泡|小手|七步/.test(userInput);
   const wantsTidy = /整理|玩具|书|归位|送回家/.test(userInput);
+  const wantsReading = /阅读|故事|图书|绘本|角色|画面|共读|书虫/.test(userInput);
   const reply =
     theme === "food" || wantsFood
       ? `🦪 海蛎小勇士听见啦：“${userInput}”。我们去泉州美食小摊认名字、找食材、听小故事，再选一个愿意靠近的小步骤。`
@@ -148,6 +149,8 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
           ? `✨ 小队长准备好啦：“${userInput}”。我们一个跟着一个站好，慢慢走，不着急也不拥挤。`
           : wantsTidy
             ? `✨ 整理小能手出发：“${userInput}”。玩具回家，图书排队，桌面马上变清爽。`
+            : wantsReading
+              ? `📚 阅读小书虫听见啦：“${userInput}”。我们先听一个短故事，再说一个角色、一张画面或一个喜欢的地方。`
             : `${currentTheme.emoji} ${currentTheme.label}收到啦。你刚才说的是“${userInput}”。我们先跟着故事走一步，再选一个小任务继续冒险吧。`;
   const choices =
     theme === "food" || wantsFood
@@ -158,6 +161,8 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
           ? ["小队长举牌", "第一位站好", "慢慢向前走"]
           : wantsTidy
             ? ["玩具找篮子", "图书排排队", "桌面变清爽"]
+            : wantsReading
+              ? ["听短故事", "说一个角色", "图书回家"]
             : currentTheme.choices;
   const badge =
     theme === "food" || wantsFood
@@ -168,6 +173,8 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
           ? "排队小队长"
           : wantsTidy
             ? "整理小能手"
+            : wantsReading
+              ? "阅读小书虫"
             : currentTheme.badgePool[0];
 
   return {
@@ -180,7 +187,6 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
 }
 
 function buildPictureBookFallback(theme: ThemeId, userInput: string) {
-  const currentTheme = themes[theme];
   const topic = userInput
     .replace(/^我想听/, "")
     .replace(/的故事$/, "")
@@ -188,11 +194,11 @@ function buildPictureBookFallback(theme: ThemeId, userInput: string) {
   const wantsFood = theme === "food" || /海蛎|面线|土笋冻|肉粽|润饼|石花|醋肉|鱼卷|食物|午餐|闽食|泉州/.test(topic);
   const reply = wantsFood
     ? "绘本故事开始啦。海蛎小勇士开着闽食小列车来到泉州古城小吃摊，先看见金黄的海蛎煎，又发现细细软软的面线糊和卷着蔬菜的润饼菜。小朋友打开美食宝箱，找到了海蛎、面线和胡萝卜，还听见摊主阿姨说：“认识名字和食材，就是靠近家乡味的第一步。”最后，大家把今天看到的颜色画进成长小书里。"
-    : "绘本故事开始啦。幼习宝小星在教室门口发现一串闪亮脚印，它邀请小朋友一起找好习惯。第一步，小手遇到清水和泡泡；第二步，玩具排队回到小篮子；第三步，小朋友慢慢喝水、轻轻说话。小星笑着说：“每做好一个小动作，身体和心情都会更舒服。”故事讲完啦，我们也试一个好习惯吧。";
+    : "绘本故事开始啦。幼习宝小星在图书角发现一本会发光的小书，它邀请小朋友先坐稳、听故事，再说一句“我看到了……”。故事里，小手遇到清水和泡泡，图书排队回到书架，小朋友慢慢喝水、轻轻说话。小星笑着说：“每做好一个小动作，成长任务就会亮一点。”故事讲完啦，我们也试一个阅读或好习惯小任务吧。";
 
   return {
     reply: topic ? reply.replace("绘本故事开始啦。", `《${topic}》开始啦。`) : reply,
-    choices: wantsFood ? ["坐小列车", "猜食材", "说发现"] : currentTheme.choices,
+    choices: wantsFood ? ["坐小列车", "猜食材", "说发现"] : ["听短故事", "说我看到", "图书回家"],
     badge: "",
     templateBadge: "绘本倾听贴纸",
     badgeKind: "story_progress",
@@ -227,11 +233,14 @@ function buildTeacherFallback(task: string, userInput = "") {
   const target = `${task} ${userInput}`;
   const isActivity = /活动|课程|方案|流程|目标|材料|观察|延伸/.test(target);
   const isStory = /故事|绘本|角色|情境|讲/.test(target);
-  const isFood = /餐|食|闽|海蛎|紫菜|挑食|尝/.test(target);
+  const isHabitTask = /幼习宝|阅读|红绿牌|文明进餐|洗手|坐姿|图书|小书虫|成长任务|生活习惯/.test(target);
+  const isFood =
+    !isHabitTask &&
+    /闽|泉州美食|海蛎|紫菜|土笋|面线|润饼|石花|醋肉|鱼卷|食材|美食|尝新/.test(target);
   const isPraise = /鼓励|表扬|挑食|不愿意|情绪|安抚|紧张/.test(target);
   const ageGroup = resolveTeacherAgeGroup(target);
   const ageFocus = buildTeacherAgeFocus(ageGroup);
-  const activityName = isFood ? "泉州美食探索小列车" : "文明进餐好习惯操";
+  const activityName = isFood ? "泉州美食探索小列车" : "幼习宝成长任务活动";
   const title = isActivity
     ? "幼儿活动课程方案"
     : isStory
@@ -248,18 +257,18 @@ function buildTeacherFallback(task: string, userInput = "") {
         "活动时长：15-20 分钟",
         isFood
           ? "活动目标：1. 能说出一种泉州美食名称。2. 能从图片或实物中找到一种食材。3. 愿意用短句介绍一个发现或选择靠近一小步。"
-          : "活动目标：1. 能模仿一个进餐好习惯动作。2. 能判断一种行为是好习惯还是需要调整。3. 愿意把一个小步骤带到午餐或家庭生活里。",
+          : "活动目标：1. 能模仿一个进餐或生活好习惯动作。2. 能通过红绿牌判断一种行为是否合适。3. 能听故事并说出一个角色、画面或喜欢的地方。",
         isFood
           ? "准备材料：泉州美食站点图、食材卡、美食宝箱、贴纸。"
-          : "准备材料：红绿牌、进餐动作图卡、碗筷模型、贴纸。",
+          : "准备材料：红绿牌、进餐动作图卡、短绘本或图片、图书归位标记、贴纸。",
         isFood
           ? "活动流程：导入 2 分钟，用闽食小列车口令进站；感知/操作 6 分钟，幼儿看图找美食和食材卡；互动表达 5 分钟，请幼儿做小小美食播报员；生活迁移 3 分钟，选择回家介绍的一种美食；收束 2 分钟，用贴纸肯定具体发现。"
-          : "活动流程：导入 2 分钟，用文明进餐操口令热身；感知/操作 6 分钟，幼儿模仿扶碗、坐稳、细嚼慢咽、整理动作；互动表达 5 分钟，用红绿牌判断行为；生活迁移 3 分钟，说说午餐或家里可以做哪一步；收束 2 分钟，肯定一个具体好习惯。",
+          : "活动流程：导入 2 分钟，用成长任务口令热身；感知/操作 6 分钟，幼儿模仿扶碗、坐稳、细嚼慢咽或图书归位动作；互动表达 5 分钟，用红绿牌判断行为或说一个故事画面；生活迁移 3 分钟，说说午餐、阅读区或家里可以做哪一步；收束 2 分钟，肯定一个具体好习惯或阅读发现。",
         "教师提问：你看到了什么？下一步可以怎么做？你愿意试哪一小步？",
         "观察要点：是否能参与操作；是否能说出一个可观察发现；是否愿意尝试或模仿目标动作。",
         isFood
           ? "家园延伸：回家完成睡前美食小回顾，说一种今天认识的美食、一个颜色或食材，以及明天愿意靠近哪一小步。"
-          : "家园延伸：回家做家庭美食小管家，饭前洗手、摆碗筷、按需取餐，餐后整理一个小地方。",
+          : "家园延伸：回家做阅读小书虫或家庭美食小管家，亲子共读 5 分钟，说一句“我看到了……”，饭前洗手，餐后整理一个小地方。",
         `注意事项：${ageFocus} 不考试、不背诵、不要求全部幼儿同一速度完成。`,
       ].join("\n")
     : isStory
@@ -340,7 +349,7 @@ export async function POST(request: Request) {
           "按年龄差异处理：小班以模仿、感知、短句回应、动作游戏为主；中班加入简单排序、比较、表达原因；大班加入合作、简单记录、规则意识和迁移表达。",
           theme === "food"
             ? "闽食主题要围绕泉州本地食育：认识名称、观察食材和外形、温和接受陌生食物、家园共育介绍一道家乡美食；可生成闽食小列车站点口令、美食猜猜乐线索、泉州美食短儿歌、小小播报员表扬语，不要只写进食问题处理。"
-            : "幼习宝主题要围绕生活习惯和安全经验，帮助幼儿在一日生活中迁移一个小行为；可生成文明进餐操口令、好习惯红绿牌判断题、珍惜粮食小列车口号、居家习惯任务和家园同步话术。",
+            : "幼习宝主题要围绕生活习惯、进餐习惯、阅读表达、安全与情绪，帮助幼儿在一日生活中迁移一个小行为；可生成阅读打卡故事提问、文明进餐操口令、好习惯红绿牌题目、亲子共读任务、表扬语、奖章口令和家园同步话术。",
           "禁止强迫孩子吃完、用“不挑食”压孩子、负面评价孩子、小学化营养知识灌输或复杂说教。",
           "请严格返回 JSON，格式如下：",
           '{"title":"", "content":"", "tips":["", "", ""]}',
@@ -355,7 +364,7 @@ export async function POST(request: Request) {
             "请根据孩子想听的内容生成一段可以直接语音播放的中文绘本故事。",
             theme === "food"
               ? "故事要融入泉州本地美食探索，可轮换海蛎煎、面线糊、土笋冻、闽南肉粽、润饼菜、石花膏、炸醋肉、崇武鱼卷；可出现闽食小列车、美食猜猜乐、美食宝箱和小小播报员；重点是认名字、找食材、听小故事、说颜色形状和选择靠近一小步。"
-              : "故事要围绕幼儿生活习惯或安全经验，可出现饭前洗手、正确坐姿、轻声进餐、细嚼慢咽、按需取餐、珍惜粮食、餐后整理、交通或防火安全。",
+              : "故事要围绕幼儿生活习惯、进餐习惯、阅读表达或安全经验，可出现饭前洗手、正确坐姿、轻声进餐、细嚼慢咽、按需取餐、珍惜粮食、餐后整理、亲子共读、图书归位、情绪表达、交通或防火安全。",
             "语言要短句、温柔、有画面感，不批评、不吓唬、不小学化。",
             "请严格返回 JSON，格式如下：",
             '{"reply":"", "choices":["", "", ""], "progressSticker":""}',
@@ -368,7 +377,7 @@ export async function POST(request: Request) {
           "请先回应孩子的话，再给 3 个可以点击的后续选项。",
           theme === "food"
             ? "后续选项必须围绕泉州美食探索，例如坐闽食小列车、猜食材卡、选颜色、猜来自哪里、给家人介绍名字、选择靠近一小步。不要总是重复看一看、闻一闻、尝一口。"
-            : "后续选项必须围绕习惯养成，例如饭前洗手、正确坐姿、轻声进餐、细嚼慢咽、按需取餐、珍惜粮食、餐后整理或居家延续。",
+            : "后续选项必须围绕幼习宝成长任务，例如饭前洗手、正确坐姿、轻声进餐、细嚼慢咽、图书归位、听故事、说一个角色、好习惯红绿牌或居家延续。",
           "禁止强迫孩子吃完、用“不挑食”压孩子、负面评价孩子或复杂说教。",
           "choices 要像孩子能直接点击的小任务，每条不超过 10 个字，不要写成成人视角。",
           "请严格返回 JSON，格式如下：",

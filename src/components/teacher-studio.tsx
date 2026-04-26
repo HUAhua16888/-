@@ -267,13 +267,13 @@ function limitTeacherHistory(history: SavedTeacherResult[]) {
 function buildMiniGameExtensionScenario(themeId: ThemeId, ageGroup: string = defaultTeacherAgeGroup) {
   return themeId === "food"
     ? `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：泉州闽食探索。幼儿已有经验：刚在儿童端完成了均衡餐盘或闽食探索小游戏。希望目标：能说出一种泉州美食名称，观察食材或外形，并选择一个愿意靠近的小步骤。${classroomPlanRequirement}`
-    : `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：幼习宝生活习惯。幼儿已有经验：刚在儿童端完成了洗手或排队小游戏。希望目标：能按图片或动作提示说出步骤，并在生活环节尝试迁移。${classroomPlanRequirement}`;
+    : `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：幼习宝班级成长任务。幼儿已有经验：刚在儿童端完成了洗手、进餐、阅读或红绿牌小游戏。希望目标：能用动作、图卡或短句完成一个生活习惯、进餐习惯或阅读表达任务，并在生活环节尝试迁移。${classroomPlanRequirement}`;
 }
 
 function buildHomePlanScenario(themeId: ThemeId, ageGroup: string = defaultTeacherAgeGroup) {
   return themeId === "food"
     ? `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：泉州美食探索。幼儿已有经验：认识少量家乡食物，但对食材、颜色和味道表达还不充分。希望目标：能说出一种泉州美食名称，找一找食材或外形特征，选择一个愿意靠近的小步骤。`
-    : `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：文明进餐好习惯。幼儿已有经验：知道饭前要洗手，但坐姿、轻声用餐、细嚼慢咽、按需取餐和餐后整理还需要图卡和动作提示。希望目标：能模仿一个进餐好习惯动作，并在午餐或家庭生活里尝试迁移。`;
+    : `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：幼习宝班级成长任务。幼儿已有经验：知道饭前要洗手，也接触过听故事、整理图书、文明进餐和红绿牌判断。希望目标：能完成一个可观察的生活习惯或阅读表达小任务，并在班级或家庭生活里尝试迁移。`;
 }
 
 function buildPreferenceInterventionScenario(record: FoodPreferenceRecord, ageGroup: string = defaultTeacherAgeGroup) {
@@ -314,6 +314,7 @@ function hasThemeMiniGameRecord(rawArchive: string | null, themeId: ThemeId) {
     : archive.miniGameProgress.washSteps > 0 ||
         archive.miniGameProgress.queue > 0 ||
         archive.miniGameProgress.habitJudge > 0 ||
+        archive.miniGameProgress.readingCheckin > 0 ||
         archive.miniGameProgress.mealManners > 0 ||
         archive.miniGameProgress.habitTrafficLight > 0;
 }
@@ -347,7 +348,8 @@ function getGameDisplayName(gameKey: MiniGameRecord["gameKey"]) {
   const labelMap: Record<MiniGameRecord["gameKey"], string> = {
     washSteps: "小手清洁任务",
     queue: "一日好习惯路线",
-    habitJudge: "看图判断做法",
+    habitJudge: "历史安全判断记录",
+    readingCheckin: "阅读小书虫打卡",
     kindWords: "闽食三步练习",
     foodObserve: "泉州美食摊位寻宝",
     foodClue: "闽食摊位寻宝",
@@ -376,7 +378,11 @@ function buildMiniGameInterventionScenario(record: MiniGameRecord) {
   }
 
   if (record.gameKey === "habitJudge") {
-    return `${childName}完成了“看图判断做法对不对”，判断记录：${pickedText}。${classroomPlanRequirement}帮助幼儿看图说出正确做法和不安全原因。`;
+    return `${childName}保留了一条“历史安全判断记录”，判断记录：${pickedText}。${classroomPlanRequirement}可转化为好习惯红绿牌活动，帮助幼儿说出正确替代做法。`;
+  }
+
+  if (record.gameKey === "readingCheckin") {
+    return `${childName}完成了“阅读小书虫打卡”，阅读表达记录：${pickedText}。${classroomPlanRequirement}设计听故事、说角色、讲画面和图书归位的班级阅读活动。`;
   }
 
   if (record.gameKey === "mealManners") {
@@ -420,7 +426,11 @@ function buildLocalInterventionTips(record: MiniGameRecord) {
   }
 
   if (record.gameKey === "habitJudge") {
-    return ["继续用图片让孩子说“哪里对、哪里要换”。", "把错误做法转成正确动作示范。", "安全知识用短句重复，不用吓唬式提醒。"];
+    return ["把历史记录转成红绿牌复习。", "把需要调整的做法转成正确动作示范。", "安全知识用短句重复，不用吓唬式提醒。"];
+  }
+
+  if (record.gameKey === "readingCheckin") {
+    return ["继续用短绘本和图卡引导孩子说“我看到了”。", "亲子共读控制在 5-10 分钟，保留轻松节奏。", "看完书马上做图书归位小任务。"];
   }
 
   if (record.gameKey === "mealManners") {
@@ -2098,7 +2108,7 @@ export function TeacherStudio() {
       <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_52%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-amber-700">集体游戏活动卡</p>
+            <p className="text-sm font-semibold text-amber-700">班级成长任务活动卡</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">一键带入活动课程方案</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
               老师先选活动卡，系统会把主题、目标、步骤和可生成内容写进左侧方案输入区；不会自动调用接口，确认后再点“开始生成”。
@@ -2127,7 +2137,7 @@ export function TeacherStudio() {
                   <h3 className="mt-1 text-xl font-semibold text-slate-900">{card.title}</h3>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                  集体游戏
+                  成长任务
                 </span>
               </div>
               <div className="mt-4 space-y-3 text-sm leading-7 text-slate-700">

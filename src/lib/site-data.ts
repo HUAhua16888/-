@@ -17,14 +17,14 @@ export const themes: Record<ThemeId, ThemeConfig> = {
     id: "habit",
     label: "幼习宝",
     emoji: "✨",
-    headline: "跟着习惯小星闯关，学会喝水、洗手、整理和排队。",
-    subtitle: "更适合晨间谈话、过渡环节和班级集体互动。",
+    headline: "进入班级成长任务中心，练习生活习惯、进餐习惯、阅读表达和红绿牌判断。",
+    subtitle: "适合晨间谈话、餐前餐后、阅读区和班级集体互动。",
     starter:
-      "你好呀，我是习惯小星。今天我们一起完成成长小任务，练习洗手、喝水和整理物品。你想先挑战哪一关？",
-    choices: ["洗手泡泡任务", "喝水小任务", "玩具送回家"],
+      "你好呀，我是幼习宝小星。今天我们一起完成班级成长任务：洗手、进餐、阅读和整理。你想先点亮哪一个小任务？",
+    choices: ["阅读小书虫", "文明进餐操", "好习惯红绿牌"],
     imagePrompt:
       "绘本风，明亮温暖，幼儿园教室里，圆润可爱的习惯小星带着孩子洗手、排队、整理书本，奶油黄和海盐蓝配色，儿童插画，高细节，安全友好。",
-    badgePool: ["洗手闪亮章", "整理小能手", "喝水勇士章", "排队小队长"],
+    badgePool: ["洗手闪亮章", "阅读小书虫", "文明进餐章", "好习惯判断章"],
   },
   food: {
     id: "food",
@@ -47,48 +47,135 @@ export const habitSkillCards = [
     icon: "🪑",
     hint: "学会坐端正、脚放稳、眼睛看老师。",
     tone: "bg-amber-100 text-amber-900",
+    taskName: "坐姿小任务",
+    gameKey: "mealManners",
+    badgeName: "坐姿闪亮章",
+    command: "小脚放稳，小背坐直，眼睛轻轻看前方。",
+    rhyme: "小椅子，稳稳坐，小身体，准备好。",
+    question: "你的小脚现在放稳了吗？",
+    actionLabel: "我坐稳了",
   },
   {
     title: "专注小耳朵",
     icon: "👂",
     hint: "练习认真听、少分心，跟上课堂节奏。",
     tone: "bg-sky-100 text-sky-900",
+    taskName: "故事小耳朵任务",
+    gameKey: "readingCheckin",
+    badgeName: "故事小耳朵",
+    command: "小耳朵打开，先听一个短故事，再说一句我听到了。",
+    rhyme: "耳朵听，眼睛看，故事朋友来作伴。",
+    question: "刚才故事里出现了谁？",
+    actionLabel: "我听到了",
   },
   {
     title: "礼貌小种子",
     icon: "🌱",
     hint: "会说请、谢谢、对不起，做有礼貌的小朋友。",
     tone: "bg-emerald-100 text-emerald-900",
+    taskName: "礼貌用语任务",
+    gameKey: "habitTrafficLight",
+    badgeName: "礼貌小种子章",
+    command: "想请同伴帮忙时，先轻轻说一声请。",
+    rhyme: "请和谢谢会发芽，礼貌小花慢慢长。",
+    question: "你想把哪一句礼貌话送给同伴？",
+    actionLabel: "我会说",
   },
   {
     title: "阅读小书虫",
     icon: "📚",
     hint: "愿意翻书、看图、听故事，养成阅读习惯。",
     tone: "bg-violet-100 text-violet-900",
+    taskName: "阅读打卡任务",
+    gameKey: "readingCheckin",
+    badgeName: "阅读小书虫",
+    command: "听一小段故事，看一张画面，说一句我看到了。",
+    rhyme: "小书页，慢慢翻，我把发现说一遍。",
+    question: "这本故事里你最喜欢哪里？",
+    actionLabel: "我来打卡",
   },
   {
     title: "情绪小天气",
     icon: "🌤️",
     hint: "会说开心、生气和难过，慢慢学会安抚自己。",
     tone: "bg-rose-100 text-rose-900",
+    taskName: "情绪表达任务",
+    gameKey: "habitTrafficLight",
+    badgeName: "情绪小天气章",
+    command: "心里有小天气，可以说：我有一点开心、难过或生气。",
+    rhyme: "小天气，说出来，老师朋友都明白。",
+    question: "你现在的小天气是什么颜色？",
+    actionLabel: "我说出来",
   },
   {
     title: "实验小侦探",
     icon: "🔬",
     hint: "跟着任务做小实验，练习观察和任务意识。",
     tone: "bg-cyan-100 text-cyan-900",
+    taskName: "观察小任务",
+    gameKey: "queue",
+    badgeName: "观察小侦探章",
+    command: "先看一看，再摸一摸，最后说一句我发现了。",
+    rhyme: "小眼睛，慢慢找，一个发现真美妙。",
+    question: "你发现了什么颜色或形状？",
+    actionLabel: "我发现了",
   },
   {
     title: "整理小能手",
     icon: "🧺",
     hint: "玩具、图书和文具都能慢慢归位。",
     tone: "bg-orange-100 text-orange-900",
+    taskName: "归位小任务",
+    gameKey: "queue",
+    badgeName: "整理小能手",
+    command: "玩具回篮子，图书回书架，桌面变清爽。",
+    rhyme: "小物品，有个家，送回家，笑哈哈。",
+    question: "你想先送谁回家？",
+    actionLabel: "我送回家",
   },
   {
     title: "喝水小勇士",
     icon: "🥤",
     hint: "愿意主动喝水，记得一口一口慢慢喝。",
     tone: "bg-teal-100 text-teal-900",
+    taskName: "主动喝水任务",
+    gameKey: "queue",
+    badgeName: "喝水勇士章",
+    command: "拿好小水杯，坐稳慢慢喝，喝完放回家。",
+    rhyme: "小水杯，手中拿，一口一口润润呀。",
+    question: "你的小水杯喝完会放回哪里？",
+    actionLabel: "我会喝水",
+  },
+];
+
+export const readingCheckinTasks = [
+  {
+    title: "每日听故事",
+    icon: "👂",
+    prompt: "我听到了谁？",
+    answerCards: ["小星", "小朋友", "会发光的小书"],
+    praise: "你认真听到故事角色啦，故事小耳朵亮起来。",
+  },
+  {
+    title: "亲子共读 5 分钟",
+    icon: "👨‍👩‍👧",
+    prompt: "我看到了什么？",
+    answerCards: ["一页图画", "一个角色", "一个好习惯"],
+    praise: "你会把看到的画面说出来，阅读小书虫真专注。",
+  },
+  {
+    title: "图书归位",
+    icon: "📚",
+    prompt: "看完书放哪里？",
+    answerCards: ["放回书架", "轻轻合上", "按标记归位"],
+    praise: "图书回到自己的家，整理小能手也在发光。",
+  },
+  {
+    title: "故事表达",
+    icon: "💬",
+    prompt: "我喜欢哪里？",
+    answerCards: ["喜欢角色", "喜欢画面", "喜欢一个好办法"],
+    praise: "你能说出喜欢的地方，故事表达完成啦。",
   },
 ];
 
@@ -130,6 +217,11 @@ export const rewardStickerCards = [
     title: "阅读小书虫",
     icon: "🐛",
     tone: "bg-violet-100 text-violet-900",
+  },
+  {
+    title: "故事小耳朵",
+    icon: "👂",
+    tone: "bg-sky-100 text-sky-900",
   },
   {
     title: "勇敢尝鲜章",
@@ -478,9 +570,9 @@ export const mealMannerActions = [
     command: "嘴巴轻轻嚼，细嚼慢慢咽。",
   },
   {
-    label: "残渣不乱丢",
+    label: "食物不乱撒",
     icon: "🧻",
-    command: "小骨小渣放好，桌面干净笑一笑。",
+    command: "饭菜慢慢送入口，食物尽量不乱撒。",
   },
   {
     label: "餐后会整理",
@@ -500,7 +592,7 @@ export const habitTrafficLightCards = [
     behavior: "边吃边玩",
     icon: "🧸",
     answer: "red",
-    goodPractice: "吃饭时先照顾小肚子，玩具等一等。",
+    goodPractice: "这个做法需要换一换，我们可以这样做：吃饭时先照顾小肚子，玩具等一等。",
   },
   {
     behavior: "细嚼慢咽",
@@ -512,13 +604,31 @@ export const habitTrafficLightCards = [
     behavior: "撒饭不收拾",
     icon: "🍚",
     answer: "red",
-    goodPractice: "不小心撒了饭，可以请老师帮忙一起整理。",
+    goodPractice: "这个做法需要换一换，我们可以这样做：不小心撒了饭，可以请老师帮忙一起整理。",
   },
   {
-    behavior: "按需取餐",
-    icon: "🍽️",
+    behavior: "看完书放回书架",
+    icon: "📚",
     answer: "green",
-    goodPractice: "吃多少取多少，是珍惜粮食的好办法。",
+    goodPractice: "看完书放回书架，是照顾图书的好习惯。",
+  },
+  {
+    behavior: "上课时大声打断别人",
+    icon: "🙋",
+    answer: "red",
+    goodPractice: "这个做法需要换一换，我们可以这样做：先举小手，等老师看到再轻声说。",
+  },
+  {
+    behavior: "生气时说“我有点难过”",
+    icon: "🌤️",
+    answer: "green",
+    goodPractice: "能说出自己的心情，是照顾自己的好办法。",
+  },
+  {
+    behavior: "拿着水杯跑来跑去",
+    icon: "🥤",
+    answer: "red",
+    goodPractice: "这个做法需要换一换，我们可以这样做：拿水杯时慢慢走，坐稳再喝水。",
   },
 ];
 
@@ -567,7 +677,7 @@ export const peerEncouragementPrompts = [
 ];
 
 export const storyMissionMap: Record<ThemeId, string[]> = {
-  habit: ["饭前洗手", "文明进餐", "好习惯红绿牌", "餐后整理"],
+  habit: ["生活习惯", "进餐习惯", "阅读表达", "安全与情绪"],
   food: ["闽食小列车", "美食猜猜乐", "逛泉州美食摊", "介绍一种家乡美食"],
 };
 
@@ -648,31 +758,16 @@ export const teacherWorkflowCards = [
   },
 ];
 
-export const teacherGroupActivityCards = [
-  {
-    title: "闽食小列车",
-    themeId: "food" as const,
-    scene: "餐前谈话、泉州美食主题周、家乡味导入",
-    goal: "幼儿能听站名找到对应美食，并说出一种食材或一句小播报。",
-    steps: ["听进站口令", "找到美食站点", "说一种食材", "给家人介绍一个名字"],
-    aiCanGenerate: "站点口令、短儿歌、进站播报、表扬语、家园同步话术",
-  },
-  {
-    title: "美食猜猜乐",
-    themeId: "food" as const,
-    scene: "食材观察、区域游戏、餐前经验唤醒",
-    goal: "幼儿能根据颜色、形状、来源和用途线索猜食材。",
-    steps: ["打开宝箱", "听三条线索", "选择食材卡", "做小小美食播报员"],
-    aiCanGenerate: "猜谜线索、食材儿歌、播报员台词、温和鼓励语",
-  },
-  {
-    title: "美食小厨师",
-    themeId: "food" as const,
-    scene: "美工区、生活区、亲子食育活动延伸",
-    goal: "幼儿能用图片或模型搭配一道泉州美食，说出主要食材。",
-    steps: ["选一道美食", "找食材卡", "摆一摆小餐盘", "说一句我发现了"],
-    aiCanGenerate: "小厨师任务卡、操作口令、亲子介绍话术、家园小任务",
-  },
+type TeacherGroupActivityCard = {
+  title: string;
+  themeId: ThemeId;
+  scene: string;
+  goal: string;
+  steps: string[];
+  aiCanGenerate: string;
+};
+
+export const teacherGroupActivityCards: TeacherGroupActivityCard[] = [
   {
     title: "文明进餐操",
     themeId: "habit" as const,
@@ -690,6 +785,14 @@ export const teacherGroupActivityCards = [
     aiCanGenerate: "判断题、正确做法提示、表扬语、家庭复习话术",
   },
   {
+    title: "阅读小书虫打卡",
+    themeId: "habit" as const,
+    scene: "阅读区、午睡前故事、亲子共读延伸",
+    goal: "幼儿能听完短故事，说出一个角色、一个画面或一个喜欢的地方，并愿意把图书归位。",
+    steps: ["听短故事", "选答案卡", "说一个发现", "图书归位打卡"],
+    aiCanGenerate: "短绘本故事、阅读提问、表达句式、亲子共读话术、表扬语",
+  },
+  {
     title: "珍惜粮食小列车",
     themeId: "habit" as const,
     scene: "进餐习惯、劳动教育、家园共育",
@@ -697,9 +800,30 @@ export const teacherGroupActivityCards = [
     steps: ["听粮食旅行故事", "选按需取餐", "感谢劳动", "餐后整理打卡"],
     aiCanGenerate: "粮食旅行故事、进餐口号、感谢语、家庭小管家任务",
   },
+  {
+    title: "家庭美食小管家",
+    themeId: "habit" as const,
+    scene: "家园共育、进餐习惯延续、亲子任务",
+    goal: "幼儿能在家参与饭前洗手、摆碗筷、尝试一小步和餐后整理。",
+    steps: ["饭前洗手", "摆碗筷", "说一种食物发现", "餐后整理一个小地方"],
+    aiCanGenerate: "家庭任务卡、亲子提醒语、家园同步建议、温和表扬语",
+  },
+  {
+    title: "睡前故事小回顾",
+    themeId: "habit" as const,
+    scene: "离园前谈话、睡前亲子共读、家长端反馈",
+    goal: "幼儿能回顾今天听到的故事或认识的食物，说出一个角色、画面或明天愿意尝试的一小步。",
+    steps: ["回想今天故事", "说一个角色或画面", "说一个小发现", "约定明天一小步"],
+    aiCanGenerate: "睡前回顾问题、亲子共读任务、家庭反馈话术、鼓励语",
+  },
 ];
 
 export const parentHomeTaskCards = [
+  {
+    title: "阅读小书虫居家任务",
+    icon: "📚",
+    tasks: ["亲子共读 5 分钟", "孩子说一句“我看到了……”", "看完书放回原位"],
+  },
   {
     title: "家庭美食小管家",
     icon: "🏠",
@@ -711,9 +835,9 @@ export const parentHomeTaskCards = [
     tasks: ["看一看", "闻一闻", "尝一点", "说发现"],
   },
   {
-    title: "睡前美食小回顾",
+    title: "睡前美食/故事小回顾",
     icon: "🌙",
-    tasks: ["今天认识了什么食物", "它是什么颜色或味道", "明天愿意尝试哪一小步"],
+    tasks: ["今天认识了什么", "我发现了什么", "明天想试哪一小步"],
   },
 ];
 

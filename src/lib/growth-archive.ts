@@ -20,6 +20,7 @@ export type MiniGameKey =
   | "washSteps"
   | "queue"
   | "habitJudge"
+  | "readingCheckin"
   | "kindWords"
   | "foodObserve"
   | "foodClue"
@@ -89,6 +90,7 @@ export function createEmptyGrowthArchive(): GrowthArchive {
       washSteps: 0,
       queue: 0,
       habitJudge: 0,
+      readingCheckin: 0,
       kindWords: 0,
       foodObserve: 0,
       foodClue: 0,
@@ -192,6 +194,7 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
         washSteps: normalizeMiniGameCount(parsed.miniGameProgress?.washSteps),
         queue: normalizeMiniGameCount(parsed.miniGameProgress?.queue),
         habitJudge: normalizeMiniGameCount(parsed.miniGameProgress?.habitJudge),
+        readingCheckin: normalizeMiniGameCount(parsed.miniGameProgress?.readingCheckin),
         kindWords: normalizeMiniGameCount(parsed.miniGameProgress?.kindWords),
         foodObserve: normalizeMiniGameCount(parsed.miniGameProgress?.foodObserve),
         foodClue: normalizeMiniGameCount(parsed.miniGameProgress?.foodClue),
@@ -355,22 +358,32 @@ const badgeLevels = [
   {
     min: 0,
     level: "成长启航",
-    description: "已经开始认识好习惯和泉州美食啦。",
+    description: "已经开始认识好习惯和成长任务啦。",
   },
   {
     min: 5,
     level: "进餐小明星",
-    description: "能完成多个进餐好习惯，也愿意认识新食物。",
+    description: "能完成多个进餐好习惯，也愿意尝试一小步。",
   },
   {
     min: 10,
-    level: "闽食小当家",
-    description: "认识更多泉州美食，还能把好习惯带到生活里。",
+    level: "阅读小书虫",
+    description: "愿意听故事、看图书，也能说出自己的发现。",
   },
   {
     min: 15,
+    level: "闽食小当家",
+    description: "认识更多泉州美食，也能把发现分享给家人。",
+  },
+  {
+    min: 20,
+    level: "好习惯小队长",
+    description: "能把好习惯带到班级生活和家庭生活里。",
+  },
+  {
+    min: 30,
     level: "成长岛小主人",
-    description: "能坚持打卡，愿意照顾自己，也能把发现分享给家人。",
+    description: "坚持完成成长任务，能照顾自己，也能鼓励同伴。",
   },
 ];
 
@@ -381,6 +394,9 @@ export function getBadgeLevelSummary(
   const childBadges = childId
     ? archive.badgeRecords.filter((record) => record.childId === childId)
     : archive.badgeRecords;
+  const childMiniGameRecords = childId
+    ? archive.miniGameRecords.filter((record) => record.childId === childId)
+    : archive.miniGameRecords;
   const uniqueBadges = new Map<string, BadgeRecord>();
 
   for (const record of childBadges) {
@@ -394,7 +410,7 @@ export function getBadgeLevelSummary(
   const latestBadges = Array.from(uniqueBadges.values()).sort(
     (left, right) => new Date(right.earnedAt).getTime() - new Date(left.earnedAt).getTime(),
   );
-  const badgeCount = latestBadges.length;
+  const badgeCount = Math.max(latestBadges.length, childMiniGameRecords.length);
   const currentLevel =
     [...badgeLevels].reverse().find((level) => badgeCount >= level.min) ?? badgeLevels[0];
   const nextLevel = badgeLevels.find((level) => level.min > badgeCount);

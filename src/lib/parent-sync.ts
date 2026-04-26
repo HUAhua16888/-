@@ -210,11 +210,14 @@ export function buildParentSyncFromMiniGame(record: MiniGameRecord): ParentSyncR
   const isFoodTrain = record.gameKey === "foodTrain";
   const isFoodGuess = record.gameKey === "foodGuess";
   const isFoodTask = record.themeId === "food";
+  const isReadingTask = record.gameKey === "readingCheckin";
   const isMealHabit =
     record.gameKey === "mealManners" || record.gameKey === "habitTrafficLight";
 
   const strategy = isFoodTask
     ? "在家延续认识、靠近、说发现的节奏，先接纳孩子的感受，再邀请孩子找食材或介绍一种泉州美食。"
+    : isReadingTask
+      ? "在家延续听故事、说角色、讲画面和图书归位的轻松节奏，先听孩子说一句发现。"
     : isMealHabit
       ? "在家继续用短口令复习进餐动作，不比较、不催促；孩子完成一个小步骤时，说出具体行为进行肯定。"
       : "在家继续用短句提醒和图卡复习，不比较、不催促；孩子做对一个动作时，说出具体行为进行肯定。";
@@ -224,6 +227,8 @@ export function buildParentSyncFromMiniGame(record: MiniGameRecord): ParentSyncR
       ? "亲子尝新小挑战：看一看食材、闻一闻气味、说一个发现；愿意时再尝一点，不需要催促。"
       : isFoodTask
         ? "家庭美食小管家：饭前洗手、摆碗筷、介绍一种今天认识的食物，餐后一起整理。"
+        : isReadingTask
+          ? "阅读小书虫居家任务：亲子共读 5 分钟，请孩子说一句“我看到了……”，看完书放回原位。"
         : isMealHabit
           ? "家庭美食小管家：饭前洗手、摆碗筷、轻声用餐、按需取餐，餐后整理一个小地方。"
           : "今晚可以请孩子说一说：今天我做对了哪个好习惯？家长只追问一个小步骤。";

@@ -85,6 +85,16 @@ function getBadgeVisual(record: BadgeRecord) {
     };
   }
 
+  if (/阅读|故事|小耳朵|书虫|图书/.test(name)) {
+    return {
+      icon: "📚",
+      label: "阅读表达",
+      description: "愿意听故事、说画面，并把图书放回原位。",
+      tone: "bg-violet-50 text-violet-900",
+      iconTone: "bg-violet-100",
+    };
+  }
+
   if (/安全|判断|交通|防火|如厕/.test(name)) {
     return {
       icon: "🛡️",
@@ -128,7 +138,8 @@ function getMiniGameDisplayName(gameKey: MiniGameRecord["gameKey"]) {
   const labelMap: Record<MiniGameRecord["gameKey"], string> = {
     washSteps: "小手清洁任务",
     queue: "一日好习惯路线",
-    habitJudge: "看图判断做法",
+    habitJudge: "历史安全判断记录",
+    readingCheckin: "阅读小书虫打卡",
     kindWords: "闽食三步练习",
     foodObserve: "泉州美食摊位寻宝",
     foodClue: "泉州美食线索寻宝",
