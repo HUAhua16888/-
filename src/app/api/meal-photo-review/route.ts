@@ -92,10 +92,10 @@ function buildDemoReview(filename: string, sizeKb: number): ReviewResult {
     source: "demo-template",
     awardBadge: false,
     badgeKind: "experience_sticker",
-    message: "照片已经上传成功，当前是演示观察卡，不包含真实识图结论。",
+    message: "照片已经上传成功，当前先返回基础观察卡，不包含真实识图结论。",
     summary: "已收到照片，可练习拍清餐盘和说出观察。",
     plateState: "待现场确认",
-    confidenceLabel: "模板演示",
+    confidenceLabel: "基础模板",
     highlightTags: ["上传成功", "练习观察", "现场确认"],
     scoreCards: [
       { label: "画面范围", value: "看整盘是否入镜" },
@@ -490,7 +490,7 @@ export async function POST(request: Request) {
         buildFallbackReview(
           fallback,
           "vision_response_invalid",
-          "视觉结果不稳定，先展示演示观察卡。",
+          "视觉结果不稳定，先返回基础观察卡。",
         ),
       );
     }
@@ -502,7 +502,7 @@ export async function POST(request: Request) {
         buildFallbackReview(
           fallback,
           "vision_response_invalid",
-          "视觉结果不完整，先展示演示观察卡。",
+          "视觉结果不完整，先返回基础观察卡。",
         ),
       );
     }
@@ -523,7 +523,7 @@ export async function POST(request: Request) {
       buildFallbackReview(
         fallback,
         "vision_provider_failed",
-        "视觉分析暂不可用，先展示演示观察卡。",
+        "视觉分析暂不可用，先返回基础观察卡。",
       ),
     );
   }

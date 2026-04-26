@@ -235,8 +235,8 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [accountText, setAccountText] = useState("");
   const [feedbackCategory, setFeedbackCategory] = useState<ParentFeedbackCategory>("question");
   const [feedbackText, setFeedbackText] = useState("");
-  const [feedbackStatus, setFeedbackStatus] = useState("家长有疑惑或想法，可以在这里提交给老师。");
-  const [status, setStatus] = useState("请输入幼儿姓名或号数，进入对应的家长查看页。");
+  const [feedbackStatus, setFeedbackStatus] = useState("家长的疑惑、想法和在家观察会保存在这台设备上。");
+  const [status, setStatus] = useState("请输入幼儿姓名或号数，查看对应成长记录。");
   const selectedChild = useMemo(
     () => childRoster.find((child) => child.id === selectedChildId) ?? null,
     [childRoster, selectedChildId],
@@ -282,10 +282,10 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       );
       setStatus(
         matched
-            ? `${formatChildLabel(matched)} 的家长查看页已打开。`
+            ? `${formatChildLabel(matched)} 的成长记录已打开。`
             : roster.length > 0
-              ? "请输入幼儿姓名或号数，进入对应的家长查看页。"
-            : "老师还没有添加班级花名册，暂时无法登录家长端。",
+              ? "请输入幼儿姓名或号数，查看对应成长记录。"
+              : "还没有幼儿名单，请联系老师在教师辅助里添加花名册。",
       );
     }, 0);
 
@@ -294,7 +294,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
   function chooseChild(child: ChildProfile) {
     setSelectedChildId(child.id);
-    setStatus(`${formatChildLabel(child)} 的家长查看页已打开。`);
+    setStatus(`${formatChildLabel(child)} 的成长记录已打开。`);
 
     if (typeof window !== "undefined") {
       window.localStorage.setItem(selectedChildStorageKey, child.id);
@@ -312,7 +312,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     const suggestions = findChildIdentitySuggestions(text, childRoster);
 
     if (suggestions.length === 0) {
-    setStatus(`没有找到“${text}”对应的幼儿账号，请联系老师确认花名册。`);
+      setStatus(`没有找到“${text}”对应的幼儿账号，请联系老师确认花名册。`);
       return;
     }
 
@@ -352,22 +352,22 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       return nextRecords;
     });
     setFeedbackText("");
-    setFeedbackStatus("已提交给老师端，老师查看后可以回复和给出育儿指导。");
+    setFeedbackStatus("已保存到老师端反馈列表，老师查看后可以回复和给出家庭建议。");
   }
 
   if (!selectedChild) {
     return (
-      <main className="mx-auto flex min-h-[calc(100vh-128px)] w-full max-w-5xl items-center px-4 py-8 md:px-8">
-        <section className="w-full rounded-[2.5rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_28px_90px_rgba(49,93,104,0.16)] md:p-8">
-          <p className="text-sm font-semibold text-amber-700">家长身份确认</p>
-          <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-6xl">
-            先登录幼儿账号
+      <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 md:px-8">
+        <section className="w-full rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
+          <p className="text-sm font-semibold text-amber-700">家长端</p>
+          <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
+            查看孩子成长记录
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            家长端需要先用幼儿姓名或号数确认账号。登录后，只显示该幼儿的成长记录、老师反馈与家庭建议。
+            用幼儿姓名或号数进入。这里显示该幼儿在这台设备上的成长记录、老师建议和家长反馈。
           </p>
 
-          <div className="mt-7 rounded-[2rem] bg-white/85 p-5 shadow-sm">
+          <div className="mt-7 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
             <p className="text-sm font-semibold text-slate-600">幼儿账号</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
               <input
@@ -417,17 +417,17 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
       <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-[2.5rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_28px_90px_rgba(49,93,104,0.16)] md:p-8">
-          <p className="text-sm font-semibold text-amber-700">家长身份路由</p>
-          <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-6xl">
-            登录幼儿账号，
-            <span className="block text-2xl text-slate-700 md:text-3xl">查看专属成长记录</span>
+        <div className="rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
+          <p className="text-sm font-semibold text-amber-700">家长端</p>
+          <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
+            {selectedChild.name} 的成长记录
+            <span className="block text-2xl text-slate-700 md:text-3xl">老师建议与家庭反馈</span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            家长端只显示当前幼儿的成长记录册、获得勋章和老师同步过来的家园共育模板信息。
+            家长端只显示当前幼儿的信息。记录、反馈和回复保存在这台设备上，请定期与老师确认。
           </p>
 
-          <div className="mt-7 rounded-[2rem] bg-white/85 p-5 shadow-sm">
+          <div className="mt-7 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
             <p className="text-sm font-semibold text-slate-600">幼儿账号</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
               <input

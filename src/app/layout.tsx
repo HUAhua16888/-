@@ -20,11 +20,11 @@ const displayFont = ZCOOL_KuaiLe({
 
 export const metadata: Metadata = {
   title: "童趣成长乐园",
-  description: "一个面向幼儿园儿童、老师和家长的 AI 互动故事与成长游戏网站。",
+  description: "面向幼儿园儿童、老师和家长的 AI 成长互动平台。",
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   openGraph: {
     title: "童趣成长乐园",
-    description: "互动故事、小游戏、语音播报和老师家长辅助的一体化儿童 AI 网站。",
+    description: "幼儿互动任务、成长记录、教师辅助和家长反馈的一体化平台。",
     type: "website",
     locale: "zh_CN",
   },

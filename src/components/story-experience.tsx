@@ -131,7 +131,7 @@ const miniGameThemeMap: Record<MiniGameKey, ThemeId> = {
   peerEncourage: "food",
   mealTray: "food",
 };
-const minnanTasteSteps = "泉州海蛎煎看颜色、晋江紫菜汤闻海味、闽南芥菜饭尝一小口";
+const minnanTasteSteps = "逛泉州美食摊、找食材卡、听小故事、说出一个发现";
 
 const washStepVisuals: Record<string, { icon: string; cue: string }> = {
   打湿小手: {
@@ -248,12 +248,12 @@ const habitJudgeCards = [
 
 function getThemeReadyStatus(themeId: ThemeId) {
   return themeId === "food"
-    ? "闽食成长岛准备好了：今天从泉州海蛎煎、晋江紫菜汤和闽南芥菜饭开始。"
+    ? "闽食成长岛准备好了：今天像逛泉州美食小岛一样，认识名字、食材和小故事。"
     : `${themes[themeId].label}准备好了。`;
 }
 
 function formatFoodList(items: string[]) {
-  return items.length > 0 ? items.join("、") : "泉州海蛎煎、晋江紫菜汤和闽南芥菜饭";
+  return items.length > 0 ? items.join("、") : "泉州海蛎煎、面线糊和润饼菜";
 }
 
 function buildMealNutritionSpeech({
@@ -309,15 +309,15 @@ function buildMiniGameCompletionCopy(
 
   if (gameKey === "foodObserve") {
     return {
-      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "闽食探味寻宝"}`,
-      status: configuredReminder || "闽食探味寻宝完成啦：听线索、找摊位、认食材、说发现。",
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "泉州美食摊位寻宝"}`,
+      status: configuredReminder || "泉州美食摊位寻宝完成啦：认识名字、找食材、听故事、说发现。",
     };
   }
 
   if (gameKey === "foodClue") {
     return {
       feedback: `刚刚点亮：${badgeName} · 闽食摊位寻宝`,
-      status: "你找到了泉州海蛎煎、晋江紫菜汤和闽南芥菜饭三个摊位宝藏。",
+      status: "你找到了泉州美食摊位宝藏，也认识了更多家乡食材。",
     };
   }
 
@@ -328,14 +328,14 @@ function buildMiniGameCompletionCopy(
       feedback: `刚刚点亮：${badgeName} · ${configuredTitle || pickedText}`,
       status: configuredReminder
         ? `${configuredReminder} 本次记录：${pickedText}。`
-        : `饮食偏好观察卡完成：${pickedText}。老师辅助页会保留这条观察记录。`,
+        : `美食认识观察卡完成：${pickedText}。老师辅助页会保留这条观察记录。`,
     };
   }
 
   if (gameKey === "peerEncourage") {
     return {
-      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "给同伴加油"}`,
-      status: configuredReminder || "你把鼓励送给了同伴：一起看一看、闻一闻、尝一小口。",
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "陪同伴认识新美食"}`,
+      status: configuredReminder || "你陪同伴认识了新美食：先看名字和样子，再慢慢靠近。",
     };
   }
 
@@ -346,7 +346,7 @@ function buildMiniGameCompletionCopy(
       feedback: `刚刚点亮：${badgeName} · ${configuredTitle || pickedText}`,
       status: configuredReminder
         ? `${configuredReminder} 本次餐盘：${pickedText}。`
-        : `午餐小餐盘搭好啦：${pickedText}，有泉州闽南味，也有均衡搭配。`,
+        : `午餐小餐盘搭好啦：${pickedText}，认识了更多泉州美食和营养。`,
     };
   }
 
@@ -373,11 +373,11 @@ function buildRepeatedMiniGameStatus(gameKey: MiniGameKey, contentConfig?: Edita
   }
 
   if (gameKey === "kindWords") {
-    return "闽食三步已经记录过啦，可以继续练习看一看、闻一闻、尝一小口。";
+    return "闽食探索已经记录过啦，可以继续练习认名字、找食材、说发现。";
   }
 
   if (gameKey === "foodObserve") {
-    return `${configuredTitle || "闽食探味寻宝"}已经记录过啦，可以继续听线索、找摊位、认食材。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "泉州美食摊位寻宝"}已经记录过啦，可以继续听线索、找摊位、认食材和听小故事。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "foodClue") {
@@ -385,11 +385,11 @@ function buildRepeatedMiniGameStatus(gameKey: MiniGameKey, contentConfig?: Edita
   }
 
   if (gameKey === "peerEncourage") {
-    return `${configuredTitle || "同伴鼓励"}已经记录过啦，可以继续把加油话送给小伙伴。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "陪同伴认识新美食"}已经记录过啦，可以继续把认识美食的小方法送给小伙伴。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "foodPreference") {
-    return `${configuredTitle || "饮食偏好观察卡"}已经记录过啦，可以继续换一种食物说说今天的感受。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "美食认识观察卡"}已经记录过啦，可以继续换一种食物说说今天的感受。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "mealTray") {
@@ -448,15 +448,39 @@ function getStoryOptionVisual(text: string, themeId: ThemeId) {
     return {
       icon: "🌊",
       title: text,
-      description: "晋江紫菜汤，听一听海边热汤的小线索。",
+      description: "海边汤品，听一听食材和热汤的小线索。",
     };
   }
 
-  if (/芥菜|菜饭|饭/.test(text)) {
+  if (/面线|糊/.test(text)) {
     return {
-      icon: "🥬",
+      icon: "🥣",
       title: text,
-      description: "闽南芥菜饭，找一找绿色芥菜和米饭香。",
+      description: "面线糊细细软软，像古城早餐的小线索。",
+    };
+  }
+
+  if (/土笋冻|透明|冻/.test(text)) {
+    return {
+      icon: "🧊",
+      title: text,
+      description: "土笋冻透明凉凉，可以先看样子、听故事。",
+    };
+  }
+
+  if (/润饼|蔬菜|菜/.test(text)) {
+    return {
+      icon: "🌯",
+      title: text,
+      description: "润饼菜卷着好多颜色，找一找里面的食材。",
+    };
+  }
+
+  if (/石花|甜|清凉/.test(text)) {
+    return {
+      icon: "🍧",
+      title: text,
+      description: "石花膏清清凉凉，像泉州夏天的小甜碗。",
     };
   }
 
@@ -507,17 +531,17 @@ function getMissionOptionVisual(text: string, themeId: ThemeId) {
     };
   }
 
-  if (/不太想吃|偏好|饮食/.test(text)) {
+  if (/还在认识|偏好|饮食|美食认识/.test(text)) {
     return {
       icon: "📝",
-      description: "记录孩子今天的食物感受。",
+      description: "记录孩子今天还在认识的食物。",
     };
   }
 
-  if (/同伴|鼓励/.test(text)) {
+  if (/同伴|鼓励|陪/.test(text)) {
     return {
       icon: "🤝",
-      description: "把温柔鼓励送给小伙伴。",
+      description: "陪小伙伴一起认识新美食。",
     };
   }
 
@@ -1917,7 +1941,7 @@ function FoodTreasureQuestGame({
   const [matched, setMatched] = useState<string[]>([]);
   const [selectedFood, setSelectedFood] = useState("");
   const [collectedIngredients, setCollectedIngredients] = useState<string[]>([]);
-  const [feedback, setFeedback] = useState("先听线索，找到第一个闽食摊位，再收集食材卡。");
+  const [feedback, setFeedback] = useState("先听线索，像逛小岛一样找到第一个泉州美食摊位。");
   const [mistakeCount, setMistakeCount] = useState(0);
   const completionReportedRef = useRef(false);
   const completed = matched.length === minnanFoodClues.length;
@@ -1927,9 +1951,9 @@ function FoodTreasureQuestGame({
   const ingredientsComplete = ingredientTotal > 0 && collectedIngredients.length === ingredientTotal;
   const introText =
     contentConfig?.childGoal.trim() ||
-    "先听线索找摊位，找对以后收集食材卡，再用看一看、闻一闻、尝一小口说发现。";
+    "像逛泉州美食小岛一样，先认名字、找食材、听小故事，再选一个愿意靠近的小步骤。";
   const clueText = currentFood
-    ? `第 ${Math.min(currentIndex + 1, minnanFoodClues.length)} 个摊位线索：${currentFood.clue}${currentFood.pictureHint}`
+    ? `第 ${Math.min(currentIndex + 1, minnanFoodClues.length)} 站，${currentFood.stall}。线索：${currentFood.clue}${currentFood.pictureHint}`
     : "摊位寻宝完成啦。";
 
   function handlePickFood(label: string) {
@@ -1938,7 +1962,7 @@ function FoodTreasureQuestGame({
     }
 
     if (label !== currentFood.label) {
-      const message = `还不是 ${label}。再听一次线索：${currentFood.clue}${currentFood.pictureHint}`;
+      const message = `还不是 ${label}。再听一次线索：${currentFood.stall}，${currentFood.clue}${currentFood.pictureHint}`;
       setMistakeCount((current) => current + 1);
       setFeedback(message);
       onSpeak?.(`再试一次。${message}`);
@@ -1947,7 +1971,7 @@ function FoodTreasureQuestGame({
 
     setSelectedFood(label);
     setCollectedIngredients([]);
-    const message = `找对啦，这是${currentFood.label}摊位。这里有${currentFood.ingredients.join("、")}。先收集食材卡，再做${currentStep?.label ?? "说发现"}。`;
+    const message = `找对啦，这是${currentFood.label}，在${currentFood.stall}。这里有${currentFood.ingredients.join("、")}。先收集食材卡，再听一个小故事。`;
     setFeedback(message);
     onSpeak?.(message);
   }
@@ -1961,7 +1985,7 @@ function FoodTreasureQuestGame({
     setCollectedIngredients(nextIngredients);
     const message =
       nextIngredients.length === ingredientTotal
-        ? `${ingredient}食材卡收好啦。${currentFood.label}的食材卡集齐了，可以去下一摊。`
+        ? `${ingredient}食材卡收好啦。${currentFood.label}的食材卡集齐了，可以听故事、选小步，再去下一摊。`
         : `${ingredient}食材卡收好啦，继续找下一张食材卡。`;
     setFeedback(message);
     onSpeak?.(message);
@@ -1985,7 +2009,7 @@ function FoodTreasureQuestGame({
     setCollectedIngredients([]);
 
     if (nextMatched.length === minnanFoodClues.length) {
-      const message = "闽食探味寻宝完成啦。你找到了摊位，也认识了里面的食材。";
+      const message = "泉州美食摊位寻宝完成啦。你认识了名字、食材、小故事，也选了靠近美食的小步骤。";
       setFeedback(message);
       onSpeak?.(message);
       if (!completionReportedRef.current) {
@@ -1997,7 +2021,7 @@ function FoodTreasureQuestGame({
 
     const nextFood = minnanFoodClues[currentIndex + 1];
     setCurrentIndex((index) => Math.min(index + 1, minnanFoodClues.length - 1));
-    const message = `去下一摊。请听线索：${nextFood.clue}${nextFood.pictureHint}`;
+    const message = `去下一摊。请听线索：${nextFood.stall}，${nextFood.clue}${nextFood.pictureHint}`;
     setFeedback(message);
     onSpeak?.(message);
   }
@@ -2008,7 +2032,7 @@ function FoodTreasureQuestGame({
     setSelectedFood("");
     setCollectedIngredients([]);
     setMistakeCount(0);
-    setFeedback("先听线索，找到第一个闽食摊位，再收集食材卡。");
+    setFeedback("先听线索，像逛小岛一样找到第一个泉州美食摊位。");
     completionReportedRef.current = false;
   }
 
@@ -2025,13 +2049,13 @@ function FoodTreasureQuestGame({
         <div>
           <p className="text-sm font-semibold text-teal-700">互动小游戏 1</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">
-            {contentConfig?.title || "闽食探味寻宝"}
+            {contentConfig?.title || "泉州美食摊位寻宝"}
           </h3>
         </div>
         <button
           onClick={() => {
             resetGame();
-            onSpeak?.("闽食探味寻宝重新开始。先听线索，找到第一个闽食摊位。");
+            onSpeak?.("泉州美食摊位寻宝重新开始。先听线索，找到第一个美食摊位。");
           }}
           className="rounded-full bg-teal-100 px-4 py-2 text-sm font-semibold text-teal-800 transition hover:bg-teal-200"
         >
@@ -2053,7 +2077,7 @@ function FoodTreasureQuestGame({
                 {completed ? "摊位全部找到" : currentFood?.clue}
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                {completed ? "你已经认识了三个闽食摊位。" : currentFood?.pictureHint}
+                {completed ? "你已经认识了多个泉州美食摊位。" : `${currentFood?.stall ?? ""} · ${currentFood?.pictureHint ?? ""}`}
               </p>
             </div>
             <SpeechCueButton text={completed ? feedback : clueText} onSpeak={onSpeak} label="播放线索" tone="teal" />
@@ -2079,6 +2103,7 @@ function FoodTreasureQuestGame({
                 <span className="block text-3xl">{done || current ? food.icon : "☆"}</span>
                 <span className="mt-2 block text-xs opacity-75">第 {index + 1} 摊</span>
                 <span className="mt-1 block">{done ? "食材已认" : current ? "正在寻宝" : "等待"}</span>
+                <span className="mt-1 block text-xs opacity-75">{food.stall}</span>
                 <span className="mt-1 block text-xs opacity-75">{food.label}</span>
               </div>
             );
@@ -2090,7 +2115,7 @@ function FoodTreasureQuestGame({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
         {minnanFoodClues.map((food) => {
           const done = matched.includes(food.label);
           const disabled = done || completed || Boolean(selectedFood);
@@ -2115,7 +2140,7 @@ function FoodTreasureQuestGame({
               <span>
                 <span className="block text-base">{food.label}</span>
                 <span className="mt-1 block text-xs leading-5 text-slate-600">
-                  {done ? "这个摊位食材已认识" : "点我找摊位"}
+                  {done ? "这个摊位食材已认识" : food.stall}
                 </span>
               </span>
             </span>
@@ -2133,6 +2158,12 @@ function FoodTreasureQuestGame({
                 {currentFood.icon} {currentFood.label}
               </h4>
               <p className="mt-2 text-sm leading-7 text-slate-700">{currentFood.ingredientIntro}</p>
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                样子线索：{currentFood.colorShape}
+              </p>
+              <p className="mt-2 rounded-[1.2rem] bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-900">
+                小故事：{currentFood.cultureStory}
+              </p>
               {currentStep ? (
                 <p className="mt-2 rounded-[1.2rem] bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900">
                   {currentStep.icon} 探味动作：{currentStep.label}，{currentStep.cue}
@@ -2140,7 +2171,7 @@ function FoodTreasureQuestGame({
               ) : null}
             </div>
             <SpeechCueButton
-              text={`${currentFood.label}的食材有${currentFood.ingredients.join("、")}。${currentFood.ingredientIntro}${currentStep ? `探味动作是${currentStep.label}，${currentStep.cue}` : ""}`}
+              text={`${currentFood.label}的食材有${currentFood.ingredients.join("、")}。${currentFood.ingredientIntro}样子线索：${currentFood.colorShape}。小故事：${currentFood.cultureStory}${currentStep ? `探味动作是${currentStep.label}，${currentStep.cue}` : ""}`}
               onSpeak={onSpeak}
               label="听食材"
               tone="teal"
@@ -2166,6 +2197,17 @@ function FoodTreasureQuestGame({
                 </button>
               );
             })}
+          </div>
+
+          <div className="mt-4 rounded-[1.4rem] bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-700">可以选择的靠近小步</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {currentFood.approachSteps.map((step) => (
+                <span key={step} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm">
+                  {step}
+                </span>
+              ))}
+            </div>
           </div>
 
           <button
@@ -2199,16 +2241,16 @@ function FoodPreferenceGame({
 }) {
   const [selectedFood, setSelectedFood] = useState("");
   const [selectedReason, setSelectedReason] = useState("");
-  const [feedback, setFeedback] = useState("选一种今天不太想吃的闽食，再说说可能的原因。");
+  const [feedback, setFeedback] = useState("选一种今天还在认识的泉州美食，再说说可能的原因。");
   const completionReportedRef = useRef(false);
   const selectedFoodInfo = minnanFoodClues.find((food) => food.label === selectedFood);
   const selectedReasonInfo = foodPreferenceReasons.find((reason) => reason.label === selectedReason);
   const completed = Boolean(selectedFood && selectedReason);
   const introText =
     contentConfig?.childGoal.trim() ||
-    "这不是给孩子贴标签，只记录今天的感受，帮助老师和家长温和陪伴。";
+    "这不是给孩子贴标签，只记录今天还在认识的食物，帮助老师和家长温和陪伴。";
   const foodRoleIntroText = selectedFoodInfo
-    ? `我是${selectedFoodInfo.label}。我的身体里有${selectedFoodInfo.ingredients.join("、")}。${selectedFoodInfo.ingredientIntro}你今天不太想吃也没关系，先认识我就很好。`
+    ? `我是${selectedFoodInfo.label}。我的身体里有${selectedFoodInfo.ingredients.join("、")}。${selectedFoodInfo.ingredientIntro}你今天还在认识我也没关系，先看见名字和食材就很好。`
     : "";
 
   function handleFoodPick(label: string) {
@@ -2216,8 +2258,8 @@ function FoodPreferenceGame({
     setSelectedFood(label);
     setSelectedReason("");
     const message = food
-      ? `我是${food.label}。我的身体里有${food.ingredients.join("、")}。${food.ingredientIntro}你今天不太想吃也没关系，先认识我就很好。`
-      : "记录下来：今天有一种食物不太想吃。";
+      ? `我是${food.label}。我的身体里有${food.ingredients.join("、")}。${food.ingredientIntro}你今天还在认识我也没关系，先看见名字和食材就很好。`
+      : "记录下来：今天有一种食物还在慢慢认识。";
     setFeedback(message);
     onSpeak?.(message);
     completionReportedRef.current = false;
@@ -2225,7 +2267,7 @@ function FoodPreferenceGame({
 
   function handleReasonPick(label: string) {
     if (!selectedFood) {
-      const message = "先选一种今天不太想吃的食物。";
+      const message = "先选一种今天还在认识的食物。";
       setFeedback(message);
       onSpeak?.(message);
       return;
@@ -2256,7 +2298,7 @@ function FoodPreferenceGame({
   function resetGame() {
     setSelectedFood("");
     setSelectedReason("");
-    setFeedback("选一种今天不太想吃的闽食，再说说可能的原因。");
+    setFeedback("选一种今天还在认识的泉州美食，再说说可能的原因。");
     completionReportedRef.current = false;
   }
 
@@ -2279,13 +2321,13 @@ function FoodPreferenceGame({
         <div>
           <p className="text-sm font-semibold text-cyan-700">互动小游戏 2</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">
-            {contentConfig?.title || "饮食偏好观察卡"}
+            {contentConfig?.title || "美食认识观察卡"}
           </h3>
         </div>
         <button
           onClick={() => {
             resetGame();
-            onSpeak?.("饮食偏好观察卡重新开始。先选一种今天不太想吃的闽食。");
+            onSpeak?.("美食认识观察卡重新开始。先选一种今天还在认识的泉州美食。");
           }}
           className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-200"
         >
@@ -2299,7 +2341,7 @@ function FoodPreferenceGame({
       </div>
 
       <div className="mt-5 rounded-[1.6rem] bg-cyan-50 p-4">
-        <p className="text-sm font-semibold text-cyan-900">今天哪一种还不太想吃？</p>
+        <p className="text-sm font-semibold text-cyan-900">今天哪一种还在认识？</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           {minnanFoodClues.map((food) => {
             const selected = selectedFood === food.label;
@@ -2392,12 +2434,12 @@ function PeerEncouragementGame({
   onSpeak?: SpeakHandler;
 }) {
   const [sent, setSent] = useState<string[]>([]);
-  const [feedback, setFeedback] = useState("选一位小伙伴，把鼓励话送给他。");
+  const [feedback, setFeedback] = useState("选一位小伙伴，把认识美食的小方法送给他。");
   const completionReportedRef = useRef(false);
   const completed = sent.length === peerEncouragementPrompts.length;
   const introText =
     contentConfig?.childGoal.trim() ||
-    "不判断对错，直接把鼓励送给同伴，一起愿意看一看、闻一闻、尝一小口。";
+    "不判断对错，陪同伴认识新美食：找颜色、找食材、听小故事。";
 
   function handleSend(peer: string, encouragement: string) {
     if (sent.includes(peer) || completed) {
@@ -2408,7 +2450,7 @@ function PeerEncouragementGame({
     setSent(nextSent);
     const message =
       nextSent.length === peerEncouragementPrompts.length
-        ? "三位小伙伴都收到鼓励啦。"
+        ? "三位小伙伴都收到认识美食的小方法啦。"
         : `你送出了：“${encouragement}”`;
     setFeedback(message);
     onSpeak?.(message);
@@ -2421,7 +2463,7 @@ function PeerEncouragementGame({
 
   function resetGame() {
     setSent([]);
-    setFeedback("选一位小伙伴，把鼓励话送给他。");
+    setFeedback("选一位小伙伴，把认识美食的小方法送给他。");
     completionReportedRef.current = false;
   }
 
@@ -2438,13 +2480,13 @@ function PeerEncouragementGame({
         <div>
           <p className="text-sm font-semibold text-rose-700">互动小游戏 3</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">
-            {contentConfig?.title || "给同伴加油"}
+            {contentConfig?.title || "陪同伴认识新美食"}
           </h3>
         </div>
         <button
           onClick={() => {
             resetGame();
-            onSpeak?.("同伴鼓励重新开始。选一位小伙伴，把鼓励话送给他。");
+            onSpeak?.("陪同伴认识新美食重新开始。选一位小伙伴，把认识美食的小方法送给他。");
           }}
           className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800 transition hover:bg-rose-200"
         >
@@ -2457,10 +2499,10 @@ function PeerEncouragementGame({
       </div>
 
       <div className="mt-5 rounded-[1.6rem] bg-rose-50 p-4">
-        <p className="text-sm font-semibold text-rose-900">同伴鼓励墙</p>
+        <p className="text-sm font-semibold text-rose-900">同伴认识墙</p>
         <div className="mt-3 flex min-h-14 flex-wrap gap-2 rounded-[1.3rem] bg-white/80 p-3">
           {sent.length === 0 ? (
-            <span className="text-sm text-slate-400">还没有送出鼓励。</span>
+            <span className="text-sm text-slate-400">还没有送出认识方法。</span>
           ) : (
             sent.map((peer) => (
               <span
@@ -2510,7 +2552,7 @@ function PeerEncouragementGame({
       </div>
 
       <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-        {completed ? "完成啦，点亮同伴鼓励星。" : `已鼓励 ${sent.length} / 3 位同伴`}
+        {completed ? "完成啦，点亮同伴认识星。" : `已陪伴 ${sent.length} / 3 位同伴`}
       </p>
     </div>
   );
@@ -2528,7 +2570,7 @@ function MealTrayGame({
   onSpeakNutrition?: (text: string) => void;
 }) {
   const [pickedItems, setPickedItems] = useState<string[]>([]);
-  const [feedback, setFeedback] = useState("先点一种食物，看看它叫什么、能帮身体做什么。");
+  const [feedback, setFeedback] = useState("先点一种泉州食物，看看它叫什么、有哪些食材。");
   const completionReportedRef = useRef(false);
   const pickedCount = pickedItems.length;
   const completed = pickedCount === 3;
@@ -2537,7 +2579,7 @@ function MealTrayGame({
   ).length;
   const introText =
     contentConfig?.childGoal.trim() ||
-    "点选食物，认识名称和营养；每样可以先看一看、闻一闻、尝一小口。";
+    "点选泉州食物，认识名称、食材和营养；每样都可以先看样子、听故事。";
 
   function handlePick(item: string) {
     if (pickedItems.includes(item) || completed) {
@@ -2549,7 +2591,7 @@ function MealTrayGame({
     const pickedOption = mealTrayOptions.find((option) => option.label === item);
     const message = pickedOption?.isHealthy
       ? `${pickedOption.icon} ${item}：${pickedOption.nutrient}，${pickedOption.benefit}`
-      : `${pickedOption?.icon ?? "⭐"} ${item}先认识一下，今天把泉州闽南食物放到餐盘中间。`;
+      : `${pickedOption?.icon ?? "⭐"} ${item}先认识一下，今天把泉州美食放到餐盘中间。`;
     setFeedback(message);
     onSpeak?.(message);
 
@@ -2569,7 +2611,7 @@ function MealTrayGame({
 
   function resetGame() {
     setPickedItems([]);
-    setFeedback("先点一种食物，看看它叫什么、能帮身体做什么。");
+    setFeedback("先点一种泉州食物，看看它叫什么、有哪些食材。");
     completionReportedRef.current = false;
   }
 
@@ -2592,7 +2634,7 @@ function MealTrayGame({
         <button
           onClick={() => {
             resetGame();
-            onSpeak?.("午餐小餐盘重新搭配。先点一种食物，听听它叫什么、能帮身体做什么。");
+            onSpeak?.("午餐小餐盘重新搭配。先点一种泉州食物，听听它叫什么、有哪些食材。");
           }}
           className="rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 transition hover:bg-orange-200"
         >
@@ -2738,14 +2780,14 @@ function MealTrayGame({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p>
               {healthyCount >= 2
-                ? `今天认识了：${formatFoodList(pickedItems)}。每样食物都可以从一小口开始，多尝试就更勇敢。`
-                : "今天先认识这些食物也可以。点“重新搭配”，再多选一种泉州闽南食物试试。"}
+                ? `今天认识了：${formatFoodList(pickedItems)}。能说出名字、食材和营养，就是很棒的探索。`
+                : "今天先认识这些食物也可以。点“重新搭配”，再多选一种泉州美食看看。"}
             </p>
             <SpeechCueButton
               text={
                 healthyCount >= 2
                   ? `今天认识了：${formatFoodList(pickedItems)}。每样食物都可以从一小口开始，多尝试就更勇敢。`
-                  : "今天先认识这些食物也可以。点重新搭配，再多选一种泉州闽南食物试试。"
+                  : "今天先认识这些食物也可以。点重新搭配，再多选一种泉州美食看看。"
               }
               onSpeak={onSpeak}
               label="听结果"
@@ -3373,7 +3415,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
 
     setLatestBadgeFeedback(
       hasPreferenceBadge
-        ? `已记录饮食偏好：${record.foodLabel} · ${record.reasonLabel}`
+        ? `已记录美食认识：${record.foodLabel} · ${record.reasonLabel}`
         : `刚刚点亮：${badgeName} · ${gameContent?.title || record.foodLabel} · ${record.reasonLabel}`,
     );
     setLatestExperienceStickerFeedback("");
@@ -3381,7 +3423,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     setStatus(
       gameContent?.reminderText
         ? `${gameContent.reminderText} 本次记录：${record.foodLabel}，原因是${record.reasonLabel}。`
-        : `饮食偏好观察已记录：${record.foodLabel}，原因是${record.reasonLabel}。老师辅助页会保留这条观察。`,
+        : `美食认识观察已记录：${record.foodLabel}，原因是${record.reasonLabel}。老师辅助页会保留这条观察。`,
     );
   }
 
@@ -3468,7 +3510,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     setStoryDraft("");
     setStatus(
       resetTheme === "food"
-        ? "闽食成长岛重新开始啦：先选泉州海蛎煎、晋江紫菜汤或闽南芥菜饭。"
+        ? "闽食成长岛重新开始啦：可以先逛泉州美食摊，认识名字、食材和小故事。"
         : `${themes[resetTheme].label}重新开始啦。`,
     );
     setBadges([]);
@@ -4286,7 +4328,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
             </div>
             <p className="mt-2 text-sm leading-7 text-slate-700">
               {themeId === "food"
-                ? "你认真完成了闽食小挑战，可以把看到、闻到、尝到的发现说给同伴听。"
+                ? "你认真完成了闽食小挑战，可以把名字、食材和小故事说给同伴听。"
                 : "你认真完成了这个小挑战，可以带着这个好习惯继续玩啦。"}
             </p>
           </div>
@@ -4330,7 +4372,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
               onSpeak={(text) => {
                 void startSpeechPlayback(text);
               }}
-              onComplete={() => logMiniGameCompletion("foodObserve", "闽食探味章")}
+              onComplete={() => logMiniGameCompletion("foodObserve", "美食摊位寻宝章")}
             />
             <FoodPreferenceGame
               contentConfig={getConfiguredGameContent("foodPreference")}
@@ -4344,7 +4386,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
               onSpeak={(text) => {
                 void startSpeechPlayback(text);
               }}
-              onComplete={() => logMiniGameCompletion("peerEncourage", "同伴鼓励星")}
+              onComplete={() => logMiniGameCompletion("peerEncourage", "同伴认识星")}
             />
             <MealTrayGame
               contentConfig={getConfiguredGameContent("mealTray")}

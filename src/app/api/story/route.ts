@@ -22,7 +22,7 @@ type StoryRequest = {
 type StoryFallbackReason = "missing_api_key" | "provider_failed" | "invalid_ai_response";
 
 const childInputMaxLength = 120;
-const teacherInputMaxLength = 520;
+const teacherInputMaxLength = 720;
 const teacherTaskMaxLength = 40;
 const messageMaxLength = 180;
 
@@ -36,6 +36,23 @@ function normalizePlainText(input: unknown, fallback: string, maxLength: number)
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+
+  return cleaned || fallback;
+}
+
+function normalizeTeacherContent(input: unknown, fallback: string, maxLength: number) {
+  if (typeof input !== "string") {
+    return fallback;
+  }
+
+  const cleaned = input
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, maxLength)
+    .trim();
 
   return cleaned || fallback;
 }
@@ -118,13 +135,13 @@ function withAiMeta<T extends Record<string, unknown>>(payload: T) {
 
 function buildChildFallback(theme: ThemeId, userInput: string) {
   const currentTheme = themes[theme];
-  const wantsFood = /海蛎|紫菜|芥菜|食物|午餐|尝|吃|闽食|看一看|闻一闻/.test(userInput);
+  const wantsFood = /海蛎|面线|土笋冻|肉粽|润饼|石花|醋肉|鱼卷|食物|午餐|尝|吃|闽食|泉州|食材|摊位/.test(userInput);
   const wantsQueue = /排队|队长|不挤|站好|慢慢走/.test(userInput);
   const wantsWash = /洗手|泡泡|小手|七步/.test(userInput);
   const wantsTidy = /整理|玩具|书|归位|送回家/.test(userInput);
   const reply =
     theme === "food" || wantsFood
-      ? `🦪 海蛎小勇士听见啦：“${userInput}”。我们先看一看、闻一闻，再勇敢尝一小口，给自己一个尝试小鼓励。`
+      ? `🦪 海蛎小勇士听见啦：“${userInput}”。我们去泉州美食小摊认名字、找食材、听小故事，再选一个愿意靠近的小步骤。`
       : wantsWash
         ? `✨ 习惯小星来帮忙：“${userInput}”。我们先打湿小手，再搓出泡泡，最后把小手擦干净。`
         : wantsQueue
@@ -134,7 +151,7 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
             : `${currentTheme.emoji} ${currentTheme.label}收到啦。你刚才说的是“${userInput}”。我们先跟着故事走一步，再选一个小任务继续冒险吧。`;
   const choices =
     theme === "food" || wantsFood
-      ? ["看一看颜色", "闻一闻香味", "勇敢尝一小口"]
+      ? ["逛美食摊", "找食材卡", "说我看到"]
       : wantsWash
         ? ["打湿小手", "搓出泡泡", "冲洗擦干"]
       : wantsQueue
@@ -168,9 +185,9 @@ function buildPictureBookFallback(theme: ThemeId, userInput: string) {
     .replace(/^我想听/, "")
     .replace(/的故事$/, "")
     .trim();
-  const wantsFood = theme === "food" || /海蛎|紫菜|芥菜|食物|午餐|闽食|泉州/.test(topic);
+  const wantsFood = theme === "food" || /海蛎|面线|土笋冻|肉粽|润饼|石花|醋肉|鱼卷|食物|午餐|闽食|泉州/.test(topic);
   const reply = wantsFood
-    ? "绘本故事开始啦。海蛎小勇士带着小朋友来到泉州小厨房，先看见金黄的海蛎煎，又闻到紫菜汤的海味。小朋友说：“我先看一看，再闻一闻，准备好了尝一小口。”海蛎小勇士轻轻点头：“愿意靠近新食物，就是勇敢。”最后，大家把今天认识的食材画进成长小书里。"
+    ? "绘本故事开始啦。海蛎小勇士带着小朋友来到泉州古城小吃摊，先看见金黄的海蛎煎，又发现细细软软的面线糊和卷着蔬菜的润饼菜。小朋友找到了鸡蛋、面线和胡萝卜，还听见摊主阿姨说：“认识名字和食材，就是靠近家乡味的第一步。”最后，大家把今天看到的颜色画进成长小书里。"
     : "绘本故事开始啦。幼习宝小星在教室门口发现一串闪亮脚印，它邀请小朋友一起找好习惯。第一步，小手遇到清水和泡泡；第二步，玩具排队回到小篮子；第三步，小朋友慢慢喝水、轻轻说话。小星笑着说：“每做好一个小动作，身体和心情都会更舒服。”故事讲完啦，我们也试一个好习惯吧。";
 
   return {
@@ -182,23 +199,61 @@ function buildPictureBookFallback(theme: ThemeId, userInput: string) {
   };
 }
 
+function resolveTeacherAgeGroup(text: string) {
+  if (/小班|3\s*-\s*4|3-4|3 至 4|3到4/.test(text)) {
+    return "小班 3-4 岁";
+  }
+
+  if (/大班|5\s*-\s*6|5-6|5 至 6|5到6/.test(text)) {
+    return "大班 5-6 岁";
+  }
+
+  return "中班 4-5 岁";
+}
+
+function buildTeacherAgeFocus(ageGroup: string) {
+  if (ageGroup.includes("小班")) {
+    return "以模仿、感知、短句回应和动作游戏为主。";
+  }
+
+  if (ageGroup.includes("大班")) {
+    return "加入合作、简单记录、规则意识和迁移表达。";
+  }
+
+  return "加入简单排序、比较和说出一点原因。";
+}
+
 function buildTeacherFallback(task: string, userInput = "") {
   const target = `${task} ${userInput}`;
   const isActivity = /活动|课程|方案|流程|目标|材料|观察|延伸/.test(target);
   const isStory = /故事|绘本|角色|情境|讲/.test(target);
   const isFood = /餐|食|闽|海蛎|紫菜|挑食|尝/.test(target);
   const isPraise = /鼓励|表扬|挑食|不愿意|情绪|安抚|紧张/.test(target);
+  const ageGroup = resolveTeacherAgeGroup(target);
+  const ageFocus = buildTeacherAgeFocus(ageGroup);
+  const activityName = isFood ? "家乡美食小发现" : "小手泡泡按顺序";
   const title = isActivity
     ? "幼儿活动课程方案"
     : isStory
-      ? "幼儿互动故事"
+      ? "幼儿互动引导"
       : isPraise
         ? "情绪支持活动"
         : isFood
           ? "闽南食育活动"
           : "幼儿故事活动";
   const content = isActivity
-    ? "活动名称：小小成长任务。适用年龄：4-5岁。目标：愿意观察图片、说出做法，并尝试一个好行为。准备：情境图片、任务卡。流程：故事导入-看图讨论-幼儿操作-分享收束。提问：你看到了什么？怎样做更安全？观察：记录幼儿是否能说出原因并完成一个动作。家园延伸：回家继续练一个小步骤。"
+    ? [
+        `活动名称：${activityName}`,
+        `适用年龄：${ageGroup}`,
+        "活动时长：15-20 分钟",
+        "活动目标：1. 愿意观察图片或实物，说出一个发现。2. 能用动作或短句完成一个小任务。3. 在生活中尝试迁移一步做法。",
+        "准备材料：情境图片、实物或模型、小任务卡、贴纸。",
+        "活动流程：导入 2 分钟，用角色或图片引出问题；感知/操作 6 分钟，让幼儿看、摸、摆或模仿；互动表达 5 分钟，请幼儿说一句发现或演示一个动作；生活迁移 3 分钟，说说今天在哪里能用到；收束 2 分钟，用贴纸肯定具体行为。",
+        "教师提问：你看到了什么？下一步可以怎么做？你愿意试哪一小步？",
+        "观察要点：是否能参与操作；是否能说出一个可观察发现；是否愿意尝试或模仿目标动作。",
+        "家园延伸：回家和家长完成一个很小的同主题任务，并说一句“我今天发现了……”。",
+        `注意事项：${ageFocus} 不考试、不背诵、不要求全部幼儿同一速度完成。`,
+      ].join("\n")
     : isStory
       ? "有一颗小星星来到教室，它想请小朋友帮忙完成一个小任务：先看一看图片，再说一说自己的发现，最后一起试一试。"
       : isPraise
@@ -213,7 +268,7 @@ function buildTeacherFallback(task: string, userInput = "") {
       : isPraise
         ? ["先接住情绪。", "不催促不比较。", "给孩子一个台阶。"]
         : isFood
-          ? ["先看闻再品尝。", "允许只尝一小口。", "用闽食故事引入。"]
+          ? ["先认名字食材。", "允许只靠近一步。", "用泉州故事引入。"]
           : ["语言短一点。", "先示范再邀请。", "完成后及时表扬。"];
 
   return {
@@ -267,10 +322,21 @@ export async function POST(request: Request) {
     mode === "teacher"
       ? [
           "你是一名面向中国幼儿园老师的备课助手。",
-          "你需要生成简洁、温柔、正向、适合老师备课和课堂活动使用的中文内容。",
+          "你需要生成简洁、温暖、正向、适合 3-6 岁幼儿园真实活动使用的中文内容。",
+          "必须符合 3-6 岁幼儿认知特点，多用游戏、故事、图片、动作、操作材料和生活情境。",
+          "少讲大道理，少抽象概念，不进行知识灌输。",
+          "不要使用考试、背诵、书面作业、小学课堂化表达。",
+          "活动目标必须写成幼儿可观察行为，例如能说出、能指出、愿意模仿、愿意尝试。",
+          "每个活动环节不宜过长，教师提问要短、具体、幼儿能回答。",
+          "活动流程必须包含：导入、感知/操作、互动表达、生活迁移、收束。",
+          "按年龄差异处理：小班以模仿、感知、短句回应、动作游戏为主；中班加入简单排序、比较、表达原因；大班加入合作、简单记录、规则意识和迁移表达。",
+          theme === "food"
+            ? "闽食主题要围绕泉州本地食育：认识名称、观察食材和外形、温和接受陌生食物、家园共育介绍一道家乡美食，不要只写挑食干预。"
+            : "幼习宝主题要围绕生活习惯和安全经验，帮助幼儿在一日生活中迁移一个小行为。",
           "请严格返回 JSON，格式如下：",
           '{"title":"", "content":"", "tips":["", "", ""]}',
-          "要求：如果是课堂活动方案，content 必须包含活动名称、年龄、目标、准备、流程、教师提问、观察要点、家园延伸；content 在 420 字以内；tips 恰好 3 条，每条不超过 18 字。",
+          "要求：如果是活动课程方案，content 必须按以下小标题分行输出：活动名称、适用年龄、活动时长、活动目标、准备材料、活动流程、教师提问、观察要点、家园延伸、注意事项。",
+          "content 在 780 字以内；tips 恰好 3 条，每条不超过 18 字，必须是老师可执行提醒。",
         ].join("\n")
       : storyType === "pictureBook"
         ? [
@@ -279,7 +345,7 @@ export async function POST(request: Request) {
             "面向 3-6 岁儿童，遵循生活化、游戏化、正向支持和尊重个体差异的幼儿教育原则。",
             "请根据孩子想听的内容生成一段可以直接语音播放的中文绘本故事。",
             theme === "food"
-              ? "故事要融入泉州闽南食育元素，可出现海蛎煎、紫菜汤、芥菜饭、看一看、闻一闻、尝一小口。"
+              ? "故事要融入泉州本地美食探索，可轮换海蛎煎、面线糊、土笋冻、闽南肉粽、润饼菜、石花膏、炸醋肉、崇武鱼卷；重点是认名字、找食材、听小故事、说颜色形状和选择靠近一小步。"
               : "故事要围绕幼儿生活习惯或安全经验，可出现洗手、喝水、整理、排队、如厕、交通或防火安全。",
             "语言要短句、温柔、有画面感，不批评、不吓唬、不小学化。",
             "请严格返回 JSON，格式如下：",
@@ -292,7 +358,7 @@ export async function POST(request: Request) {
           "面向 3-6 岁儿童，语言要温柔、简短、鼓励式、绘本感，绝不批评孩子。",
           "请先回应孩子的话，再给 3 个可以点击的后续选项。",
           theme === "food"
-            ? "后续选项必须围绕闽食探索，例如看一看、闻一闻、尝一小口、认识海蛎或紫菜。"
+            ? "后续选项必须围绕泉州美食探索，例如逛摊位、找食材卡、选颜色、猜来自哪里、给家人介绍名字、选择靠近一小步。不要总是重复看一看、闻一闻、尝一口。"
             : "后续选项必须围绕习惯养成，例如洗手、排队、整理玩具、喝水或礼貌表达。",
           "choices 要像孩子能直接点击的小任务，每条不超过 10 个字，不要写成成人视角。",
           "请严格返回 JSON，格式如下：",
@@ -302,7 +368,7 @@ export async function POST(request: Request) {
 
   const userPrompt =
     mode === "teacher"
-      ? `老师想生成的内容类型：${teacherTask}。补充说明：${userInput}`
+      ? `当前主题：${themeConfig.label}。老师想生成的内容类型：${teacherTask}。补充说明：${userInput}`
       : storyType === "pictureBook"
         ? `孩子想听的绘本故事内容：${userInput}`
         : `孩子刚刚说：${userInput}`;
@@ -317,7 +383,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.8,
-        max_tokens: 900,
+        max_tokens: mode === "teacher" ? 1200 : 900,
         messages: [
           {
             role: "system",
@@ -360,10 +426,10 @@ export async function POST(request: Request) {
         return NextResponse.json(
           withAiMeta({
             title: normalizePlainText(parsed.title, "老师辅助小卡片", 32),
-            content: normalizePlainText(
+            content: normalizeTeacherContent(
               parsed.content,
               buildTeacherFallback(teacherTask, userInput).content,
-              420,
+              820,
             ),
             tips: normalizeShortList(
               parsed.tips,

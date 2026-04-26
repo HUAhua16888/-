@@ -62,7 +62,7 @@ export function ChildIdentityGateway({
           ? `${formatChildLabel(nextChild)} 的小名牌拿好啦，可以选择今天想去哪里玩。`
           : roster.length > 0
             ? "点一点自己的名字，也可以按按钮说出名字或号数。"
-            : "还没有看到小朋友名单，请老师先放进花名册。",
+            : "还没有看到小朋友名单，请老师先在教师辅助里添加花名册。",
       );
     }, 0);
 
@@ -86,7 +86,7 @@ export function ChildIdentityGateway({
   function applyIdentityTranscript(transcript: string) {
     if (childRoster.length === 0) {
       setVoiceSuggestions([]);
-      setStatus("还没有看到小朋友名单，请老师先放进花名册。");
+      setStatus("还没有看到小朋友名单，请老师先在教师辅助里添加花名册。");
       return;
     }
 
@@ -160,9 +160,9 @@ export function ChildIdentityGateway({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
-      <section className="flex min-h-[calc(100vh-128px)] flex-col gap-6">
-        <div className="rounded-[2.5rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff7dc_48%,#e5fbfa_100%)] p-6 shadow-[0_28px_90px_rgba(49,93,104,0.16)] md:p-8">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-7 px-4 py-8 md:px-8">
+      <section className="flex min-h-screen flex-col gap-6">
+        <div className="rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff7dc_48%,#e5fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
               <p className="text-sm font-semibold text-teal-700">游戏打卡前</p>
@@ -175,7 +175,7 @@ export function ChildIdentityGateway({
               </p>
             </div>
 
-            <div className="rounded-[2rem] bg-white/84 p-5 shadow-sm">
+            <div className="rounded-[1.5rem] bg-white/84 p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-500">我的小名牌</p>
@@ -233,7 +233,7 @@ export function ChildIdentityGateway({
                     href="/teachers"
                     className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:-translate-y-0.5"
                   >
-                    请老师先放入小朋友名单
+                    请老师先添加花名册
                   </Link>
                 )}
               </div>
@@ -249,7 +249,7 @@ export function ChildIdentityGateway({
         </div>
 
         <div>
-          <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)] md:p-8">
+          <section className="rounded-[2rem] bg-white/90 p-6 shadow-[0_20px_60px_rgba(35,88,95,0.1)] md:p-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-cyan-700">今天想去哪玩</p>
@@ -294,7 +294,7 @@ export function ChildIdentityGateway({
                         <p className="mt-2 text-sm leading-7 text-slate-600">{theme.headline}</p>
                       </div>
                       <span className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                        进入
+                        进入{theme.label}
                       </span>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">

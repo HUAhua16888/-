@@ -75,13 +75,50 @@ type ParentFeedbackDraft = {
   guidance: string;
 };
 
-const teacherScenarioMaxLength = 520;
+const teacherScenarioMaxLength = 680;
 const teacherHistoryLimit = 6;
 const teacherAccountStorageKey = "tongqu-growth-web-teacher-account";
 const teacherPasscodeStorageKey = "tongqu-growth-web-teacher-passcode";
 const teacherSessionStorageKey = "tongqu-growth-web-teacher-session";
 const classroomPlanRequirement =
-  "请生成一节完整课堂活动方案，包含活动名称、适用年龄、活动目标、材料准备、导入故事、活动流程、教师提问、幼儿操作、观察要点和家园延伸。";
+  "请生成一节幼儿园活动方案，结构包含活动名称、适用年龄、活动时长、活动目标、准备材料、活动流程、教师提问、观察要点、家园延伸和注意事项。";
+const teacherAgeOptions = [
+  {
+    label: "小班 3-4 岁",
+    focus: "以模仿、感知、短句回应和动作游戏为主。",
+  },
+  {
+    label: "中班 4-5 岁",
+    focus: "加入简单排序、比较和说出一点原因。",
+  },
+  {
+    label: "大班 5-6 岁",
+    focus: "加入合作、简单记录、规则意识和迁移表达。",
+  },
+] as const;
+const defaultTeacherAgeGroup = teacherAgeOptions[1].label;
+const defaultTeacherTask = teacherTasks.find((item) => item.id === "home") ?? teacherTasks[0];
+type TeacherTaskItem = (typeof teacherTasks)[number];
+
+function isActivityPlanTask(task: string) {
+  return /活动课程方案/.test(task);
+}
+
+function resolveTeacherAgeGroup(text: string) {
+  if (/小班|3\s*-\s*4|3-4|3 至 4|3到4/.test(text)) {
+    return teacherAgeOptions[0].label;
+  }
+
+  if (/大班|5\s*-\s*6|5-6|5 至 6|5到6/.test(text)) {
+    return teacherAgeOptions[2].label;
+  }
+
+  return defaultTeacherAgeGroup;
+}
+
+function getTeacherAgeFocus(ageGroup: string) {
+  return teacherAgeOptions.find((item) => item.label === ageGroup)?.focus ?? teacherAgeOptions[1].focus;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -121,17 +158,31 @@ function buildTeacherClientFallback(task: string, userInput = ""): TeacherRespon
   const isStory = /故事|绘本|角色|情境|讲/.test(target);
   const isFood = /餐|食|闽|海蛎|紫菜|挑食|尝/.test(target);
   const isPraise = /鼓励|表扬|挑食|不愿意|情绪|安抚|紧张/.test(target);
+  const ageGroup = resolveTeacherAgeGroup(target);
+  const ageFocus = getTeacherAgeFocus(ageGroup);
+  const activityName = isFood ? "家乡美食小发现" : "小手泡泡按顺序";
   const title = isActivity
     ? "幼儿活动课程方案"
     : isStory
-      ? "幼儿互动故事"
+      ? "幼儿互动引导"
       : isPraise
         ? "情绪支持活动"
         : isFood
           ? "闽南食育活动"
           : "幼儿故事活动";
   const content = isActivity
-    ? "活动名称：小小成长任务。适用年龄：4-5岁。目标：愿意观察图片、说出做法，并尝试一个好行为。准备：情境图片、任务卡。流程：故事导入-看图讨论-幼儿操作-分享收束。提问：你看到了什么？怎样做更安全？观察：记录幼儿是否能说出原因并完成一个动作。家园延伸：回家继续练一个小步骤。"
+    ? [
+        `活动名称：${activityName}`,
+        `适用年龄：${ageGroup}`,
+        "活动时长：15-20 分钟",
+        `活动目标：1. 愿意观察图片或实物，说出一个发现。2. 能用动作或短句完成一个小任务。3. 在生活中尝试迁移一步做法。`,
+        `准备材料：情境图片、实物或模型、小任务卡、贴纸。`,
+        `活动流程：导入 2 分钟，用角色或图片引出问题；感知/操作 6 分钟，让幼儿看、摸、摆或模仿；互动表达 5 分钟，请幼儿说一句发现或演示一个动作；生活迁移 3 分钟，说说今天在哪里能用到；收束 2 分钟，用贴纸肯定具体行为。`,
+        `教师提问：你看到了什么？下一步可以怎么做？你愿意试哪一小步？`,
+        `观察要点：是否能参与操作；是否能说出一个可观察发现；是否愿意尝试或模仿目标动作。`,
+        `家园延伸：回家和家长完成一个很小的同主题任务，并说一句“我今天发现了……”。`,
+        `注意事项：${ageFocus} 不考试、不背诵、不要求全部幼儿同一速度完成。`,
+      ].join("\n")
     : isStory
       ? "有一颗小星星来到教室，它想请小朋友帮忙完成一个小任务：先看一看图片，再说一说自己的发现，最后一起试一试。"
       : isPraise
@@ -146,7 +197,7 @@ function buildTeacherClientFallback(task: string, userInput = ""): TeacherRespon
       : isPraise
         ? ["先接住情绪。", "不催促不比较。", "给孩子一个台阶。"]
         : isFood
-          ? ["先看闻再品尝。", "允许只尝一小口。", "用闽食故事引入。"]
+          ? ["先认名字食材。", "允许只靠近一步。", "用泉州故事引入。"]
           : ["语言短一点。", "先示范再邀请。", "完成后及时表扬。"];
 
   return {
@@ -204,20 +255,39 @@ function limitTeacherHistory(history: SavedTeacherResult[]) {
   return sortTeacherHistory(history).slice(0, teacherHistoryLimit);
 }
 
-function buildMiniGameExtensionScenario(themeId: ThemeId) {
+function buildMiniGameExtensionScenario(themeId: ThemeId, ageGroup: string = defaultTeacherAgeGroup) {
   return themeId === "food"
-    ? `孩子刚在儿童端完成了均衡餐盘或闽食探索小游戏。${classroomPlanRequirement}课堂内容要贴合泉州闽食、食材观察和愿意尝试新食物。`
-    : `孩子刚在儿童端完成了洗手或排队小游戏。${classroomPlanRequirement}课堂内容要贴合生活习惯和安全知识。`;
+    ? `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：泉州闽食探索。幼儿已有经验：刚在儿童端完成了均衡餐盘或闽食探索小游戏。希望目标：能说出一种泉州美食名称，观察食材或外形，并选择一个愿意靠近的小步骤。${classroomPlanRequirement}`
+    : `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：幼习宝生活习惯。幼儿已有经验：刚在儿童端完成了洗手或排队小游戏。希望目标：能按图片或动作提示说出步骤，并在生活环节尝试迁移。${classroomPlanRequirement}`;
 }
 
-function buildHomePlanScenario(themeId: ThemeId) {
+function buildHomePlanScenario(themeId: ThemeId, ageGroup: string = defaultTeacherAgeGroup) {
   return themeId === "food"
-    ? "今天准备围绕闽食观察或餐盘尝试设计一次幼儿活动，请生成活动名称、目标、材料、导入故事、流程和观察要点。"
-    : "今天准备围绕洗手、排队或整理习惯设计一次幼儿活动，请生成活动名称、目标、材料、导入故事、流程和观察要点。";
+    ? `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：泉州美食小发现。幼儿已有经验：认识少量家乡食物，但对食材、颜色和味道表达还不充分。希望目标：能说出一种泉州美食名称，找一找食材或外形特征，选择一个愿意靠近的小步骤。`
+    : `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：饭前洗手。幼儿已有经验：知道要洗手，但步骤容易漏。希望目标：能按顺序说出并模仿洗手步骤，在餐前主动尝试。`;
 }
 
-function buildPreferenceInterventionScenario(record: FoodPreferenceRecord) {
-  return `儿童端记录：孩子今天对“${record.foodLabel}”不太想吃，原因选择为“${record.reasonLabel}”。已有温和策略：${record.strategy}${record.gentleTryTip}。${classroomPlanRequirement}要求不贴“挑食”标签，围绕看一看、闻一闻、尝一小口设计食育课堂。`;
+function buildPreferenceInterventionScenario(record: FoodPreferenceRecord, ageGroup: string = defaultTeacherAgeGroup) {
+  return `年龄段：${ageGroup}。活动时长：15-20 分钟。儿童端记录：孩子正在认识“${record.foodLabel}”，原因选择为“${record.reasonLabel}”。已有温和策略：${record.strategy}${record.gentleTryTip}。${classroomPlanRequirement}要求不贴“挑食”标签，围绕看见名字、观察食材、说出发现和选择愿意靠近的一小步设计食育课堂。`;
+}
+
+function buildTeacherTaskScenario(item: TeacherTaskItem, themeId: ThemeId, ageGroup: string) {
+  return item.id === "home" ? buildHomePlanScenario(themeId, ageGroup) : item.starter;
+}
+
+function buildTeacherRequestInput(task: string, scenario: string, ageGroup: string, themeId: ThemeId) {
+  const themeLabel = themeId === "food" ? "闽食成长岛" : "幼习宝";
+  const ageFocus = getTeacherAgeFocus(ageGroup);
+
+  return isActivityPlanTask(task)
+    ? [
+        `年龄段：${ageGroup}`,
+        `主题来源：${themeLabel}`,
+        `年龄特点：${ageFocus}`,
+        scenario.trim(),
+        "请按幼儿园活动方案结构输出，目标写成可观察行为，环节短、游戏化、可操作。",
+      ].join("\n")
+    : [`年龄段参考：${ageGroup}`, `主题来源：${themeLabel}`, scenario.trim()].join("\n");
 }
 
 function hasThemeMiniGameRecord(rawArchive: string | null, themeId: ThemeId) {
@@ -266,10 +336,10 @@ function getGameDisplayName(gameKey: MiniGameRecord["gameKey"]) {
     queue: "一日好习惯路线",
     habitJudge: "看图判断做法",
     kindWords: "闽食三步练习",
-    foodObserve: "闽食探味寻宝",
+    foodObserve: "泉州美食摊位寻宝",
     foodClue: "闽食摊位寻宝",
-    foodPreference: "饮食偏好观察卡",
-    peerEncourage: "同伴鼓励",
+    foodPreference: "美食认识观察卡",
+    peerEncourage: "陪同伴认识新美食",
     mealTray: "午餐小餐盘",
   };
 
@@ -293,7 +363,7 @@ function buildMiniGameInterventionScenario(record: MiniGameRecord) {
   }
 
   if (record.gameKey === "foodPreference") {
-    return `${childName}完成了饮食偏好观察，选择记录：${pickedText}。${classroomPlanRequirement}不贴标签，先接纳，再用看一看、闻一闻、尝一小口推进。`;
+    return `${childName}完成了美食认识观察，选择记录：${pickedText}。${classroomPlanRequirement}不贴标签，围绕认识名字、观察食材、说出发现和选择靠近一小步推进。`;
   }
 
   if (record.gameKey === "mealTray") {
@@ -301,7 +371,7 @@ function buildMiniGameInterventionScenario(record: MiniGameRecord) {
   }
 
   if (record.gameKey === "peerEncourage") {
-    return `${childName}完成了同伴鼓励互动，选择记录：${pickedText}。${classroomPlanRequirement}支持幼儿用温柔语言鼓励同伴尝试新食物。`;
+    return `${childName}完成了陪同伴认识新美食互动，选择记录：${pickedText}。${classroomPlanRequirement}支持幼儿用温柔语言陪同伴认识食材、颜色和小故事。`;
   }
 
   return `${childName}完成了${getGameDisplayName(record.gameKey)}，选择记录：${pickedText}。${classroomPlanRequirement}请根据本次互动情况设计课堂重点。`;
@@ -344,24 +414,23 @@ export function TeacherStudio() {
   const [teacherSetupAccount, setTeacherSetupAccount] = useState("");
   const [teacherSetupPasscode, setTeacherSetupPasscode] = useState("");
   const [teacherAuthStatus, setTeacherAuthStatus] =
-    useState("请先登录教师账号，再进入老师辅助台。");
+    useState("请先确认本机教师账号，再进入老师辅助台。");
   const [themeId, setThemeId] = useState<ThemeId>("habit");
-  const [task, setTask] = useState(teacherTasks[0].label);
-  const [scenario, setScenario] = useState(
-    "今天午餐前，我想给 4-5 岁幼儿讲一个关于勇敢尝试新食物的小故事。",
-  );
+  const [teacherAgeGroup, setTeacherAgeGroup] = useState<string>(defaultTeacherAgeGroup);
+  const [task, setTask] = useState(defaultTeacherTask.label);
+  const [scenario, setScenario] = useState(buildHomePlanScenario("habit", defaultTeacherAgeGroup));
   const [result, setResult] = useState<TeacherResponse | null>(null);
   const [savedResults, setSavedResults] = useState<SavedTeacherResult[]>([]);
   const [growthArchive, setGrowthArchive] = useState<GrowthArchive>(() => createEmptyGrowthArchive());
   const [childRoster, setChildRoster] = useState<ChildProfile[]>([]);
   const [newChildName, setNewChildName] = useState("");
   const [newChildNumber, setNewChildNumber] = useState("");
-  const [rosterStatus, setRosterStatus] = useState("添加姓名和号数后，幼儿可以在首页用语音选择自己的学习身份。");
+  const [rosterStatus, setRosterStatus] = useState("添加姓名和号数后，幼儿可以用小名牌进入对应互动任务。");
   const [videoResources, setVideoResources] = useState<TeacherVideoResource[]>([]);
   const [videoThemeId, setVideoThemeId] = useState<ThemeId>("habit");
   const [videoTitle, setVideoTitle] = useState("");
   const [videoPrompt, setVideoPrompt] = useState("");
-  const [videoStatus, setVideoStatus] = useState("教师可以在这里登记放松学视频素材，或先保存文字生成视频需求。");
+  const [videoStatus, setVideoStatus] = useState("教师可以登记放松学视频素材，或先保存文字生成视频需求。记录保存在这台设备上。");
   const [gameContentConfigs, setGameContentConfigs] =
     useState<EditableGameContent[]>(defaultGameContentConfigs);
   const [selectedContentGameKey, setSelectedContentGameKey] =
@@ -386,6 +455,7 @@ export function TeacherStudio() {
   const audioUrlRef = useRef<string | null>(null);
   const historyReadFailedRef = useRef(false);
   const teacherScenarioRemaining = teacherScenarioMaxLength - scenario.length;
+  const isActivityPlanSelected = isActivityPlanTask(task);
   const pinnedSavedResultCount = savedResults.filter((item) => item.pinned).length;
   const filteredSavedResults = useMemo(() => {
     if (historyFilter === "theme") {
@@ -626,7 +696,7 @@ export function TeacherStudio() {
       setTeacherAuthenticated(Boolean(savedSession && savedSession === savedAccount && savedPasscode));
       setTeacherAuthStatus(
         savedAccount && savedPasscode
-          ? "请输入教师账号口令，验证后进入老师辅助台。"
+          ? "请输入本机教师账号口令，验证后进入老师辅助台。"
           : "首次使用请先创建本机教师账号和口令。",
       );
       setTeacherAuthHydrated(true);
@@ -649,6 +719,7 @@ export function TeacherStudio() {
             themeId?: ThemeId;
             task?: string;
             scenario?: string;
+            ageGroup?: string;
           };
 
           if (parsed.themeId && themes[parsed.themeId]) {
@@ -657,6 +728,10 @@ export function TeacherStudio() {
 
           if (parsed.task) {
             setTask(parsed.task);
+          }
+
+          if (parsed.ageGroup && teacherAgeOptions.some((item) => item.label === parsed.ageGroup)) {
+            setTeacherAgeGroup(parsed.ageGroup);
           }
 
           if (parsed.scenario) {
@@ -737,8 +812,8 @@ export function TeacherStudio() {
           setTask(homeTask.label);
           setScenario(
             hasMiniGameRecord
-              ? buildMiniGameExtensionScenario(linkedTheme)
-              : buildHomePlanScenario(linkedTheme),
+              ? buildMiniGameExtensionScenario(linkedTheme, defaultTeacherAgeGroup)
+              : buildHomePlanScenario(linkedTheme, defaultTeacherAgeGroup),
           );
           setDraftStatus(
             hasMiniGameRecord
@@ -763,11 +838,12 @@ export function TeacherStudio() {
       draftStorageKey,
       JSON.stringify({
         themeId,
+        ageGroup: teacherAgeGroup,
         task,
         scenario,
       }),
     );
-  }, [draftHydrated, draftStorageKey, scenario, task, themeId]);
+  }, [draftHydrated, draftStorageKey, scenario, task, teacherAgeGroup, themeId]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !draftHydrated) {
@@ -805,6 +881,32 @@ export function TeacherStudio() {
     window.localStorage.setItem(gameContentConfigStorageKey, JSON.stringify(gameContentConfigs));
   }, [draftHydrated, gameContentConfigs]);
 
+  function selectTeacherTheme(nextThemeId: ThemeId) {
+    setThemeId(nextThemeId);
+
+    if (isActivityPlanSelected) {
+      setScenario(buildHomePlanScenario(nextThemeId, teacherAgeGroup));
+    }
+
+    setDraftStatus("主题已切换，活动方案草稿会按当前年龄段更新。");
+  }
+
+  function selectTeacherAge(nextAgeGroup: string) {
+    setTeacherAgeGroup(nextAgeGroup);
+
+    if (isActivityPlanSelected) {
+      setScenario(buildHomePlanScenario(themeId, nextAgeGroup));
+    }
+
+    setDraftStatus("年龄段已更新，生成时会按对应年龄特点调整活动。");
+  }
+
+  function selectTeacherTask(item: TeacherTaskItem, statusMessage = "已切换到新的老师任务模板，会自动保存到这台设备。") {
+    setTask(item.label);
+    setScenario(buildTeacherTaskScenario(item, themeId, teacherAgeGroup));
+    setDraftStatus(statusMessage);
+  }
+
   async function generate() {
     const cleanScenario = scenario.trim();
 
@@ -820,6 +922,7 @@ export function TeacherStudio() {
 
     setIsLoading(true);
     try {
+      const requestInput = buildTeacherRequestInput(task, cleanScenario, teacherAgeGroup, themeId);
       const response = await fetch("/api/story", {
         method: "POST",
         headers: {
@@ -828,7 +931,7 @@ export function TeacherStudio() {
         body: JSON.stringify({
           mode: "teacher",
           theme: themeId,
-          userInput: scenario,
+          userInput: requestInput,
           teacherTask: task,
         }),
       });
@@ -847,7 +950,7 @@ export function TeacherStudio() {
             ? payload.error
             : "生成接口暂时不可用。";
         setResult({
-          ...buildTeacherClientFallback(task, cleanScenario),
+          ...buildTeacherClientFallback(task, requestInput),
           error: errorMessage,
           fallbackUsed: true,
           needsReview: true,
@@ -862,7 +965,7 @@ export function TeacherStudio() {
 
       if (!normalized) {
         setResult({
-          ...buildTeacherClientFallback(task, cleanScenario),
+          ...buildTeacherClientFallback(task, requestInput),
           error: "返回结构不完整，已切换为备用内容。",
           fallbackUsed: true,
           needsReview: true,
@@ -874,7 +977,7 @@ export function TeacherStudio() {
       }
 
       const fallbackUsed =
-        Boolean(normalized.error) || isTeacherFallbackPayload(normalized, task, cleanScenario);
+        Boolean(normalized.error) || isTeacherFallbackPayload(normalized, task, requestInput);
       const data: TeacherResponse = {
         ...normalized,
         fallbackUsed,
@@ -921,7 +1024,7 @@ export function TeacherStudio() {
       });
     } catch {
       setResult({
-        ...buildTeacherClientFallback(task, cleanScenario),
+        ...buildTeacherClientFallback(task, buildTeacherRequestInput(task, cleanScenario, teacherAgeGroup, themeId)),
         error: "生成暂时失败，已切换为备用内容。",
         fallbackUsed: true,
         needsReview: true,
@@ -998,8 +1101,9 @@ export function TeacherStudio() {
 
   function resetTeacherDraft(statusMessage = "已经恢复到默认内容，可以重新开始输入。") {
     setThemeId("habit");
-    setTask(teacherTasks[0].label);
-    setScenario("请为 4-5 岁幼儿生成一个关于勇敢尝试新食物的互动故事，并给出活动延伸玩法。");
+    setTeacherAgeGroup(defaultTeacherAgeGroup);
+    setTask(defaultTeacherTask.label);
+    setScenario(buildHomePlanScenario("habit", defaultTeacherAgeGroup));
     setResult(null);
     setCopyStatus("");
     setVoiceStatus("");
@@ -1025,6 +1129,7 @@ export function TeacherStudio() {
   function reuseSavedResult(item: SavedTeacherResult) {
     setThemeId(item.themeId);
     setTask(item.task);
+    setTeacherAgeGroup(resolveTeacherAgeGroup(item.scenario));
     setScenario(item.scenario);
     setResult({
       title: item.title,
@@ -1083,11 +1188,11 @@ export function TeacherStudio() {
 
     setThemeId("food");
     setTask(homeTask.label);
-    setScenario(buildPreferenceInterventionScenario(record));
+    setScenario(buildPreferenceInterventionScenario(record, teacherAgeGroup));
     setResult(null);
     setCopyStatus("");
     setVoiceStatus("");
-    setDraftStatus("已带入儿童端饮食偏好记录，可以生成一节食育课堂活动方案。");
+    setDraftStatus("已带入儿童端美食认识记录，可以生成一节泉州食育课堂活动方案。");
   }
 
   function saveParentSyncRecord(record: ParentSyncRecord) {
@@ -1118,7 +1223,7 @@ export function TeacherStudio() {
     const parentRecord = buildParentSyncFromFoodPreference(record);
 
     if (!parentRecord) {
-      setParentSyncStatus("这条饮食偏好记录没有绑定幼儿身份，无法同步到家长端。请先让幼儿选择姓名或号数。");
+      setParentSyncStatus("这条美食认识记录没有绑定幼儿身份，无法同步到家长端。请先让幼儿选择姓名或号数。");
       return;
     }
 
@@ -1180,7 +1285,7 @@ export function TeacherStudio() {
 
     if (isFood) {
       return {
-        reply: `${record.childName}家长您好，收到您的反馈。孩子进食慢或暂时不想尝试时，我们会先观察原因，不给孩子贴标签，再用看一看、闻一闻、尝一小口的方式慢慢引导。`,
+        reply: `${record.childName}家长您好，收到您的反馈。孩子进食慢或暂时不想尝试时，我们会先观察原因，不给孩子贴标签，再用认名字、找食材、说发现和靠近一小步的方式慢慢陪伴。`,
         guidance: "家庭配合建议：先固定安静进餐位置，少催促；保留孩子熟悉的一种食物，再加入一小口目标食物；饭后只记录一次具体进步，例如愿意闻一闻或尝一口。",
       };
     }
@@ -1501,7 +1606,7 @@ export function TeacherStudio() {
     const passcode = teacherSetupPasscode.trim();
 
     if (account.length < 2 || passcode.length < 4) {
-      setTeacherAuthStatus("账号至少 2 个字，口令至少 4 位。");
+      setTeacherAuthStatus("本机教师账号至少 2 个字，口令至少 4 位。");
       return;
     }
 
@@ -1516,7 +1621,7 @@ export function TeacherStudio() {
     setTeacherAccountInput(account);
     setTeacherPasscodeInput("");
     setTeacherSetupPasscode("");
-    setTeacherAuthStatus("教师账号已创建，本次已进入老师辅助台。");
+    setTeacherAuthStatus("本机教师账号已创建，本次已进入老师辅助台。");
   }
 
   function loginTeacherAccount() {
@@ -1534,7 +1639,7 @@ export function TeacherStudio() {
       window.sessionStorage.setItem(teacherSessionStorageKey, account);
       setTeacherAuthenticated(true);
       setTeacherPasscodeInput("");
-      setTeacherAuthStatus("教师身份已确认，可以查看幼儿互动汇总和生成方案。");
+      setTeacherAuthStatus("本机教师身份已确认，可以查看互动汇总和生成方案。");
       return;
     }
 
@@ -1555,25 +1660,25 @@ export function TeacherStudio() {
   if (!teacherAuthHydrated || !teacherAuthenticated) {
     return (
       <div className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 md:px-8">
-        <section className="w-full rounded-[2.5rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff7dc_48%,#e5fbfa_100%)] p-6 shadow-[0_28px_90px_rgba(49,93,104,0.16)] md:p-10">
+        <section className="w-full rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff7dc_48%,#e5fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-10">
           <p className="text-sm font-semibold text-teal-700">老师身份确认</p>
           <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
-            {teacherHasAccount ? "登录老师账号" : "创建老师账号"}
+            {teacherHasAccount ? "登录本机教师账号" : "创建本机教师账号"}
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
-            老师辅助台会看到幼儿游戏打卡、家长反馈和课程生成内容，请先确认老师身份再进入。
+            老师辅助台会看到幼儿游戏打卡、家长反馈和课程生成内容。当前账号只保存在这台设备上。
           </p>
 
-          <div className="mt-8 grid gap-4 rounded-[2rem] bg-white/86 p-5 shadow-sm md:grid-cols-2">
+          <div className="mt-8 grid gap-4 rounded-[1.5rem] bg-white/86 p-5 shadow-sm md:grid-cols-2">
             {teacherHasAccount ? (
               <>
                 <label className="text-sm font-semibold text-slate-700">
-                  老师账号
+                  本机教师账号
                   <input
                     value={teacherAccountInput}
                     onChange={(event) => setTeacherAccountInput(event.target.value)}
                     className="mt-2 w-full rounded-[1.2rem] border border-slate-100 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:border-teal-300"
-                    placeholder="请输入老师账号"
+                    placeholder="请输入本机教师账号"
                   />
                 </label>
                 <label className="text-sm font-semibold text-slate-700">
@@ -1595,7 +1700,7 @@ export function TeacherStudio() {
             ) : (
               <>
                 <label className="text-sm font-semibold text-slate-700">
-                  设置老师账号
+                  设置本机教师账号
                   <input
                     value={teacherSetupAccount}
                     onChange={(event) => setTeacherSetupAccount(event.target.value)}
@@ -1627,7 +1732,7 @@ export function TeacherStudio() {
               onClick={teacherHasAccount ? loginTeacherAccount : createTeacherAccount}
               className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
             >
-              {teacherHasAccount ? "进入老师辅助台" : "创建并进入"}
+              {teacherHasAccount ? "进入教师辅助" : "创建并进入"}
             </button>
             <p className="text-sm font-semibold text-teal-700">{teacherAuthStatus}</p>
           </div>
@@ -1639,25 +1744,25 @@ export function TeacherStudio() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
       <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-[2.5rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff7dc_48%,#e5fbfa_100%)] p-8 shadow-[0_28px_90px_rgba(49,93,104,0.18)]">
+        <div className="rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff7dc_48%,#e5fbfa_100%)] p-8 shadow-[0_22px_70px_rgba(49,93,104,0.14)]">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">
             老师辅助台
           </p>
           <h1 className="mt-4 text-4xl leading-tight font-semibold text-slate-900 md:text-6xl">
-            生成故事
+            快速生成活动方案
             <span className="mt-2 block text-2xl text-slate-700 md:text-3xl">
-              和活动课程方案
+              也能改故事和导入语
             </span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
-            这里作为老师备课辅助台，输入年龄段、活动主题、幼儿情况和目标，就能生成故事、导入语、活动流程、教师提问和观察要点。
+            先选主题、年龄段和任务，再生成可修改的幼儿园活动方案。这里也能管理花名册、查看互动汇总和处理家长反馈。
             {premiumTtsEnabled ? ` 当前已经预留 ${premiumVoiceLabel} 播报入口，适合直接试播老师引导语。` : ""}
           </p>
           <button
             onClick={logoutTeacherAccount}
             className="mt-5 rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
           >
-            退出老师账号
+            退出本机教师账号
           </button>
 
           <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -1678,7 +1783,7 @@ export function TeacherStudio() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-cyan-700">快速入口</p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-900">故事与课程模板</h2>
+              <h2 className="mt-1 text-2xl font-semibold text-slate-900">先选模板，再生成</h2>
             </div>
           </div>
 
@@ -1687,22 +1792,26 @@ export function TeacherStudio() {
               <button
                 key={item.id}
                 onClick={() => {
-                  setTask(item.label);
-                  setScenario(item.starter);
-                  setDraftStatus("已切换到新的老师任务模板，会自动保存到这台设备。");
+                  selectTeacherTask(item);
                 }}
-                className="rounded-[1.5rem] bg-slate-50 px-4 py-4 text-left transition hover:-translate-y-0.5 hover:bg-slate-100"
+                className={`rounded-[1.5rem] px-4 py-4 text-left transition hover:-translate-y-0.5 ${
+                  item.id === "home"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "bg-slate-50 text-slate-800 hover:bg-slate-100"
+                }`}
               >
-                <p className="font-semibold text-slate-800">{item.label}</p>
-                <p className="mt-2 text-sm leading-7 text-slate-500">{item.starter}</p>
+                <p className="font-semibold">{item.id === "home" ? "推荐：" : ""}{item.label}</p>
+                <p className={`mt-2 text-sm leading-7 ${item.id === "home" ? "text-white/75" : "text-slate-500"}`}>
+                  {item.starter}
+                </p>
               </button>
             ))}
           </div>
 
           <div className="mt-5 rounded-[1.8rem] bg-[linear-gradient(135deg,#effcfc_0%,#ffffff_100%)] p-4">
-            <p className="text-sm font-semibold text-slate-500">这一页适合什么时候打开</p>
+            <p className="text-sm font-semibold text-slate-500">老师操作顺序</p>
             <p className="mt-2 text-sm leading-7 text-slate-700">
-              老师备课、改故事、设计活动流程，或把儿童互动记录转成下一次活动方案时，都可以在这里生成初稿。
+              选择年龄段、主题和活动目标，系统会生成一份可直接修改的幼儿园活动方案。
             </p>
           </div>
         </div>
@@ -2132,7 +2241,7 @@ export function TeacherStudio() {
             <p className="text-sm font-semibold text-emerald-700">课堂活动方案池</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">根据游戏情况生成一节课堂活动方案</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              从幼儿游戏记录、饮食偏好观察中带入生成器，生成老师可继续修改使用的一节课堂活动方案。
+              从幼儿游戏记录、美食认识观察中带入生成器，生成老师可继续修改使用的一节课堂活动方案。
             </p>
           </div>
           <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
@@ -2179,7 +2288,7 @@ export function TeacherStudio() {
                   key={`food-${record.recordedAt}-${record.foodLabel}`}
                   className="rounded-[1.7rem] bg-orange-50 p-4"
                 >
-                  <p className="text-sm font-semibold text-orange-700">饮食偏好</p>
+                  <p className="text-sm font-semibold text-orange-700">美食认识</p>
                   <h3 className="mt-2 text-lg font-semibold text-slate-900">
                     {record.childName ?? "未选择身份"} · {record.foodLabel}
                   </h3>
@@ -2475,10 +2584,10 @@ export function TeacherStudio() {
       <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_55%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-orange-700">儿童端饮食偏好记录</p>
+            <p className="text-sm font-semibold text-orange-700">儿童端美食认识记录</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">食育活动延伸线索</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              干预策略只在老师辅助页展示；儿童端只给孩子听食物角色的食材介绍。
+              干预策略只在老师辅助页查看；儿童端只给孩子听食物角色的食材介绍。
             </p>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
@@ -2529,7 +2638,7 @@ export function TeacherStudio() {
             ))
           ) : (
             <div className="rounded-[1.8rem] bg-white/78 px-5 py-6 text-sm leading-7 text-slate-600 lg:col-span-2">
-              儿童端完成“饮食偏好观察卡”后，这里会显示食物、原因和温和干预策略。
+              儿童端完成“美食认识观察卡”后，这里会显示食物、原因和温和食育策略。
             </div>
           )}
         </div>
@@ -2538,15 +2647,56 @@ export function TeacherStudio() {
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
           <p className="text-sm font-semibold text-amber-700">内容生成面板</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">输入你的场景</h2>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">快速生成活动方案</h2>
+          <p className="mt-2 text-sm leading-7 text-slate-600">
+            先选主题、年龄段和任务，再补充活动目标。生成内容会按幼儿园活动结构输出，方便继续修改。
+          </p>
+
+          <div className="mt-5">
+            <p className="text-xs font-semibold text-slate-500">1. 选择主题</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {Object.values(themes).map((theme) => (
+                <button
+                  key={theme.id}
+                  onClick={() => selectTeacherTheme(theme.id)}
+                  className={`rounded-full px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                    themeId === theme.id
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  {theme.emoji} {theme.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <p className="text-xs font-semibold text-slate-500">2. 选择年龄段</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {teacherAgeOptions.map((item) => (
+                <button
+                  key={item.label}
+                  onClick={() => selectTeacherAge(item.label)}
+                  className={`rounded-full px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                    teacherAgeGroup === item.label
+                      ? "bg-teal-700 text-white"
+                      : "bg-teal-50 text-teal-900"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs font-semibold text-teal-700">{getTeacherAgeFocus(teacherAgeGroup)}</p>
+          </div>
 
           <div className="mt-5 flex flex-wrap gap-3">
             {teacherTasks.map((item) => (
               <button
                 key={item.id}
                 onClick={() => {
-                  setTask(item.label);
-                  setDraftStatus("任务类型已切换，会自动保存到这台设备。");
+                  selectTeacherTask(item, "任务类型已切换，会自动保存到这台设备。");
                 }}
                 className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
                   task === item.label
@@ -2569,7 +2719,11 @@ export function TeacherStudio() {
             className="mt-5 min-h-48 w-full rounded-[2rem] border border-slate-200 bg-slate-50 px-5 py-4 text-sm leading-7 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white"
           />
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-500">
-            <span>建议写清年龄、场景和目标，生成结果会更适合直接使用。</span>
+            <span>
+              {isActivityPlanSelected
+                ? "建议保留年龄段、时长、主题、已有经验和目标，生成结果更适合直接使用。"
+                : "建议写清年龄、场景和目标，生成结果会更适合直接使用。"}
+            </span>
             <span className={teacherScenarioRemaining < 40 ? "text-amber-700" : "text-slate-500"}>
               还可输入 {teacherScenarioRemaining} 字
             </span>
@@ -2585,7 +2739,7 @@ export function TeacherStudio() {
 
           <div className="mt-4 rounded-[1.5rem] bg-slate-50 px-4 py-4">
             <p className="text-sm leading-7 text-slate-600">
-              小建议：先点一个“故事与课程模板”，再看生成结果、复制动作和试播按钮，老师端价值会更直观。
+              小建议：活动目标尽量写成幼儿能做到、看得到的行为，例如“能按顺序模仿洗手步骤”。
             </p>
             <p className="mt-3 text-sm font-semibold text-teal-700">{draftStatus}</p>
             <div className="mt-4 flex flex-wrap gap-3">
@@ -2629,7 +2783,7 @@ export function TeacherStudio() {
           ) : null}
 
           <div className="mt-5 rounded-[2rem] bg-white/80 p-5">
-            <p className="text-sm leading-8 text-slate-700">
+            <p className="whitespace-pre-line text-sm leading-8 text-slate-700">
               {result?.content ?? "点击左侧按钮后，这里会出现可以继续修改的故事或活动课程方案。"}
             </p>
           </div>
