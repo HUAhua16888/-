@@ -24,13 +24,13 @@ const navItems = [
   },
   {
     href: "/parents",
-    label: "家长端",
+    label: "家庭延续",
     icon: "👪",
     shortLabel: "家长",
   },
   {
     href: "/teachers",
-    label: "老师辅助",
+    label: "教师工作台",
     icon: "🧑‍🏫",
     shortLabel: "老师",
   },

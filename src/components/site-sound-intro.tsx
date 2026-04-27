@@ -11,22 +11,22 @@ const premiumIntroEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true
 
 function getIntroText(pathname: string) {
   if (pathname.startsWith("/teachers")) {
-    return "欢迎来到教师辅助。这里可以查看幼儿互动汇总，生成活动方案，处理家长反馈。";
+    return "欢迎来到教师工作台。这里可以查看幼儿互动记录，生成跟进方案，处理家长反馈。";
   }
 
   if (pathname.startsWith("/adventure")) {
-    return "欢迎来到童趣成长乐园。今天可以听故事、玩任务，点亮自己的成长记录。";
+    return "欢迎来到幼芽成长智伴。今天可以听故事、玩任务，点亮自己的成长记录。";
   }
 
   if (pathname.startsWith("/parents")) {
-    return "欢迎来到家长端。这里可以查看孩子成长记录、老师建议，也可以提交家庭反馈。";
+    return "欢迎来到家庭延续页。这里可以查看孩子成长记录、老师建议，也可以提交家庭反馈。";
   }
 
   if (pathname.startsWith("/children")) {
     return "欢迎来到儿童互动。先找到自己的小名牌，再选择幼习宝或闽食成长岛。";
   }
 
-  return "欢迎来到童趣成长乐园。请选择儿童互动、教师辅助或家长端。";
+  return "欢迎来到幼芽成长智伴。请选择儿童互动、教师工作台或家庭延续。";
 }
 
 function getAudioContext() {

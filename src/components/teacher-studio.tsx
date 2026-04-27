@@ -235,7 +235,7 @@ function buildTeacherCopyText(
   themeId: ThemeId,
 ) {
   return [
-    "【童趣成长乐园｜老师辅助生成】",
+    "【幼芽成长智伴｜教师工作台生成】",
     `主题：${themeId === "habit" ? "好习惯练习" : "闽食探索"}`,
     `任务：${task}`,
     `场景：${scenario.trim()}`,
@@ -568,7 +568,7 @@ export function TeacherStudio() {
   const [teacherSetupAccount, setTeacherSetupAccount] = useState("");
   const [teacherSetupPasscode, setTeacherSetupPasscode] = useState("");
   const [teacherAuthStatus, setTeacherAuthStatus] =
-    useState("请先确认本机教师账号，再进入老师辅助台。");
+    useState("班级试用模式：请先确认本机教师账号，再进入教师工作台。");
   const [themeId, setThemeId] = useState<ThemeId>("habit");
   const [teacherAgeGroup, setTeacherAgeGroup] = useState<string>(defaultTeacherAgeGroup);
   const [task, setTask] = useState(defaultTeacherTask.label);
@@ -925,8 +925,8 @@ export function TeacherStudio() {
       setTeacherAuthenticated(Boolean(savedSession && savedSession === savedAccount && savedPasscode));
       setTeacherAuthStatus(
         savedAccount && savedPasscode
-          ? "请输入本机教师账号口令，验证后进入老师辅助台。"
-          : "首次使用请先创建本机教师账号和口令。",
+          ? "班级试用模式：请输入本机教师账号口令，验证后进入教师工作台。"
+          : "班级试用模式：首次使用请先创建本机教师账号和口令。",
       );
       setTeacherAuthHydrated(true);
     }, 0);
@@ -1737,7 +1737,7 @@ export function TeacherStudio() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = "童趣成长乐园-班级花名册模板.csv";
+    link.download = "幼芽成长智伴-班级花名册模板.csv";
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1941,7 +1941,7 @@ export function TeacherStudio() {
     setTeacherAccountInput(account);
     setTeacherPasscodeInput("");
     setTeacherSetupPasscode("");
-    setTeacherAuthStatus("本机教师账号已创建，本次已进入老师辅助台。");
+    setTeacherAuthStatus("本机教师账号已创建，本次已进入教师工作台。");
   }
 
   function loginTeacherAccount() {
@@ -1974,7 +1974,7 @@ export function TeacherStudio() {
     cleanupAudio();
     setTeacherAuthenticated(false);
     setTeacherPasscodeInput("");
-    setTeacherAuthStatus("已退出老师辅助台，请重新登录后再查看。");
+    setTeacherAuthStatus("已退出教师工作台，请重新登录后再查看。");
   }
 
   if (!teacherAuthHydrated || !teacherAuthenticated) {
@@ -1986,7 +1986,8 @@ export function TeacherStudio() {
             {teacherHasAccount ? "登录本机教师账号" : "创建本机教师账号"}
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
-            老师辅助台会看到幼儿游戏打卡、家长反馈和课程生成内容。当前账号只保存在这台设备上。
+            当前为班级试用模式。本机教师账号仅用于保护这台设备上的班级数据，老师可查看幼儿互动记录、家长反馈和课程生成内容。
+            正式园所使用时，可升级为园所管理员统一分配教师账号。
           </p>
 
           <div className="mt-8 grid gap-4 rounded-[1.5rem] bg-white/86 p-5 shadow-sm md:grid-cols-2">
@@ -2052,7 +2053,7 @@ export function TeacherStudio() {
               onClick={teacherHasAccount ? loginTeacherAccount : createTeacherAccount}
               className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
             >
-              {teacherHasAccount ? "进入教师辅助" : "创建并进入"}
+              {teacherHasAccount ? "进入教师工作台" : "创建并进入"}
             </button>
             <p className="text-sm font-semibold text-teal-700">{teacherAuthStatus}</p>
           </div>
@@ -2067,16 +2068,16 @@ export function TeacherStudio() {
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">
-              今日班级概览
+              教师跟进工作台
             </p>
             <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
-              查看班级成长记录，
+              先看重点幼儿，
               <span className="block text-2xl text-slate-700 md:text-3xl">
-                快速生成跟进方案
+                再做课堂和家庭跟进
               </span>
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-              这里汇总幼儿在儿童端完成的阅读、习惯、进餐和闽食探索记录。老师可以根据记录生成课堂活动方案、鼓励语和家园同步建议，也可以从活动模板快速带入一节课。
+              这里汇总幼儿在儿童端完成的阅读、习惯、进餐和闽食探索记录。老师先看今日概览和重点线索，再生成课堂活动方案、鼓励语和家园同步建议。
               {premiumTtsEnabled ? ` ${premiumVoiceLabel} 可用于试播老师引导语和活动口令。` : ""}
             </p>
           </div>
@@ -2102,6 +2103,37 @@ export function TeacherStudio() {
               <p className="mt-2 text-3xl font-semibold text-slate-950">{item.value}</p>
             </div>
           ))}
+        </div>
+
+        <div className="mt-5 rounded-[1.4rem] bg-white/78 px-4 py-4 text-sm leading-7 text-slate-700">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-slate-900">成效证据链</p>
+              <p className="mt-1 text-slate-600">
+                把幼儿互动、教师跟进、家庭延续和反馈沉淀连起来，方便后续展示阶段成果。
+              </p>
+            </div>
+            <span className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800">
+              班级试用可追踪
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-5">
+            {[
+              { label: "儿童互动", value: miniGameSummaryStats.total, hint: "累计任务" },
+              { label: "重点线索", value: classOverview.focusCount, hint: "待跟进" },
+              { label: "家园同步", value: parentSyncRecords.length, hint: "已发送" },
+              { label: "家庭反馈", value: parentFeedbackRecords.length, hint: "家长回流" },
+              { label: "奖章沉淀", value: growthArchive.badgeRecords.length, hint: "成长表现" },
+            ].map((item, index) => (
+              <div key={item.label} className="rounded-[1.2rem] bg-slate-50 px-3 py-3">
+                <p className="text-xs font-semibold text-slate-500">
+                  {index + 1}. {item.label}
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-slate-950">{item.value}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{item.hint}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
@@ -2223,8 +2255,8 @@ export function TeacherStudio() {
         <div className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f5fffe_0%,#ffffff_54%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-cyan-700">幼儿互动记录</p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-900">按记录类型跟进</h2>
+              <p className="text-sm font-semibold text-cyan-700">重点互动线索</p>
+              <h2 className="mt-1 text-2xl font-semibold text-slate-900">先看类型，再选动作</h2>
             </div>
             <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900">
               总记录 {miniGameSummaryStats.total} 条
@@ -2350,7 +2382,7 @@ export function TeacherStudio() {
           </div>
 
           <p className="mt-4 rounded-[1.2rem] bg-white/75 px-4 py-3 text-sm leading-7 text-slate-600">
-            最近明细 {recentMiniGameRecords.length} 条可继续在方案生成中心查看；老师可先从这里按类型生成方案、同步家长或生成鼓励语。
+            老师优先从这里处理：先看哪类互动最多、哪些幼儿参与，再生成方案、同步家长或生成鼓励语。
           </p>
         </div>
       </section>
@@ -2358,10 +2390,10 @@ export function TeacherStudio() {
       <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_52%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-amber-700">课堂活动方案生成中心</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">按记录或模板生成</h2>
+            <p className="text-sm font-semibold text-amber-700">跟进方案生成中心</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">从记录生成，模板作补充</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              先从幼儿互动记录生成跟进方案，也可以从班级活动模板直接生成或带入修改。
+              有互动记录时优先按记录跟进；没有记录或要组织集体活动时，再从班级活动模板带入修改。
             </p>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
@@ -2370,7 +2402,7 @@ export function TeacherStudio() {
         </div>
 
         <div className="mt-5">
-          <p className="text-sm font-semibold text-emerald-800">按活动模板生成</p>
+          <p className="text-sm font-semibold text-emerald-800">活动模板补充</p>
         </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           {teacherGroupActivityCards.map((card) => (
@@ -2654,19 +2686,19 @@ export function TeacherStudio() {
         </div>
       </details>
 
-      <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <details className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-emerald-700">按幼儿记录生成</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">根据互动记录生成跟进方案</h2>
+            <p className="text-sm font-semibold text-emerald-700">最近记录明细</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">点名到幼儿时再展开</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              从幼儿游戏记录、美食认识观察中直接生成跟进方案，也可以同步家长或生成一句鼓励语。
+              这里保留最近的幼儿游戏记录和美食认识观察，用于单个幼儿的方案、同步和鼓励语。
             </p>
           </div>
           <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
             {interventionRecords.length} 条线索
           </span>
-        </div>
+        </summary>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           {interventionRecords.length > 0 ? (
@@ -2695,7 +2727,7 @@ export function TeacherStudio() {
             </p>
           )}
         </div>
-      </section>
+      </details>
 
       <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fbff_0%,#ffffff_52%,#fff2f5_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2815,7 +2847,7 @@ export function TeacherStudio() {
                 })
               ) : (
                 <p className="rounded-[1.4rem] bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-600">
-                  家长端还没有提交反馈。家长登录幼儿账号后，可在家长页填写疑惑、想法或在家观察。
+                  家长端还没有提交反馈。家长选择幼儿身份后，可在家长页填写疑惑、想法或在家观察。
                 </p>
               )}
             </div>

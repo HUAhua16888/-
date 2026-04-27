@@ -19,12 +19,12 @@ const displayFont = ZCOOL_KuaiLe({
 });
 
 export const metadata: Metadata = {
-  title: "童趣成长乐园",
-  description: "面向幼儿园儿童、老师和家长的 AI 成长互动平台。",
+  title: "幼芽成长智伴",
+  description: "面向幼儿园班级试用的 AI 成长互动与家园共育支持平台。",
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   openGraph: {
-    title: "童趣成长乐园",
-    description: "幼儿互动任务、成长记录、教师辅助和家长反馈的一体化平台。",
+    title: "幼芽成长智伴",
+    description: "儿童互动、教师跟进和家庭延续的一体化成长支持平台。",
     type: "website",
     locale: "zh_CN",
   },

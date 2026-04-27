@@ -254,8 +254,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [accountText, setAccountText] = useState("");
   const [feedbackCategory, setFeedbackCategory] = useState<ParentFeedbackCategory>("question");
   const [feedbackText, setFeedbackText] = useState("");
-  const [feedbackStatus, setFeedbackStatus] = useState("家长的疑惑、想法和在家观察会保存在这台设备上。");
-  const [status, setStatus] = useState("请输入幼儿姓名或号数，查看对应成长记录。");
+  const [feedbackStatus, setFeedbackStatus] =
+    useState("班级试用模式：家长的疑惑、想法和在家观察会保存在这台设备上。");
+  const [status, setStatus] = useState("请输入幼儿姓名或号数，选择幼儿身份后查看对应成长记录。");
   const selectedChild = useMemo(
     () => childRoster.find((child) => child.id === selectedChildId) ?? null,
     [childRoster, selectedChildId],
@@ -307,7 +308,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         matched
             ? `${formatChildLabel(matched)} 的成长记录已打开。`
             : roster.length > 0
-              ? "请输入幼儿姓名或号数，查看对应成长记录。"
+              ? "请输入幼儿姓名或号数，选择幼儿身份后查看对应成长记录。"
               : "还没有幼儿名单，请联系老师在教师辅助里添加花名册。",
       );
     }, 0);
@@ -335,7 +336,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     const suggestions = findChildIdentitySuggestions(text, childRoster);
 
     if (suggestions.length === 0) {
-      setStatus(`没有找到“${text}”对应的幼儿账号，请联系老师确认花名册。`);
+      setStatus(`没有找到“${text}”对应的幼儿身份，请联系老师确认花名册。`);
       return;
     }
 
@@ -344,7 +345,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
   function submitParentFeedback() {
     if (!selectedChild) {
-      setFeedbackStatus("请先登录幼儿账号，再提交给老师。");
+      setFeedbackStatus("请先选择幼儿身份，再提交给老师。");
       return;
     }
 
@@ -382,16 +383,17 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 md:px-8">
         <section className="w-full rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
-          <p className="text-sm font-semibold text-amber-700">家长端</p>
+          <p className="text-sm font-semibold text-amber-700">班级试用模式</p>
           <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
             查看孩子成长记录
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            用幼儿姓名或号数进入。这里显示该幼儿在这台设备上的成长记录、老师建议和家长反馈。
+            家长通过幼儿身份查看对应记录。这里显示该幼儿在这台设备上的成长记录、老师建议和家长反馈。
+            正式使用时可升级为家庭查看码。
           </p>
 
           <div className="mt-7 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
-            <p className="text-sm font-semibold text-slate-600">幼儿账号</p>
+            <p className="text-sm font-semibold text-slate-600">幼儿身份</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
               <input
                 value={accountText}
@@ -409,7 +411,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
                 type="button"
               >
-                登录查看
+                查看记录
               </button>
             </div>
             <p className="mt-3 text-sm leading-7 font-semibold text-amber-800">{status}</p>
@@ -427,7 +429,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 ))
               ) : (
                 <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600">
-                  暂无幼儿账号，请联系老师添加花名册
+                  暂无幼儿身份，请联系老师添加花名册
                 </span>
               )}
             </div>
@@ -441,17 +443,18 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
       <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
-          <p className="text-sm font-semibold text-amber-700">家长端</p>
+          <p className="text-sm font-semibold text-amber-700">班级试用模式</p>
           <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
             {selectedChild.name} 的成长记录
             <span className="block text-2xl text-slate-700 md:text-3xl">老师建议与家庭反馈</span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            家长端只显示当前幼儿的信息。记录、反馈和回复保存在这台设备上，请定期与老师确认。
+            家长端通过幼儿身份查看对应记录，只显示当前幼儿的信息。记录、反馈和回复保存在这台设备上。
+            正式使用时可升级为家庭查看码。
           </p>
 
           <div className="mt-7 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
-            <p className="text-sm font-semibold text-slate-600">幼儿账号</p>
+            <p className="text-sm font-semibold text-slate-600">幼儿身份</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
               <input
                 value={accountText}
@@ -468,7 +471,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 onClick={loginByAccount}
                 className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
               >
-                登录查看
+                查看记录
               </button>
             </div>
             <p className="mt-3 text-sm leading-7 font-semibold text-amber-800">{status}</p>
@@ -490,7 +493,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 ))
               ) : (
                 <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600">
-                  暂无幼儿账号，请联系老师添加花名册
+                  暂无幼儿身份，请联系老师添加花名册
                 </span>
               )}
             </div>
@@ -503,7 +506,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               <div>
                 <p className="text-sm font-semibold text-cyan-700">家长版首页</p>
                 <h2 className="mt-1 text-3xl font-semibold text-slate-900">
-                  {selectedChild ? `${selectedChild.name} 的成长记录册` : "请选择幼儿账号"}
+                  {selectedChild ? `${selectedChild.name} 的成长记录册` : "请选择幼儿身份"}
                 </h2>
               </div>
               {selectedChild ? (
@@ -588,7 +591,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                   })
                 ) : (
                   <span className="text-sm leading-7 text-slate-500">
-                    暂无绑定到该幼儿账号的勋章记录。
+                    暂无绑定到该幼儿身份的勋章记录。
                   </span>
                 )}
               </div>
@@ -768,7 +771,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 ))
               ) : (
                 <p className="rounded-[1.3rem] bg-white px-4 py-5 text-sm leading-7 text-slate-500">
-                  暂无绑定到该幼儿账号的游戏打卡记录。
+                  暂无绑定到该幼儿身份的游戏打卡记录。
                 </p>
               )}
             </div>
@@ -908,7 +911,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               ))
             ) : (
               <p className="rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
-                暂无绑定到该幼儿账号的小游戏记录。
+                暂无绑定到该幼儿身份的小游戏记录。
               </p>
             )}
           </div>
@@ -932,7 +935,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               ))
             ) : (
               <p className="rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
-                暂无绑定到该幼儿账号的美食认识观察。
+                暂无绑定到该幼儿身份的美食认识观察。
               </p>
             )}
           </div>
