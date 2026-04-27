@@ -27,6 +27,8 @@ export type ParentFeedbackRecord = {
   content: string;
   createdAt: string;
   status: "new" | "read";
+  attachmentName?: string;
+  attachmentDataUrl?: string;
   teacherReply?: string;
   teacherGuidance?: string;
   teacherRepliedAt?: string;
@@ -97,6 +99,11 @@ function normalizeParentFeedbackRecord(value: unknown): ParentFeedbackRecord | n
     typeof value.teacherGuidance === "string" ? value.teacherGuidance.trim() : "";
   const teacherRepliedAt =
     typeof value.teacherRepliedAt === "string" ? value.teacherRepliedAt.trim() : "";
+  const attachmentName = typeof value.attachmentName === "string" ? value.attachmentName.trim() : "";
+  const attachmentDataUrl =
+    typeof value.attachmentDataUrl === "string" && value.attachmentDataUrl.startsWith("data:image/")
+      ? value.attachmentDataUrl
+      : "";
   const teacherReplySource = value.teacherReplySource === "ai" ? "ai" : "manual";
   const status = value.status === "read" ? "read" : "new";
 
@@ -112,6 +119,12 @@ function normalizeParentFeedbackRecord(value: unknown): ParentFeedbackRecord | n
     content: content.slice(0, 320),
     createdAt: createdAt || new Date().toISOString(),
     status,
+    ...(attachmentDataUrl
+      ? {
+          attachmentName: attachmentName.slice(0, 80) || "家庭观察照片",
+          attachmentDataUrl,
+        }
+      : {}),
     ...(teacherReply || teacherGuidance
       ? {
           ...(teacherReply ? { teacherReply: teacherReply.slice(0, 360) } : {}),
@@ -194,7 +207,7 @@ export function getParentFeedbackCategoryLabel(category: ParentFeedbackCategory)
   }
 
   if (category === "home-observation") {
-    return "在家观察";
+    return "在家观察 / 居家任务反馈";
   }
 
   return "家长疑惑";
@@ -212,6 +225,22 @@ export function getMiniGameFollowUp(record: MiniGameRecord) {
   };
 
   const map: Partial<Record<MiniGameRecord["gameKey"], typeof fallback>> = {
+    washSteps: {
+      displayName: "洗手小任务",
+      observation: "孩子练习了饭前便后洗手步骤，可继续用短口令帮助孩子按顺序完成。",
+      activityScenario: `洗手小任务记录：${pickedText}。请生成幼儿一日生活常规活动，围绕打湿、搓泡泡、冲干净、擦干和饭前便后迁移。`,
+      homeTask: "饭前请孩子按同样顺序洗手，只提醒一个步骤，完成后具体表扬。",
+      encouragement: "你记得先洗小手，干净小手已经准备好啦。",
+      focus: true,
+    },
+    queue: {
+      displayName: "一日生活常规任务",
+      observation: "孩子练习了喝水、如厕、整理或排队等常规做法，可继续看是否能迁移到真实生活环节。",
+      activityScenario: `一日生活常规记录：${pickedText}。请生成一节幼儿生活常规跟进活动，包含喝水、如厕表达、整理归位、排队等待和正向口令。`,
+      homeTask: "回家只选一个小步骤：慢慢喝水、整理玩具、饭前洗手或把物品送回原位。",
+      encouragement: "你愿意听提醒，也会选一个合适做法，这就是自主管理的一小步。",
+      focus: true,
+    },
     readingCheckin: {
       displayName: "阅读小书虫打卡",
       observation: "孩子完成了阅读表达任务，能听故事并说出一个角色、画面或喜欢的地方。",
@@ -342,7 +371,7 @@ export function buildParentSyncFromMiniGame(record: MiniGameRecord): ParentSyncR
     summary: `${record.childName}今天完成了“${themeName}”中的${followUp.displayName}。互动记录：${pickedText}。老师观察：${followUp.observation}`,
     strategy: followUp.observation,
     homePractice: followUp.homeTask,
-    sourceLabel: "幼儿游戏记录",
+    sourceLabel: "幼儿互动记录",
     syncedAt: new Date().toISOString(),
   };
 }

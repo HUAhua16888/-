@@ -3,6 +3,8 @@
 :root {
   --background: #fffaf0;
   --foreground: #213547;
+  --font-body: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-fun: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
 }
 
 @theme inline {

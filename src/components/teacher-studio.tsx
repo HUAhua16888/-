@@ -78,6 +78,11 @@ type ParentFeedbackDraft = {
 
 const teacherScenarioMaxLength = 680;
 const teacherHistoryLimit = 6;
+const legacyGameContentKeys: EditableGameContent["gameKey"][] = [
+  "habitJudge",
+  "peerEncourage",
+  "mealTray",
+];
 const teacherAccountStorageKey = "tongqu-growth-web-teacher-account";
 const teacherPasscodeStorageKey = "tongqu-growth-web-teacher-passcode";
 const teacherSessionStorageKey = "tongqu-growth-web-teacher-session";
@@ -235,7 +240,7 @@ function buildTeacherCopyText(
   themeId: ThemeId,
 ) {
   return [
-    "【幼芽成长智伴｜教师工作台生成】",
+    "【幼芽成长智伴｜幼习宝教育智能体教师工作台生成】",
     `主题：${themeId === "habit" ? "好习惯练习" : "闽食探索"}`,
     `任务：${task}`,
     `场景：${scenario.trim()}`,
@@ -266,14 +271,14 @@ function limitTeacherHistory(history: SavedTeacherResult[]) {
 
 function buildMiniGameExtensionScenario(themeId: ThemeId, ageGroup: string = defaultTeacherAgeGroup) {
   return themeId === "food"
-    ? `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：泉州闽食探索。幼儿已有经验：刚在儿童端完成了均衡餐盘或闽食探索小游戏。希望目标：能说出一种泉州美食名称，观察食材或外形，并选择一个愿意靠近的小步骤。${classroomPlanRequirement}`
-    : `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：幼习宝班级成长任务。幼儿已有经验：刚在儿童端完成了洗手、进餐、阅读或红绿牌小游戏。希望目标：能用动作、图卡或短句完成一个生活习惯、进餐习惯或阅读表达任务，并在生活环节尝试迁移。${classroomPlanRequirement}`;
+    ? `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：泉州闽食探索。幼儿已有经验：刚在儿童端完成了闽食小列车、摊位寻宝、美食观察卡或泉州小厨房任务。希望目标：能说出一种泉州美食名称，观察食材或外形，并选择一个愿意靠近的小步骤。${classroomPlanRequirement}`
+    : `年龄段：${ageGroup}。活动时长：15-20 分钟。活动主题：幼习宝一日生活常规提醒。幼儿已有经验：刚在儿童端完成了洗手、喝水、如厕、整理、排队、文明进餐或红绿牌任务。希望目标：能用动作、图卡或短句完成一个生活常规或进餐习惯任务，并在生活环节尝试迁移。${classroomPlanRequirement}`;
 }
 
 function buildHomePlanScenario(themeId: ThemeId, ageGroup: string = defaultTeacherAgeGroup) {
   return themeId === "food"
     ? `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：泉州美食探索。幼儿已有经验：认识少量家乡食物，但对食材、颜色和味道表达还不充分。希望目标：能说出一种泉州美食名称，找一找食材或外形特征，选择一个愿意靠近的小步骤。`
-    : `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：幼习宝班级成长任务。幼儿已有经验：知道饭前要洗手，也接触过听故事、整理图书、文明进餐和红绿牌判断。希望目标：能完成一个可观察的生活习惯或阅读表达小任务，并在班级或家庭生活里尝试迁移。`;
+    : `年龄段：${ageGroup}。活动时长：15-20 分钟。主题：幼习宝一日生活常规提醒。幼儿已有经验：知道饭前要洗手，但喝水、如厕表达、整理、排队和文明进餐仍需要反复提醒。希望目标：能完成一个可观察的生活常规或进餐习惯小任务，并在班级或家庭生活里尝试迁移。`;
 }
 
 function buildPreferenceInterventionScenario(record: FoodPreferenceRecord, ageGroup: string = defaultTeacherAgeGroup) {
@@ -555,6 +560,80 @@ function buildLocalInterventionTips(record: MiniGameRecord) {
   return ["先肯定参与。", "只推进一个小目标。", "同步给家长一句可延续的话。"];
 }
 
+function formatTeacherPickedItems(items: string[]) {
+  return items.filter(Boolean).slice(0, 4).join("、") || "已完成互动任务";
+}
+
+function getMiniGameInsightKey(record: MiniGameRecord) {
+  return `${record.completedAt}-${record.gameKey}-${record.childId ?? record.childName ?? "anon"}`;
+}
+
+function getFoodPreferenceInsightKey(record: FoodPreferenceRecord) {
+  return `${record.recordedAt}-${record.foodLabel}-${record.childId ?? record.childName ?? "anon"}`;
+}
+
+function getFoodAcceptanceStageText(text: string) {
+  if (/尝|吃|一点/.test(text)) {
+    return "愿意尝一点";
+  }
+
+  if (/闻|香|味/.test(text)) {
+    return "愿意闻一闻";
+  }
+
+  if (/说|名字|介绍|播报/.test(text)) {
+    return "能说出名字";
+  }
+
+  if (/看|观察|图片|颜色|形状/.test(text)) {
+    return "愿意看一看";
+  }
+
+  return "正在认识";
+}
+
+function buildMiniGameEffectChangeLine(record: MiniGameRecord) {
+  const childName = record.childName ?? "未选择身份";
+  const pickedText = formatTeacherPickedItems(record.pickedItems);
+
+  if (record.gameKey === "readingCheckin") {
+    return `${childName}：阅读打卡从愿意听故事，到能说出一个角色、画面或喜欢点。`;
+  }
+
+  if (record.gameKey === "washSteps") {
+    return `${childName}：洗手常规从需要提醒，到能按顺序完成一个清洁步骤。`;
+  }
+
+  if (record.gameKey === "queue") {
+    return `${childName}：一日常规从愿意听提示，到能选择喝水、如厕、排队或整理的合适做法。`;
+  }
+
+  if (record.gameKey === "mealManners") {
+    return `${childName}：进餐操从需要听口令，到能主动练习扶好碗、坐稳和餐后整理。`;
+  }
+
+  if (record.gameKey === "habitTrafficLight") {
+    return `${childName}：好习惯判断从愿意选择，到能尝试说出正确做法。`;
+  }
+
+  if (record.gameKey === "foodPreference") {
+    return `${childName}：美食认识从正在观察，到${getFoodAcceptanceStageText(pickedText)}。`;
+  }
+
+  if (record.themeId === "food") {
+    return `${childName}：闽食探索从认识名字，到能找食材或说一个发现。`;
+  }
+
+  return `${childName}：成长任务从愿意参与，到能完成一个可观察的小步骤。`;
+}
+
+function buildFoodPreferenceEffectChangeLine(record: FoodPreferenceRecord) {
+  const childName = record.childName ?? "未选择身份";
+  const stage = getFoodAcceptanceStageText(`${record.foodLabel}、${record.reasonLabel}、${record.gentleTryTip}`);
+
+  return `${childName}：${record.foodLabel} 从正在认识，到${stage}。`;
+}
+
 export function TeacherStudio() {
   const premiumTtsEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
   const premiumVoiceLabel = process.env.NEXT_PUBLIC_TTS_VOICE_LABEL ?? defaultPremiumVoiceLabel;
@@ -588,9 +667,9 @@ export function TeacherStudio() {
   const [gameContentConfigs, setGameContentConfigs] =
     useState<EditableGameContent[]>(defaultGameContentConfigs);
   const [selectedContentGameKey, setSelectedContentGameKey] =
-    useState<EditableGameContent["gameKey"]>("washSteps");
+    useState<EditableGameContent["gameKey"]>("readingCheckin");
   const [gameContentStatus, setGameContentStatus] =
-    useState("教师可以在这里调整儿童端小游戏名称、规则引导、完成提醒和互动内容说明。");
+    useState("底部辅助配置：仅在需要统一微调儿童端任务话术时使用。");
   const [parentSyncRecords, setParentSyncRecords] = useState<ParentSyncRecord[]>([]);
   const [parentFeedbackRecords, setParentFeedbackRecords] = useState<ParentFeedbackRecord[]>([]);
   const [selectedParentFeedbackId, setSelectedParentFeedbackId] = useState("");
@@ -766,8 +845,12 @@ export function TeacherStudio() {
   const recommendedNextSteps = useMemo(() => {
     const records = growthArchive.miniGameRecords;
     const hasReading = records.some((record) => record.gameKey === "readingCheckin");
-    const hasMeal = records.some(
-      (record) => record.gameKey === "mealManners" || record.gameKey === "habitTrafficLight",
+    const hasRoutine = records.some(
+      (record) =>
+        record.gameKey === "washSteps" ||
+        record.gameKey === "queue" ||
+        record.gameKey === "mealManners" ||
+        record.gameKey === "habitTrafficLight",
     );
     const hasFood = records.some(
       (record) =>
@@ -782,25 +865,126 @@ export function TeacherStudio() {
     }
 
     if (hasReading) {
-      return ["生成阅读延伸活动", "同步亲子共读 5 分钟"];
+      return ["生成阅读习惯延伸", "同步亲子共读 5 分钟"];
     }
 
-    if (hasMeal) {
-      return ["生成文明进餐活动", "同步饭前洗手和餐后整理"];
+    if (hasRoutine) {
+      return ["生成一日常规口令", "同步饭前洗手、喝水或整理"];
     }
 
     if (hasFood) {
       return ["生成泉州美食探索活动", "同步家庭找一种泉州美食"];
     }
 
-    return ["从活动模板生成一节课", "引导幼儿先完成一个任务"];
+    return ["从常规提醒生成一节课", "引导幼儿先完成一个生活任务"];
   }, [growthArchive.miniGameRecords, newParentFeedbackCount]);
+  const aiDailyObservationCards = useMemo(() => {
+    const habitRecords = growthArchive.miniGameRecords.filter((record) => record.themeId === "habit");
+    const foodRecords = growthArchive.miniGameRecords.filter((record) => record.themeId === "food");
+    const latestHabit = habitRecords[0] ? getMiniGameFollowUp(habitRecords[0]) : null;
+    const latestFood = foodRecords[0] ? getMiniGameFollowUp(foodRecords[0]) : null;
+    const latestFoodPreference = growthArchive.foodPreferenceRecords[0]
+      ? getFoodPreferenceFollowUp(growthArchive.foodPreferenceRecords[0])
+      : null;
+
+    return [
+      {
+        label: "今日参与情况",
+        value:
+          classOverview.participatedCount > 0
+            ? `${classOverview.participatedCount} 名幼儿参与，完成 ${classOverview.interactionCount} 次任务`
+            : "今天还没有新的儿童端任务记录",
+      },
+      {
+        label: "一日常规表现",
+        value: latestHabit?.observation ?? "暂无常规互动记录，可先安排洗手、喝水、如厕、整理、排队或文明进餐提醒。",
+      },
+      {
+        label: "闽食探索表现",
+        value:
+          latestFoodPreference?.observation ??
+          latestFood?.observation ??
+          "暂无闽食探索记录，可先从小列车或摊位寻宝开始。",
+      },
+      {
+        label: "需要老师关注",
+        value:
+          classOverview.focusCount > 0
+            ? `${classOverview.focusCount} 条线索需要跟进，优先看喝水洗手、排队整理、文明进餐、美食认识和家长新反馈。`
+            : "暂无明显需要关注的线索，可继续观察孩子下一次选择。",
+      },
+      {
+        label: "今日建议动作",
+        value: recommendedNextSteps.join("；"),
+      },
+    ];
+  }, [
+    classOverview.focusCount,
+    classOverview.interactionCount,
+    classOverview.participatedCount,
+    growthArchive.foodPreferenceRecords,
+    growthArchive.miniGameRecords,
+    recommendedNextSteps,
+  ]);
+  const aiFocusInsightRows = useMemo(() => {
+    const gameRows = growthArchive.miniGameRecords.slice(0, 4).map((record) => {
+      const followUp = getMiniGameFollowUp(record);
+
+      return {
+        id: `game-${getMiniGameInsightKey(record)}`,
+        kind: "game" as const,
+        recordKey: getMiniGameInsightKey(record),
+        childName: record.childName ?? "未选择身份",
+        title: followUp.displayName,
+        meaning: `${followUp.observation} 记录：${formatTeacherPickedItems(record.pickedItems)}。`,
+        nextAction: followUp.homeTask,
+      };
+    });
+    const foodRows = growthArchive.foodPreferenceRecords.slice(0, 3).map((record) => {
+      const followUp = getFoodPreferenceFollowUp(record);
+
+      return {
+        id: `food-${getFoodPreferenceInsightKey(record)}`,
+        kind: "food" as const,
+        recordKey: getFoodPreferenceInsightKey(record),
+        childName: record.childName ?? "未选择身份",
+        title: followUp.displayName,
+        meaning: followUp.observation,
+        nextAction: followUp.homeTask,
+      };
+    });
+
+    return [...foodRows, ...gameRows].slice(0, 6);
+  }, [growthArchive.foodPreferenceRecords, growthArchive.miniGameRecords]);
+  const effectChangeRecords = useMemo(() => {
+    const foodLines = growthArchive.foodPreferenceRecords
+      .slice(0, 3)
+      .map(buildFoodPreferenceEffectChangeLine);
+    const gameLines = growthArchive.miniGameRecords
+      .slice(0, 5)
+      .map(buildMiniGameEffectChangeLine);
+    const uniqueLines = Array.from(new Set([...foodLines, ...gameLines])).slice(0, 6);
+
+    return uniqueLines.length > 0
+      ? uniqueLines
+      : [
+          "暂无变化记录。孩子完成儿童端互动后，这里会自动整理从愿意听、愿意选择到能说出做法的变化。",
+        ];
+  }, [growthArchive.foodPreferenceRecords, growthArchive.miniGameRecords]);
   const selectedParentFeedback = useMemo(
     () =>
       parentFeedbackRecords.find((record) => record.id === selectedParentFeedbackId) ??
       latestParentFeedbackRecords[0] ??
       null,
     [latestParentFeedbackRecords, parentFeedbackRecords, selectedParentFeedbackId],
+  );
+  const activeGameContentConfigs = useMemo(
+    () => gameContentConfigs.filter((item) => !legacyGameContentKeys.includes(item.gameKey)),
+    [gameContentConfigs],
+  );
+  const legacyGameContentConfigs = useMemo(
+    () => gameContentConfigs.filter((item) => legacyGameContentKeys.includes(item.gameKey)),
+    [gameContentConfigs],
   );
   const selectedGameContent = useMemo(
     () =>
@@ -967,7 +1151,7 @@ export function TeacherStudio() {
 
           if (parsed.scenario) {
             setScenario(parsed.scenario);
-            setDraftStatus("已恢复这台设备上次留下的老师端草稿。");
+            setDraftStatus("已恢复这台设备上次留下的教师工作台草稿。");
           }
         }
       } catch {
@@ -1048,8 +1232,8 @@ export function TeacherStudio() {
           );
           setDraftStatus(
             hasMiniGameRecord
-            ? "已接上儿童端小游戏记录，可以直接生成一节课堂活动方案。"
-              : "还没有读到儿童端小游戏记录，已切换为普通活动课程方案草稿。",
+            ? "已接上儿童端互动记录，可以直接生成一节课堂跟进方案。"
+              : "还没有读到儿童端互动记录，已切换为普通活动课程方案草稿。",
           );
         }
 
@@ -1363,7 +1547,7 @@ export function TeacherStudio() {
   function clearTeacherDraft() {
     if (
       typeof window !== "undefined" &&
-      !window.confirm("确认清空这台设备上的老师端草稿吗？当前输入会恢复为默认内容。")
+      !window.confirm("确认清空这台设备上的教师工作台草稿吗？当前输入会恢复为默认内容。")
     ) {
       setDraftStatus("已取消清空草稿，当前内容继续保留。");
       return;
@@ -1373,7 +1557,7 @@ export function TeacherStudio() {
       window.localStorage.removeItem(draftStorageKey);
     }
 
-    resetTeacherDraft("这台设备上的老师端草稿已经清空。");
+    resetTeacherDraft("这台设备上的教师工作台草稿已经清空。");
   }
 
   function reuseSavedResult(item: SavedTeacherResult) {
@@ -1395,7 +1579,7 @@ export function TeacherStudio() {
   function clearTeacherHistory() {
     if (
       typeof window !== "undefined" &&
-      !window.confirm("确认清空这台设备上的全部老师端生成历史吗？固定收藏也会一起清空。")
+      !window.confirm("确认清空这台设备上的全部教师工作台生成历史吗？固定收藏也会一起清空。")
     ) {
       setDraftStatus("已取消清空历史，生成记录继续保留。");
       return;
@@ -1406,7 +1590,7 @@ export function TeacherStudio() {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(historyStorageKey);
     }
-    setDraftStatus("这台设备上的老师端生成历史已经清空。");
+    setDraftStatus("这台设备上的教师工作台生成历史已经清空。");
   }
 
   function deleteSavedResult(id: string) {
@@ -1475,14 +1659,14 @@ export function TeacherStudio() {
 
       return nextRecords;
     });
-    setParentSyncStatus(`${record.childName} 的“${record.title}”已同步到家长端。`);
+    setParentSyncStatus(`${record.childName} 的“${record.title}”已同步到家庭延续。`);
   }
 
   function syncMiniGameRecordToParent(record: MiniGameRecord) {
     const parentRecord = buildParentSyncFromMiniGame(record);
 
     if (!parentRecord) {
-      setParentSyncStatus("这条游戏记录没有绑定幼儿身份，无法同步到家长端。请先让幼儿选择姓名或号数。");
+      setParentSyncStatus("这条互动记录没有绑定幼儿身份，无法同步到家庭延续。请先让幼儿选择姓名或号数。");
       return;
     }
 
@@ -1493,11 +1677,59 @@ export function TeacherStudio() {
     const parentRecord = buildParentSyncFromFoodPreference(record);
 
     if (!parentRecord) {
-      setParentSyncStatus("这条美食认识记录没有绑定幼儿身份，无法同步到家长端。请先让幼儿选择姓名或号数。");
+      setParentSyncStatus("这条美食认识记录没有绑定幼儿身份，无法同步到家庭延续。请先让幼儿选择姓名或号数。");
       return;
     }
 
     saveParentSyncRecord(parentRecord);
+  }
+
+  function getMiniGameRecordByInsightKey(recordKey: string) {
+    return growthArchive.miniGameRecords.find(
+      (record) => getMiniGameInsightKey(record) === recordKey,
+    );
+  }
+
+  function getFoodPreferenceRecordByInsightKey(recordKey: string) {
+    return growthArchive.foodPreferenceRecords.find(
+      (record) => getFoodPreferenceInsightKey(record) === recordKey,
+    );
+  }
+
+  function generateAiFocusPlan(kind: "game" | "food", recordKey: string) {
+    if (kind === "game") {
+      const record = getMiniGameRecordByInsightKey(recordKey);
+
+      if (record) {
+        generateMiniGamePlan(record);
+      }
+
+      return;
+    }
+
+    const record = getFoodPreferenceRecordByInsightKey(recordKey);
+
+    if (record) {
+      generateFoodPreferencePlan(record);
+    }
+  }
+
+  function syncAiFocusToParent(kind: "game" | "food", recordKey: string) {
+    if (kind === "game") {
+      const record = getMiniGameRecordByInsightKey(recordKey);
+
+      if (record) {
+        syncMiniGameRecordToParent(record);
+      }
+
+      return;
+    }
+
+    const record = getFoodPreferenceRecordByInsightKey(recordKey);
+
+    if (record) {
+      syncFoodPreferenceRecordToParent(record);
+    }
   }
 
   function updateParentFeedbackRecords(
@@ -1632,7 +1864,7 @@ export function TeacherStudio() {
     const guidance = draft.guidance.trim();
 
     if (!reply && !guidance) {
-      setParentSyncStatus("请先填写老师回复或育儿指导，再保存给家长端。");
+      setParentSyncStatus("请先填写老师回复或育儿指导，再保存到家庭延续。");
       return;
     }
 
@@ -1737,7 +1969,7 @@ export function TeacherStudio() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = "幼芽成长智伴-班级花名册模板.csv";
+    link.download = "幼芽成长智伴-幼习宝教育智能体-班级花名册模板.csv";
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1856,7 +2088,7 @@ export function TeacherStudio() {
 
       return nextConfigs;
     });
-    setGameContentStatus("已恢复当前小游戏的默认设计和提醒文案。");
+    setGameContentStatus("已恢复当前成长任务的默认设计和提醒文案。");
   }
 
   function generateMiniGamePlan(record: MiniGameRecord) {
@@ -1977,6 +2209,29 @@ export function TeacherStudio() {
     setTeacherAuthStatus("已退出教师工作台，请重新登录后再查看。");
   }
 
+  function resetTeacherAccountSetup() {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("确认重新创建本机教师账号吗？这只会清除这台设备上的教师登录口令，不会删除幼儿记录、家长反馈或生成内容。")
+    ) {
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(teacherAccountStorageKey);
+      window.localStorage.removeItem(teacherPasscodeStorageKey);
+      window.sessionStorage.removeItem(teacherSessionStorageKey);
+    }
+
+    setTeacherHasAccount(false);
+    setTeacherAuthenticated(false);
+    setTeacherAccountInput("");
+    setTeacherPasscodeInput("");
+    setTeacherSetupAccount("");
+    setTeacherSetupPasscode("");
+    setTeacherAuthStatus("旧的本机教师账号已清除。请重新设置教师账号和至少 4 位口令。");
+  }
+
   if (!teacherAuthHydrated || !teacherAuthenticated) {
     return (
       <div className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 md:px-8">
@@ -2052,9 +2307,19 @@ export function TeacherStudio() {
             <button
               onClick={teacherHasAccount ? loginTeacherAccount : createTeacherAccount}
               className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+              type="button"
             >
               {teacherHasAccount ? "进入教师工作台" : "创建并进入"}
             </button>
+            {teacherHasAccount ? (
+              <button
+                onClick={resetTeacherAccountSetup}
+                className="rounded-full bg-rose-100 px-5 py-3 text-sm font-semibold text-rose-800 transition hover:-translate-y-0.5"
+                type="button"
+              >
+                重新创建本机教师账号
+              </button>
+            ) : null}
             <p className="text-sm font-semibold text-teal-700">{teacherAuthStatus}</p>
           </div>
         </section>
@@ -2068,16 +2333,16 @@ export function TeacherStudio() {
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">
-              教师跟进工作台
+              幼习宝教育智能体 · 教师工作台
             </p>
             <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
-              先看重点幼儿，
+              看常规记录，
               <span className="block text-2xl text-slate-700 md:text-3xl">
-                再做课堂和家庭跟进
+                生成跟进并同步家长
               </span>
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-              这里汇总幼儿在儿童端完成的阅读、习惯、进餐和闽食探索记录。老师先看今日概览和重点线索，再生成课堂活动方案、鼓励语和家园同步建议。
+              这里汇总幼儿在儿童端完成的喝水、洗手、如厕、整理、排队、文明进餐和闽食进餐改善记录。老师先看今日常规情况和重点问题，再生成跟进口令、温和食育策略和家园同步建议。
               {premiumTtsEnabled ? ` ${premiumVoiceLabel} 可用于试播老师引导语和活动口令。` : ""}
             </p>
           </div>
@@ -2108,9 +2373,9 @@ export function TeacherStudio() {
         <div className="mt-5 rounded-[1.4rem] bg-white/78 px-4 py-4 text-sm leading-7 text-slate-700">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="font-semibold text-slate-900">成效证据链</p>
+          <p className="font-semibold text-slate-900">教育智能体证据链</p>
               <p className="mt-1 text-slate-600">
-                把幼儿互动、教师跟进、家庭延续和反馈沉淀连起来，方便后续展示阶段成果。
+                把 AI 正向提醒、幼儿互动记录、教师跟进、家庭延续和反馈沉淀连起来，展示常规改善证据。
               </p>
             </div>
             <span className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800">
@@ -2150,7 +2415,7 @@ export function TeacherStudio() {
               ))}
             </div>
             <p className="mt-2">
-              需要关注包含：美食认识观察、红绿牌或进餐类记录、未回复家长反馈，以及未绑定幼儿身份的记录。
+              需要关注包含：喝水洗手、排队整理、文明进餐、美食认识观察、未回复家长反馈，以及未绑定幼儿身份的记录。
             </p>
             {classOverview.unboundRecords > 0
               ? ` 当前有 ${classOverview.unboundRecords} 条未绑定记录，请先引导幼儿选择小名牌。`
@@ -2171,7 +2436,85 @@ export function TeacherStudio() {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+      <section className="order-1 rounded-[2.5rem] bg-[linear-gradient(135deg,#f6fffb_0%,#ffffff_52%,#fff8df_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-teal-700">AI 今日一日常规观察摘要</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">从原始记录看提醒是否有效</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              系统把儿童端的一日生活常规、文明进餐和闽食观察记录转成老师可跟进的教育线索。
+            </p>
+          </div>
+          <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+            AI 分析 {aiDailyObservationCards.length} 项
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-5">
+          {aiDailyObservationCards.map((card) => (
+            <article key={card.label} className="rounded-[1.6rem] bg-white/88 p-4 shadow-sm">
+              <p className="text-sm font-semibold text-teal-700">{card.label}</p>
+              <p className="mt-2 text-sm leading-7 text-slate-700">{card.value}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="mt-6 rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-cyan-700">AI 重点线索</p>
+              <h3 className="mt-1 text-xl font-semibold text-slate-900">重点幼儿 / 重点问题线索</h3>
+            </div>
+            <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900">
+              {aiFocusInsightRows.length} 条
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {aiFocusInsightRows.length > 0 ? (
+              aiFocusInsightRows.map((row) => (
+                <article key={row.id} className="rounded-[1.4rem] bg-slate-50 px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {row.childName} · {row.title}
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-slate-700">{row.meaning}</p>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                      AI 线索
+                    </span>
+                  </div>
+                  <p className="mt-3 rounded-[1.1rem] bg-emerald-50 px-3 py-2 text-sm leading-7 text-emerald-900">
+                    下一步：{row.nextAction}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => generateAiFocusPlan(row.kind, row.recordKey)}
+                      className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5"
+                      type="button"
+                    >
+                      生成跟进建议
+                    </button>
+                    <button
+                      onClick={() => syncAiFocusToParent(row.kind, row.recordKey)}
+                      className="rounded-full bg-cyan-100 px-3 py-2 text-xs font-semibold text-cyan-900 transition hover:-translate-y-0.5"
+                      type="button"
+                    >
+                      AI 家园同步
+                    </button>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="rounded-[1.4rem] bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-600 lg:col-span-2">
+                暂无重点线索。幼儿完成一次儿童端互动后，这里会自动给出教育含义和下一步跟进。
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="order-2 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <details className="rounded-[2.2rem] bg-white/90 p-5 shadow-[0_18px_58px_rgba(35,88,95,0.1)]">
           <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4">
             <div>
@@ -2255,8 +2598,8 @@ export function TeacherStudio() {
         <div className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f5fffe_0%,#ffffff_54%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-cyan-700">重点互动线索</p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-900">先看类型，再选动作</h2>
+              <p className="text-sm font-semibold text-cyan-700">重点幼儿 / 重点问题</p>
+              <h2 className="mt-1 text-2xl font-semibold text-slate-900">看常规线索，再选跟进动作</h2>
             </div>
             <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900">
               总记录 {miniGameSummaryStats.total} 条
@@ -2279,7 +2622,7 @@ export function TeacherStudio() {
 
           <div className="mt-5 overflow-hidden rounded-[1.8rem] bg-white/88 shadow-sm">
             <div className="hidden grid-cols-[1.1fr_0.75fr_0.9fr_1.45fr] gap-3 bg-slate-900 px-4 py-3 text-xs font-semibold text-white md:grid">
-              <span>游戏项目</span>
+              <span>记录项目</span>
               <span>次数 / 幼儿</span>
               <span>最近记录</span>
               <span>数据提示</span>
@@ -2292,7 +2635,7 @@ export function TeacherStudio() {
                     className="grid gap-3 px-4 py-4 text-sm text-slate-700 md:grid-cols-[1.1fr_0.75fr_0.9fr_1.45fr]"
                   >
                     <div>
-                      <p className="text-xs font-semibold text-slate-400 md:hidden">游戏项目</p>
+                      <p className="text-xs font-semibold text-slate-400 md:hidden">记录项目</p>
                       <p className="mt-1 font-semibold text-slate-950">{row.gameName}</p>
                       <p className="mt-1 text-xs font-semibold text-slate-500">
                         {row.themeId === "habit" ? "幼习宝" : "闽食成长岛"}
@@ -2376,30 +2719,30 @@ export function TeacherStudio() {
               </div>
             ) : (
               <p className="px-4 py-6 text-sm leading-7 text-slate-600">
-                暂无游戏互动数据。幼儿完成小游戏后，这里会按项目汇总次数、参与幼儿、高频选择和最近记录。
+                暂无互动记录。幼儿完成常规提醒或闽食观察后，这里会按项目汇总次数、参与幼儿、高频选择和最近记录。
               </p>
             )}
           </div>
 
           <p className="mt-4 rounded-[1.2rem] bg-white/75 px-4 py-3 text-sm leading-7 text-slate-600">
-            老师优先从这里处理：先看哪类互动最多、哪些幼儿参与，再生成方案、同步家长或生成鼓励语。
+            老师优先从这里处理：先看哪类常规或进餐问题需要跟进，再生成建议、同步家长或生成鼓励语。
           </p>
         </div>
       </section>
 
-      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_52%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <details className="order-last rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_52%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-amber-700">跟进方案生成中心</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">从记录生成，模板作补充</h2>
+            <p className="text-sm font-semibold text-amber-700">底部辅助配置</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">活动模板库（可选）</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              有互动记录时优先按记录跟进；没有记录或要组织集体活动时，再从班级活动模板带入修改。
+              主流程优先按幼儿记录生成跟进；没有记录或要组织集体活动时，再打开模板带入修改。
             </p>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
-            记录 {interventionRecords.length} 条 · 模板 {teacherGroupActivityCards.length} 张
+            模板 {teacherGroupActivityCards.length} 张
           </span>
-        </div>
+        </summary>
 
         <div className="mt-5">
           <p className="text-sm font-semibold text-emerald-800">活动模板补充</p>
@@ -2462,31 +2805,31 @@ export function TeacherStudio() {
             </article>
           ))}
         </div>
-      </section>
+      </details>
 
-      <details className="rounded-[2.2rem] bg-[linear-gradient(135deg,#f6fffb_0%,#ffffff_52%,#fff5e6_100%)] p-5 shadow-[0_18px_58px_rgba(35,88,95,0.1)]">
+      <details className="order-last rounded-[2.2rem] bg-[linear-gradient(135deg,#f6fffb_0%,#ffffff_52%,#fff5e6_100%)] p-5 shadow-[0_18px_58px_rgba(35,88,95,0.1)]">
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-emerald-700">高级设置</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-900">小游戏文案配置</h2>
+            <p className="text-sm font-semibold text-emerald-700">底部辅助配置</p>
+            <h2 className="mt-1 text-xl font-semibold text-slate-900">成长任务文案配置</h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              用于老师后期微调儿童端任务话术，默认收起，不影响日常跟进流程。
+              仅在需要统一微调儿童端常规提醒和闽食观察话术时打开，日常跟进不必进入这里。
             </p>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
-            {gameContentConfigs.length} 个游戏
+            {activeGameContentConfigs.length} 个当前项目
           </span>
         </summary>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
           <div className="rounded-[1.8rem] bg-white/85 p-4 shadow-sm">
             <div className="grid gap-2">
-              {gameContentConfigs.map((config) => (
+              {activeGameContentConfigs.map((config) => (
                 <button
                   key={config.gameKey}
                   onClick={() => {
                     setSelectedContentGameKey(config.gameKey);
-                    setGameContentStatus("已切换小游戏配置。");
+                    setGameContentStatus("已切换成长任务配置。");
                   }}
                   className={`rounded-[1.2rem] px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
                     selectedContentGameKey === config.gameKey
@@ -2502,12 +2845,39 @@ export function TeacherStudio() {
                 </button>
               ))}
             </div>
+            {legacyGameContentConfigs.length > 0 ? (
+              <details className="mt-4 rounded-[1.4rem] bg-slate-50 p-3">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-600">
+                  历史兼容项 {legacyGameContentConfigs.length} 个
+                </summary>
+                <div className="mt-3 grid gap-2">
+                  {legacyGameContentConfigs.map((config) => (
+                    <button
+                      key={config.gameKey}
+                      onClick={() => {
+                        setSelectedContentGameKey(config.gameKey);
+                        setGameContentStatus("已切换到历史兼容项。仅用于保留旧记录显示，不建议作为当前儿童端主入口。");
+                      }}
+                      className={`rounded-[1.2rem] px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
+                        selectedContentGameKey === config.gameKey
+                          ? "bg-slate-900 text-white"
+                          : "bg-white text-slate-500 hover:bg-slate-100"
+                      }`}
+                      type="button"
+                    >
+                      <span className="block">历史兼容</span>
+                      <span className="mt-1 block text-base">{config.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </div>
 
           <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-semibold text-slate-700">小游戏名称</span>
+                <span className="text-sm font-semibold text-slate-700">任务名称</span>
                 <input
                   value={selectedGameContent.title}
                   onChange={(event) => updateSelectedGameContent({ title: event.target.value })}
@@ -2576,13 +2946,13 @@ export function TeacherStudio() {
         </div>
       </details>
 
-      <details className="rounded-[2.2rem] bg-[linear-gradient(135deg,#eefcfc_0%,#ffffff_55%,#fff7dc_100%)] p-5 shadow-[0_18px_58px_rgba(35,88,95,0.1)]">
+      <details className="order-last rounded-[2.2rem] bg-[linear-gradient(135deg,#eefcfc_0%,#ffffff_55%,#fff7dc_100%)] p-5 shadow-[0_18px_58px_rgba(35,88,95,0.1)]">
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-cyan-700">更多工具</p>
+            <p className="text-sm font-semibold text-cyan-700">底部辅助配置</p>
             <h2 className="mt-1 text-xl font-semibold text-slate-900">素材与扩展</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              视频素材登记和背景音乐放在这里，避免打断“看记录、做跟进”的主流程。
+              视频素材登记和背景音乐放在底部，避免打断“看记录、做跟进、回家长”的主流程。
             </p>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
@@ -2686,13 +3056,13 @@ export function TeacherStudio() {
         </div>
       </details>
 
-      <details className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+      <details className="order-7 rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-emerald-700">最近记录明细</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">点名到幼儿时再展开</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              这里保留最近的幼儿游戏记录和美食认识观察，用于单个幼儿的方案、同步和鼓励语。
+              这里保留最近的幼儿互动记录和美食认识观察，用于单个幼儿的方案、同步和鼓励语。
             </p>
           </div>
           <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
@@ -2729,11 +3099,11 @@ export function TeacherStudio() {
         </div>
       </details>
 
-      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fbff_0%,#ffffff_52%,#fff2f5_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+      <section className="order-5 rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fbff_0%,#ffffff_52%,#fff2f5_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-rose-700">家园共育</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">家长同步与反馈跟进</h2>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">家庭同步与反馈跟进</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
               这里只显示家长提交的疑惑、想法和在家观察。老师选择一条反馈后，回复家长并给出可执行的家庭育儿指导。
             </p>
@@ -2847,7 +3217,7 @@ export function TeacherStudio() {
                 })
               ) : (
                 <p className="rounded-[1.4rem] bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-600">
-                  家长端还没有提交反馈。家长选择幼儿身份后，可在家长页填写疑惑、想法或在家观察。
+                  家庭延续还没有提交反馈。家长选择幼儿身份后，可在家庭延续页填写疑惑、想法或在家观察。
                 </p>
               )}
             </div>
@@ -2888,12 +3258,29 @@ export function TeacherStudio() {
                       <p className="mt-2 text-sm leading-7 text-slate-800">
                         {selectedParentFeedback.content}
                       </p>
+                      {selectedParentFeedback.attachmentDataUrl ? (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold text-slate-500">
+                            家庭观察照片 · {selectedParentFeedback.attachmentName ?? "照片"}
+                          </p>
+                          <div
+                            aria-label={
+                              selectedParentFeedback.attachmentName ?? "家庭观察照片"
+                            }
+                            className="mt-2 h-32 w-32 rounded-[1.2rem] bg-cover bg-center shadow-sm"
+                            role="img"
+                            style={{
+                              backgroundImage: `url(${selectedParentFeedback.attachmentDataUrl})`,
+                            }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
 
                     {selectedParentFeedback.teacherReply || selectedParentFeedback.teacherGuidance ? (
                       <div className="mt-4 rounded-[1.4rem] bg-cyan-50 px-4 py-3">
                         <p className="text-xs font-semibold text-cyan-800">
-                          已保存给家长端 ·{" "}
+                          已保存到家庭延续 ·{" "}
                           {formatParentSyncTime(
                             selectedParentFeedback.teacherRepliedAt ??
                               selectedParentFeedback.createdAt,
@@ -2975,7 +3362,32 @@ export function TeacherStudio() {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <section className="order-6 rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fff9_0%,#ffffff_52%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-emerald-700">成效变化记录</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">把互动变化沉淀成证据</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              不做复杂报表，先把孩子从愿意听、愿意选择、能说做法到生活迁移的变化记录下来。
+            </p>
+          </div>
+          <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
+            最近 {effectChangeRecords.length} 条
+          </span>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {effectChangeRecords.map((line) => (
+            <p
+              key={line}
+              className="rounded-[1.4rem] bg-white/88 px-4 py-4 text-sm leading-7 text-slate-700 shadow-sm"
+            >
+              {line}
+            </p>
+          ))}
+        </div>
+      </section>
+
+      <section className="order-4 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
           <p className="text-sm font-semibold text-amber-700">生成结果与修改区</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-900">确认草稿后再生成</h2>
@@ -3194,7 +3606,7 @@ export function TeacherStudio() {
         </div>
       </section>
 
-      <details className="rounded-[2.2rem] bg-white/90 p-5 shadow-[0_18px_58px_rgba(35,88,95,0.1)]">
+      <details className="order-8 rounded-[2.2rem] bg-white/90 p-5 shadow-[0_18px_58px_rgba(35,88,95,0.1)]">
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-teal-700">生成历史</p>

@@ -205,7 +205,7 @@ export async function POST(request: Request) {
         };
     const v3Body = {
       user: {
-        uid: `tongqu-growth-web-${scene}`,
+        uid: `youxi-bao-education-agent-${scene}`,
       },
       req_params: {
         text: textForSpeech,
@@ -223,7 +223,7 @@ export async function POST(request: Request) {
         appid: appId,
       },
       user: {
-        uid: `tongqu-growth-web-${scene}`,
+        uid: `youxi-bao-education-agent-${scene}`,
       },
       audio: {
         voice_type: voiceType,

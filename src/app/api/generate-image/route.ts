@@ -16,7 +16,7 @@ function normalizeImageError(message: string) {
     lower.includes("do not have access") ||
     lower.includes("model")
   ) {
-    return "图片生成功能暂时不可用，请先体验聊天、语音和小游戏。";
+    return "图片生成功能暂时不可用，请先体验 AI 正向提醒、语音和成长任务。";
   }
 
   if (lower.includes("timeout")) {
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
   if (!imageEnabled) {
     return NextResponse.json(
-      { error: "AI 出图功能当前先关闭，请先体验聊天、语音和小游戏主流程。" },
+      { error: "AI 出图功能当前先关闭，请先体验语音提醒和成长任务主流程。" },
       { status: 400 },
     );
   }

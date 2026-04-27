@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { findChildIdentitySuggestions, formatChildLabel } from "@/lib/child-identity";
@@ -14,6 +15,7 @@ import {
   selectedChildStorageKey,
   type BadgeRecord,
   type ChildProfile,
+  type FoodPreferenceRecord,
   type GrowthArchive,
   type MiniGameRecord,
 } from "@/lib/growth-archive";
@@ -34,6 +36,8 @@ import {
 type ParentPortalProps = {
   initialChildId?: string;
 };
+
+type ParentHomeTaskCard = (typeof parentHomeTaskCards)[number];
 
 function formatRecordTime(value: string) {
   const date = new Date(value);
@@ -245,6 +249,112 @@ function getChildParentFeedbacks(records: ParentFeedbackRecord[], child: ChildPr
   return records.filter((record) => (child ? record.childId === child.id : false));
 }
 
+function dedupeParentHomeTaskCards(cards: ParentHomeTaskCard[]) {
+  const seen = new Set<string>();
+
+  return cards.filter((card) => {
+    if (seen.has(card.title)) {
+      return false;
+    }
+
+    seen.add(card.title);
+    return true;
+  });
+}
+
+function buildAiTaskFromMiniGame(record: MiniGameRecord): ParentHomeTaskCard {
+  if (record.gameKey === "readingCheckin") {
+    return {
+      title: "AI亲子共读延续",
+      icon: "📚",
+      tasks: ["睡前共读 5 分钟", "孩子说一个角色", "孩子说一个画面", "看完书放回原位"],
+    };
+  }
+
+  if (record.gameKey === "mealManners" || record.gameKey === "habitTrafficLight") {
+    return {
+      title: "AI进餐好习惯延续",
+      icon: "🥣",
+      tasks: ["饭前洗手", "摆碗筷", "坐好慢慢吃", "餐后整理一个小地方"],
+    };
+  }
+
+  if (record.themeId === "food") {
+    return {
+      title: "AI闽食探索延续",
+      icon: "🥢",
+      tasks: ["说出一种泉州美食", "找一个食材", "看一看不急着吃", "给家人介绍一句"],
+    };
+  }
+
+  return {
+    title: "AI好习惯小任务",
+    icon: "✨",
+    tasks: ["说出一个好习惯", "做一个小动作", "请家长观察一句", "明天告诉老师"],
+  };
+}
+
+function buildAiTaskFromFoodPreference(record: FoodPreferenceRecord): ParentHomeTaskCard {
+  const isSensitiveIngredient = /香菇|小葱|葱|蒜|紫菜/.test(record.foodLabel);
+
+  return {
+    title: isSensitiveIngredient ? `${record.foodLabel}温和观察任务` : `${record.foodLabel}靠近一小步`,
+    icon: isSensitiveIngredient ? "🍄" : "🥢",
+    tasks: [
+      `找一找${record.foodLabel}`,
+      /闻/.test(record.reasonLabel) ? "先闻一闻，不急着吃" : "先看一看，不急着吃",
+      "说出它的名字",
+      record.gentleTryTip || "家长只记录一个小变化",
+    ],
+  };
+}
+
+function buildParentChangeLines(
+  miniGameRecords: MiniGameRecord[],
+  foodPreferenceRecords: FoodPreferenceRecord[],
+) {
+  const foodLines = foodPreferenceRecords.slice(0, 2).map((record) => {
+    const stage = /尝|吃|一点/.test(`${record.reasonLabel}${record.gentleTryTip}`)
+      ? "愿意尝一点"
+      : /闻|香|味/.test(`${record.reasonLabel}${record.gentleTryTip}`)
+        ? "愿意闻一闻"
+        : /说|名字/.test(`${record.reasonLabel}${record.gentleTryTip}`)
+          ? "能说出名字"
+          : "愿意看一看";
+
+    return `${record.foodLabel}：从正在认识，到${stage}。`;
+  });
+  const gameLines = miniGameRecords.slice(0, 4).map((record) => {
+    if (record.gameKey === "readingCheckin") {
+      return "阅读：从愿意听故事，到能说出一个角色或画面。";
+    }
+
+    if (record.gameKey === "washSteps") {
+      return "洗手：从需要提醒，到能记住一个清洁步骤。";
+    }
+
+    if (record.gameKey === "queue") {
+      return "一日常规：从愿意听提示，到能选择喝水、如厕、排队或整理的合适做法。";
+    }
+
+    if (record.gameKey === "mealManners") {
+      return "进餐：从听口令，到能练习扶碗、坐稳和餐后整理。";
+    }
+
+    if (record.gameKey === "habitTrafficLight") {
+      return "习惯判断：从愿意选择，到能说出更合适的做法。";
+    }
+
+    if (record.themeId === "food") {
+      return "闽食探索：从认识名字，到能找食材或说一个发现。";
+    }
+
+    return "成长任务：从愿意参与，到完成一个小步骤。";
+  });
+
+  return Array.from(new Set([...foodLines, ...gameLines])).slice(0, 5);
+}
+
 export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [childRoster, setChildRoster] = useState<ChildProfile[]>([]);
   const [selectedChildId, setSelectedChildId] = useState(initialChildId ?? "");
@@ -254,8 +364,21 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [accountText, setAccountText] = useState("");
   const [feedbackCategory, setFeedbackCategory] = useState<ParentFeedbackCategory>("question");
   const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackPhoto, setFeedbackPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [feedbackPhotoStatus, setFeedbackPhotoStatus] =
+    useState("可选上传一张家庭观察照片，仅保存在这台设备上。");
   const [feedbackStatus, setFeedbackStatus] =
     useState("班级试用模式：家长的疑惑、想法和在家观察会保存在这台设备上。");
+  const [selectedHomeTaskTitle, setSelectedHomeTaskTitle] = useState(
+    parentHomeTaskCards[0]?.title ?? "",
+  );
+  const [selectedHomeTaskStep, setSelectedHomeTaskStep] = useState(
+    parentHomeTaskCards[0]?.tasks[0] ?? "",
+  );
+  const [homeTaskNote, setHomeTaskNote] = useState("");
+  const [homeTaskStatus, setHomeTaskStatus] = useState(
+    "先选一张居家任务卡，再选一个今天真的完成的小步骤。",
+  );
   const [status, setStatus] = useState("请输入幼儿姓名或号数，选择幼儿身份后查看对应成长记录。");
   const selectedChild = useMemo(
     () => childRoster.find((child) => child.id === selectedChildId) ?? null,
@@ -274,6 +397,44 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     () => getChildParentSyncs(parentSyncRecords, selectedChild),
     [parentSyncRecords, selectedChild],
   );
+  const aiHomeTaskCards = useMemo(() => {
+    const cards: ParentHomeTaskCard[] = [];
+    const latestSync = childParentSyncs[0];
+    const latestFoodPreference = childFoodPreferences[0];
+    const latestMiniGame = childMiniGames[0];
+
+    if (latestSync) {
+      cards.push({
+        title: "AI今日居家小任务",
+        icon: latestSync.themeId === "food" ? "🥢" : "✨",
+        tasks: [latestSync.homePractice, "家长写一句观察", "完成后反馈老师"],
+      });
+    }
+
+    if (latestFoodPreference) {
+      cards.push(buildAiTaskFromFoodPreference(latestFoodPreference));
+    }
+
+    if (latestMiniGame) {
+      cards.push(buildAiTaskFromMiniGame(latestMiniGame));
+    }
+
+    return dedupeParentHomeTaskCards([...cards, ...parentHomeTaskCards]).slice(0, 5);
+  }, [childFoodPreferences, childMiniGames, childParentSyncs]);
+  const selectedHomeTask = useMemo(
+    () =>
+      aiHomeTaskCards.find((card) => card.title === selectedHomeTaskTitle) ??
+      aiHomeTaskCards[0] ??
+      parentHomeTaskCards[0],
+    [aiHomeTaskCards, selectedHomeTaskTitle],
+  );
+  const effectiveHomeTaskStep = useMemo(
+    () =>
+      selectedHomeTask?.tasks.includes(selectedHomeTaskStep)
+        ? selectedHomeTaskStep
+        : selectedHomeTask?.tasks[0] ?? "",
+    [selectedHomeTask, selectedHomeTaskStep],
+  );
   const childParentFeedbacks = useMemo(
     () => getChildParentFeedbacks(parentFeedbackRecords, selectedChild),
     [parentFeedbackRecords, selectedChild],
@@ -286,6 +447,10 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   );
   const miniGameTotal = childMiniGames.length;
   const miniGameAnalysis = useMemo(() => buildMiniGameAnalysis(childMiniGames), [childMiniGames]);
+  const parentChangeLines = useMemo(
+    () => buildParentChangeLines(childMiniGames, childFoodPreferences),
+    [childFoodPreferences, childMiniGames],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -351,8 +516,8 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
     const content = feedbackText.trim().slice(0, 320);
 
-    if (!content) {
-      setFeedbackStatus("请先写下家长的疑惑、想法或在家观察。");
+    if (!content && !feedbackPhoto) {
+      setFeedbackStatus("请先写一句观察，或上传一张家庭观察照片。");
       return;
     }
 
@@ -361,6 +526,95 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       childId: selectedChild.id,
       childName: selectedChild.name,
       category: feedbackCategory,
+      content: content || "家长上传了一张家庭观察照片，请老师结合幼儿记录继续跟进。",
+      createdAt: new Date().toISOString(),
+      status: "new",
+      ...(feedbackPhoto
+        ? {
+            attachmentName: feedbackPhoto.name,
+            attachmentDataUrl: feedbackPhoto.dataUrl,
+          }
+        : {}),
+    };
+
+    setParentFeedbackRecords((current) => {
+      const nextRecords = addParentFeedbackRecord(current, record);
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(parentFeedbackStorageKey, JSON.stringify(nextRecords));
+      }
+
+      return nextRecords;
+    });
+    setFeedbackText("");
+    setFeedbackPhoto(null);
+    setFeedbackPhotoStatus("可选上传一张家庭观察照片，仅保存在这台设备上。");
+    setFeedbackStatus("已保存到教师工作台反馈列表，老师查看后可以回复和给出家庭建议。");
+  }
+
+  function chooseFeedbackPhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setFeedbackPhotoStatus("请选择图片文件。");
+      return;
+    }
+
+    if (file.size > 1_500_000) {
+      setFeedbackPhotoStatus("图片有点大，请选择 1.5MB 以内的家庭观察照片。");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+
+      if (!dataUrl.startsWith("data:image/")) {
+        setFeedbackPhotoStatus("照片读取失败，请重新选择。");
+        return;
+      }
+
+      setFeedbackPhoto({ name: file.name, dataUrl });
+      setFeedbackPhotoStatus("照片已添加，提交后老师端可以查看。");
+    };
+    reader.onerror = () => setFeedbackPhotoStatus("照片读取失败，请重新选择。");
+    reader.readAsDataURL(file);
+  }
+
+  function chooseHomeTask(card: ParentHomeTaskCard) {
+    setSelectedHomeTaskTitle(card.title);
+    setSelectedHomeTaskStep(card.tasks[0] ?? "");
+    setHomeTaskStatus(`已选择“${card.title}”，今天只记录一个真实小步骤就可以。`);
+  }
+
+  function submitHomeTask() {
+    if (!selectedChild) {
+      setHomeTaskStatus("请先选择幼儿身份，再提交居家任务。");
+      return;
+    }
+
+    if (!selectedHomeTask || !effectiveHomeTaskStep) {
+      setHomeTaskStatus("请先选择一张任务卡和一个小步骤。");
+      return;
+    }
+
+    const note = homeTaskNote.trim().slice(0, 180);
+    const content = [
+      `完成居家延续任务：${selectedHomeTask.title}`,
+      `小步骤：${effectiveHomeTaskStep}`,
+      note ? `家长观察：${note}` : "家长观察：孩子已完成一个小步骤，后续继续观察。",
+    ].join("。");
+
+    const record: ParentFeedbackRecord = {
+      id: `home-task-${Date.now()}-${selectedChild.id}`,
+      childId: selectedChild.id,
+      childName: selectedChild.name,
+      category: "home-observation",
       content,
       createdAt: new Date().toISOString(),
       status: "new",
@@ -375,8 +629,10 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
       return nextRecords;
     });
-    setFeedbackText("");
-    setFeedbackStatus("已保存到老师端反馈列表，老师查看后可以回复和给出家庭建议。");
+    setHomeTaskNote("");
+    setFeedbackCategory("home-observation");
+    setFeedbackStatus("居家任务已同步到教师工作台反馈列表。");
+    setHomeTaskStatus("已提交给老师。老师可以在工作台里看到这次居家延续记录。");
   }
 
   if (!selectedChild) {
@@ -441,15 +697,15 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
-      <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+      <section className="grid gap-6">
         <div className="rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
           <p className="text-sm font-semibold text-amber-700">班级试用模式</p>
           <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
-            {selectedChild.name} 的成长记录
-            <span className="block text-2xl text-slate-700 md:text-3xl">老师建议与家庭反馈</span>
+            {selectedChild.name} 的家庭延续页
+            <span className="block text-2xl text-slate-700 md:text-3xl">看老师建议，回家做一小步</span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            家庭延续页通过幼儿身份查看对应记录，只显示当前幼儿的信息。记录、反馈和回复保存在这台设备上。
+            家庭延续页通过幼儿身份查看对应记录，只显示当前幼儿的信息。家长先看老师今天观察到了什么，再完成一个小步骤并反馈观察。记录、反馈和回复保存在这台设备上。
             正式使用时可升级为家庭查看码。
           </p>
 
@@ -500,7 +756,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
           </div>
         </div>
 
-        <div className="grid gap-6">
+        <div className="hidden">
           <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -522,7 +778,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 <p className="mt-2 text-3xl font-semibold text-slate-900">{uniqueBadgeCount}</p>
               </div>
               <div className="rounded-[1.5rem] bg-amber-50 p-4">
-                <p className="text-xs font-semibold text-amber-800">游戏记录</p>
+                <p className="text-xs font-semibold text-amber-800">互动记录</p>
                 <p className="mt-2 text-3xl font-semibold text-slate-900">{miniGameTotal}</p>
               </div>
               <div className="rounded-[1.5rem] bg-emerald-50 p-4">
@@ -603,8 +859,8 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f5fffe_0%,#ffffff_55%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-emerald-700">老师同步给家长</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">老师反馈与家庭建议</h2>
+            <p className="text-sm font-semibold text-emerald-700">老师今天观察到什么</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">老师建议与家庭小步骤</h2>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
             {childParentSyncs.length} 条
@@ -637,7 +893,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             ))
           ) : (
             <p className="rounded-[1.8rem] bg-white/78 px-5 py-6 text-sm leading-7 text-slate-600 lg:col-span-2">
-              老师还没有给该幼儿同步反馈与家庭建议。请等待老师端确认后同步。
+              老师还没有给该幼儿同步反馈与家庭建议。请等待教师工作台确认后同步。
             </p>
           )}
         </div>
@@ -646,19 +902,30 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_54%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-amber-700">居家延续任务</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">回家可以轻轻做</h2>
+            <p className="text-sm font-semibold text-amber-700">AI 生成的居家小任务</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">今天回家接着轻轻做</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              这些任务不要求一次全部完成。家长只选一个小步骤，记录孩子愿意认识、愿意靠近和愿意整理的过程。
+              优先根据老师同步和孩子当天记录生成。家长只选一个小步骤，记录孩子愿意认识、愿意靠近和愿意整理的过程。
             </p>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
-            {parentHomeTaskCards.length} 类
+            {aiHomeTaskCards.length} 类
           </span>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
-          {parentHomeTaskCards.map((card) => (
-            <article key={card.title} className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+          {aiHomeTaskCards.map((card) => {
+            const isSelected = selectedHomeTask?.title === card.title;
+
+            return (
+            <button
+              key={card.title}
+              onClick={() => chooseHomeTask(card)}
+              className={`rounded-[1.8rem] bg-white/88 p-5 text-left shadow-sm transition hover:-translate-y-0.5 ${
+                isSelected ? "ring-2 ring-amber-300" : ""
+              }`}
+              type="button"
+              aria-pressed={isSelected}
+            >
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-amber-100 text-2xl">
                   {card.icon}
@@ -675,12 +942,103 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                   </span>
                 ))}
               </div>
-            </article>
-          ))}
+              <p className="mt-4 text-xs font-semibold text-amber-700">
+                {isSelected ? "正在记录这一项" : "点击选择"}
+              </p>
+            </button>
+            );
+          })}
+        </div>
+        {selectedHomeTask ? (
+          <div className="mt-5 rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-amber-700">当前居家任务</p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-900">{selectedHomeTask.title}</h3>
+                <p className="mt-2 text-sm leading-7 text-slate-600">
+                  今天只选一个小步骤。完成后写一句观察，教师工作台就能继续跟进。
+                </p>
+              </div>
+              <button
+                onClick={submitHomeTask}
+                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                type="button"
+              >
+                完成并反馈老师
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {selectedHomeTask.tasks.map((taskItem) => (
+                <button
+                  key={taskItem}
+                  onClick={() => {
+                    setSelectedHomeTaskStep(taskItem);
+                    setHomeTaskStatus(`已选择小步骤：“${taskItem}”。`);
+                  }}
+                  className={`rounded-full px-3 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                    effectiveHomeTaskStep === taskItem
+                      ? "bg-amber-400 text-slate-950"
+                      : "bg-slate-50 text-slate-700"
+                  }`}
+                  type="button"
+                >
+                  {taskItem}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={homeTaskNote}
+              onChange={(event) => setHomeTaskNote(event.target.value)}
+              maxLength={180}
+              placeholder="可以写一句：孩子今天愿意闻一闻香菇，或者听完故事能说出一个角色。"
+              className="mt-4 min-h-24 w-full rounded-[1.3rem] border border-amber-100 bg-amber-50/50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition focus:border-amber-300 focus:bg-white"
+            />
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="rounded-[1.1rem] bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                {homeTaskStatus}
+              </p>
+              <span className="text-xs font-semibold text-slate-500">
+                还可输入 {180 - homeTaskNote.length} 字
+              </span>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fff9_0%,#ffffff_52%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-emerald-700">最近变化记录</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">看见孩子的一小步</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              这里不是给孩子打分，只记录从愿意听、愿意选择，到能说出做法或靠近新食物的一点变化。
+            </p>
+          </div>
+          <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
+            {parentChangeLines.length || 0} 条
+          </span>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {parentChangeLines.length > 0 ? (
+            parentChangeLines.map((line) => (
+              <p
+                key={line}
+                className="rounded-[1.4rem] bg-white/88 px-4 py-4 text-sm leading-7 text-slate-700 shadow-sm"
+              >
+                {line}
+              </p>
+            ))
+          ) : (
+            <p className="rounded-[1.4rem] bg-white/88 px-4 py-5 text-sm leading-7 text-slate-600 md:col-span-2">
+              暂无变化记录。孩子完成儿童互动，或老师同步家庭任务后，这里会逐步出现变化线索。
+            </p>
+          )}
         </div>
       </section>
 
-      <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+      <section className="hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-cyan-700">成效记录</p>
@@ -782,10 +1140,10 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-rose-700">家长反馈给老师</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">疑惑与想法</h2>
+            <p className="text-sm font-semibold text-rose-700">反馈给老师</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">提交一句家庭观察</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              这里提交后会汇总给老师，方便老师结合幼儿互动记录继续跟进。
+              这里提交后会汇总到教师工作台，老师可以结合幼儿互动记录继续跟进。
             </p>
           </div>
           <span className="rounded-full bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800">
@@ -800,7 +1158,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 [
                   ["question", "我有疑惑"],
                   ["idea", "我有想法"],
-                  ["home-observation", "在家观察"],
+                  ["home-observation", "在家观察 / 居家任务反馈"],
                 ] as Array<[ParentFeedbackCategory, string]>
               ).map(([category, label]) => (
                 <button
@@ -824,6 +1182,48 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               placeholder="例如：孩子回家提到一种还在认识的美食，想知道可以怎么陪他找食材、说发现。"
               className="mt-4 min-h-32 w-full rounded-[1.3rem] border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition focus:border-rose-300"
             />
+            <div className="mt-3 rounded-[1.2rem] bg-white px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">家庭观察照片</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">{feedbackPhotoStatus}</p>
+                </div>
+                <label className="cursor-pointer rounded-full bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-800 transition hover:-translate-y-0.5">
+                  选择照片
+                  <input
+                    accept="image/*"
+                    className="hidden"
+                    onChange={chooseFeedbackPhoto}
+                    type="file"
+                  />
+                </label>
+              </div>
+              {feedbackPhoto ? (
+                <div className="mt-3 flex items-center gap-3">
+                  <div
+                    aria-label="家庭观察照片预览"
+                    className="h-20 w-20 rounded-[1rem] bg-cover bg-center"
+                    role="img"
+                    style={{ backgroundImage: `url(${feedbackPhoto.dataUrl})` }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-800">
+                      {feedbackPhoto.name}
+                    </p>
+                    <button
+                      className="mt-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
+                      onClick={() => {
+                        setFeedbackPhoto(null);
+                        setFeedbackPhotoStatus("可选上传一张家庭观察照片，仅保存在这台设备上。");
+                      }}
+                      type="button"
+                    >
+                      移除照片
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs font-semibold text-slate-500">
                 还可输入 {320 - feedbackText.length} 字
@@ -854,6 +1254,14 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-7 text-slate-700">{record.content}</p>
+                  {record.attachmentDataUrl ? (
+                    <div
+                      aria-label={record.attachmentName ?? "家庭观察照片"}
+                      className="mt-3 h-24 w-24 rounded-[1rem] bg-cover bg-center shadow-sm"
+                      role="img"
+                      style={{ backgroundImage: `url(${record.attachmentDataUrl})` }}
+                    />
+                  ) : null}
                   {record.teacherReply || record.teacherGuidance ? (
                     <div className="mt-3 rounded-[1.2rem] bg-white px-4 py-3 shadow-sm">
                       <p className="text-xs font-semibold text-teal-700">
@@ -886,9 +1294,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
+      <section className="hidden">
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-cyan-700">小游戏记录</p>
+          <p className="text-sm font-semibold text-cyan-700">互动记录</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-900">互动情况</h2>
           <div className="mt-5 grid gap-3">
             {childMiniGames.length > 0 ? (
@@ -911,7 +1319,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               ))
             ) : (
               <p className="rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
-                暂无绑定到该幼儿身份的小游戏记录。
+                暂无绑定到该幼儿身份的互动记录。
               </p>
             )}
           </div>

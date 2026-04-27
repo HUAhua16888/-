@@ -103,7 +103,8 @@ export async function GET(request: Request) {
   if (!canShowInternal) {
     return NextResponse.json({
       ok: true,
-      app: "幼芽成长智伴",
+      app: "幼习宝：幼儿一日生活常规与闽食进餐改善教育智能体",
+      platform: "幼芽成长智伴",
       now: new Date().toISOString(),
       status: publicMode === "local-demo" ? "basic" : "available",
     });
@@ -120,7 +121,8 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    app: "幼芽成长智伴",
+    app: "幼习宝：幼儿一日生活常规与闽食进餐改善教育智能体",
+    platform: "幼芽成长智伴",
     now: new Date().toISOString(),
     summary: {
       readyCapabilities: readyCount,

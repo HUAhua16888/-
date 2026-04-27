@@ -11,22 +11,22 @@ const premiumIntroEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true
 
 function getIntroText(pathname: string) {
   if (pathname.startsWith("/teachers")) {
-    return "欢迎来到教师工作台。这里可以查看幼儿互动记录，生成跟进方案，处理家长反馈。";
+    return "欢迎来到幼芽成长智伴，幼习宝一日生活常规与闽食进餐改善教育智能体。这里是教师工作台，老师可以查看 AI 成长记录，生成跟进建议，并同步家庭任务。";
   }
 
   if (pathname.startsWith("/adventure")) {
-    return "欢迎来到幼芽成长智伴。今天可以听故事、玩任务，点亮自己的成长记录。";
+    return "欢迎来到幼芽成长智伴，幼习宝教育智能体。今天跟着 AI 正向口令练洗手、喝水、整理、排队和文明进餐，也可以温和认识闽食。";
   }
 
   if (pathname.startsWith("/parents")) {
-    return "欢迎来到家庭延续页。这里可以查看孩子成长记录、老师建议，也可以提交家庭反馈。";
+    return "欢迎来到幼芽成长智伴，幼习宝教育智能体。这里是家庭延续，可以查看老师今天的观察，回家做一个小步骤，再提交家庭观察。";
   }
 
   if (pathname.startsWith("/children")) {
-    return "欢迎来到儿童互动。先找到自己的小名牌，再选择幼习宝或闽食成长岛。";
+    return "欢迎来到幼芽成长智伴，幼习宝教育智能体。这里是儿童互动，先找到自己的小名牌，再进入一日生活常规或闽食进餐改善任务。";
   }
 
-  return "欢迎来到幼芽成长智伴。请选择儿童互动、教师工作台或家庭延续。";
+  return "欢迎来到幼芽成长智伴，幼习宝一日生活常规与闽食进餐改善教育智能体。请选择儿童互动、教师工作台或家庭延续。";
 }
 
 function getAudioContext() {
