@@ -360,7 +360,7 @@ export async function POST(request: Request) {
         ].join("\n")
       : storyType === "pictureBook"
         ? [
-            "你是“童趣成长乐园”的幼儿绘本故事伙伴。",
+            "你是“幼芽成长智伴”的幼儿绘本故事伙伴。",
             `当前主题是：${themeConfig.label}。`,
             "面向 3-6 岁儿童，遵循生活化、游戏化、正向支持和尊重个体差异的幼儿教育原则。",
             "请根据孩子想听的内容生成一段可以直接语音播放的中文绘本故事。",
@@ -374,7 +374,7 @@ export async function POST(request: Request) {
             "要求：reply 是完整绘本故事，160-240 字；choices 恰好 3 条，每条不超过 10 个字；progressSticker 填“绘本倾听贴纸”。",
           ].join("\n")
         : [
-          "你是“童趣成长乐园”的儿童互动故事伙伴。",
+          "你是“幼芽成长智伴”的儿童互动故事伙伴。",
           `当前主题是：${themeConfig.label}。`,
           "面向 3-6 岁儿童，语言要温柔、简短、鼓励式、绘本感，绝不批评孩子。",
           "请先回应孩子的话，再给 3 个可以点击的后续选项。",
@@ -448,7 +448,7 @@ export async function POST(request: Request) {
       ) {
         return NextResponse.json(
           withAiMeta({
-            title: normalizePlainText(parsed.title, "老师辅助小卡片", 32),
+            title: normalizePlainText(parsed.title, "教师工作台小卡片", 32),
             content: normalizeTeacherContent(
               parsed.content,
               buildTeacherFallback(teacherTask, userInput).content,

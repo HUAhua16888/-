@@ -309,7 +309,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             ? `${formatChildLabel(matched)} 的成长记录已打开。`
             : roster.length > 0
               ? "请输入幼儿姓名或号数，选择幼儿身份后查看对应成长记录。"
-              : "还没有幼儿名单，请联系老师在教师辅助里添加花名册。",
+              : "还没有幼儿名单，请联系老师在教师工作台里添加花名册。",
       );
     }, 0);
 
@@ -449,7 +449,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             <span className="block text-2xl text-slate-700 md:text-3xl">老师建议与家庭反馈</span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            家长端通过幼儿身份查看对应记录，只显示当前幼儿的信息。记录、反馈和回复保存在这台设备上。
+            家庭延续页通过幼儿身份查看对应记录，只显示当前幼儿的信息。记录、反馈和回复保存在这台设备上。
             正式使用时可升级为家庭查看码。
           </p>
 
@@ -504,7 +504,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
           <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-cyan-700">家长版首页</p>
+                <p className="text-sm font-semibold text-cyan-700">家庭延续首页</p>
                 <h2 className="mt-1 text-3xl font-semibold text-slate-900">
                   {selectedChild ? `${selectedChild.name} 的成长记录册` : "请选择幼儿身份"}
                 </h2>
@@ -683,8 +683,8 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-cyan-700">游戏打卡汇总</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">分析与对比情况</h2>
+            <p className="text-sm font-semibold text-cyan-700">成效记录</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">孩子参与情况</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
               汇总当前幼儿在两个主题里的打卡次数、常见选择和最近完成时间，方便家长看见孩子在哪些方面练得更多。
             </p>

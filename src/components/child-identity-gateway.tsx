@@ -62,7 +62,7 @@ export function ChildIdentityGateway({
           ? `${formatChildLabel(nextChild)} 的小名牌拿好啦，可以选择今天想去哪里玩。`
           : roster.length > 0
             ? "点一点自己的名字，也可以按按钮说出名字或号数。"
-            : "还没有看到小朋友名单，请老师先在教师辅助里添加花名册。",
+            : "还没有看到小朋友名单，请老师先在教师工作台里添加花名册。",
       );
     }, 0);
 
@@ -86,7 +86,7 @@ export function ChildIdentityGateway({
   function applyIdentityTranscript(transcript: string) {
     if (childRoster.length === 0) {
       setVoiceSuggestions([]);
-      setStatus("还没有看到小朋友名单，请老师先在教师辅助里添加花名册。");
+      setStatus("还没有看到小朋友名单，请老师先在教师工作台里添加花名册。");
       return;
     }
 

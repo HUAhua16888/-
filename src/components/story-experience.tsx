@@ -414,7 +414,7 @@ function buildMiniGameCompletionCopy(
       feedback: `刚刚点亮：${badgeName} · ${configuredTitle || pickedText}`,
       status: configuredReminder
         ? `${configuredReminder} 本次记录：${pickedText}。`
-        : `美食认识观察卡完成：${pickedText}。老师辅助页会保留这条观察记录。`,
+        : `美食认识观察卡完成：${pickedText}。教师工作台会保留这条观察记录。`,
     };
   }
 
@@ -1458,7 +1458,7 @@ function ThemeVideoBoard({ themeId }: { themeId: ThemeId }) {
             </div>
             <div className="mt-4 flex h-36 items-center justify-center rounded-[1.4rem] border border-dashed border-cyan-200 bg-cyan-50 text-center">
               <p className="px-4 text-sm leading-7 font-semibold text-cyan-900">
-                视频资源由老师辅助页上传或登记
+                视频资源由教师工作台上传或登记
               </p>
             </div>
           </article>
@@ -4512,7 +4512,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     setStatus(
       gameContent?.reminderText
         ? `${gameContent.reminderText} 本次记录：${record.foodLabel}，原因是${record.reasonLabel}。`
-        : `美食认识观察已记录：${record.foodLabel}，原因是${record.reasonLabel}。老师辅助页会保留这条观察。`,
+        : `美食认识观察已记录：${record.foodLabel}，原因是${record.reasonLabel}。教师工作台会保留这条观察。`,
     );
   }
 

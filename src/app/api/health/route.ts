@@ -103,7 +103,7 @@ export async function GET(request: Request) {
   if (!canShowInternal) {
     return NextResponse.json({
       ok: true,
-      app: "童趣成长乐园",
+      app: "幼芽成长智伴",
       now: new Date().toISOString(),
       status: publicMode === "local-demo" ? "basic" : "available",
     });
@@ -120,7 +120,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    app: "童趣成长乐园",
+    app: "幼芽成长智伴",
     now: new Date().toISOString(),
     summary: {
       readyCapabilities: readyCount,
