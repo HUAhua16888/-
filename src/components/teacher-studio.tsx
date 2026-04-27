@@ -2242,7 +2242,7 @@ export function TeacherStudio() {
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
             当前为班级试用模式。本机教师账号仅用于保护这台设备上的班级数据，老师可查看幼儿互动记录、家长反馈和课程生成内容。
-            正式园所使用时，可升级为园所管理员统一分配教师账号。
+            如果这台设备已经保存过旧账号，请使用下方“忘记口令/重新创建账号”，只会重设登录口令，不会删除幼儿记录。
           </p>
 
           <div className="mt-8 grid gap-4 rounded-[1.5rem] bg-white/86 p-5 shadow-sm md:grid-cols-2">
@@ -2314,14 +2314,23 @@ export function TeacherStudio() {
             {teacherHasAccount ? (
               <button
                 onClick={resetTeacherAccountSetup}
-                className="rounded-full bg-rose-100 px-5 py-3 text-sm font-semibold text-rose-800 transition hover:-translate-y-0.5"
+                className="rounded-full bg-amber-100 px-5 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200 transition hover:-translate-y-0.5 hover:bg-amber-200"
                 type="button"
               >
-                重新创建本机教师账号
+                忘记口令 / 重新创建账号
               </button>
             ) : null}
             <p className="text-sm font-semibold text-teal-700">{teacherAuthStatus}</p>
           </div>
+          {teacherHasAccount ? (
+            <div className="mt-4 rounded-[1.3rem] bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-950">
+              如果无法进入，通常是旧本机口令还保存在浏览器里。点击“忘记口令/重新创建账号”后，可立即设置新的本机教师账号；幼儿记录、家长反馈和生成内容都会保留。
+            </div>
+          ) : (
+            <div className="mt-4 rounded-[1.3rem] bg-teal-50 px-4 py-3 text-sm leading-7 text-teal-950">
+              首次使用请设置一个便于本班老师记住的本机账号，账号至少 2 个字，口令至少 4 位。
+            </div>
+          )}
         </section>
       </div>
     );
