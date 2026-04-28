@@ -35,14 +35,6 @@ const identityRoutes = [
   },
 ];
 
-const evidenceSteps = [
-  "AI正向提醒",
-  "幼儿互动记录",
-  "教师分析跟进",
-  "家庭一致延续",
-  "成效变化沉淀",
-];
-
 export function HomeWorkspace() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-8 md:px-8">
@@ -53,40 +45,11 @@ export function HomeWorkspace() {
             幼芽成长智伴
           </h1>
           <p className="mt-3 max-w-3xl text-2xl leading-tight font-semibold text-slate-900 md:text-3xl">
-            幼习宝：幼儿一日生活常规与闽食进餐改善教育智能体
+            幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体
           </p>
           <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-            针对幼儿喝水、洗手、如厕、整理、排队、文明进餐等常规反复提醒效果不稳定的问题，用 AI 正向口令、互动任务和成长记录帮助孩子自主管理。教师根据 AI 记录及时跟进，并同步家长形成家园一致教育。
+            一个教育智能体平台，两条主线协同：幼习宝练洗手、喝水、如厕、整理、排队、文明进餐；闽食成长岛结合每日食谱播报、泉州食材认识、食物观察和家园延续，帮助老师形成可跟进的成长记录。
           </p>
-        </div>
-
-        <div className="mt-6 grid gap-3 rounded-[1.5rem] bg-white/72 p-4 shadow-sm sm:grid-cols-3">
-          <div>
-            <p className="text-xs font-semibold text-slate-500">案例主线</p>
-            <p className="mt-1 font-semibold text-slate-900">常规提醒 · 进餐改善</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-500">当前模式</p>
-            <p className="mt-1 font-semibold text-slate-900">班级试用模式</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-500">三端分工</p>
-            <p className="mt-1 font-semibold text-slate-900">儿童互动 · 教师工作台 · 家庭延续</p>
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-[1.5rem] bg-white/72 p-4 shadow-sm">
-          <p className="text-sm font-semibold text-slate-900">教育智能体闭环</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {evidenceSteps.map((step, index) => (
-              <span
-                key={step}
-                className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
-              >
-                {index + 1}. {step}
-              </span>
-            ))}
-          </div>
         </div>
 
         <div className="mt-7 grid gap-4 md:grid-cols-3">

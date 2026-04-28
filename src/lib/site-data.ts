@@ -41,17 +41,56 @@ export const themes: Record<ThemeId, ThemeConfig> = {
   },
 };
 
+export const lifeHabitKnowledge = [
+  {
+    key: "喝水",
+    cue: "小水杯，双手拿，接半杯，慢慢喝。",
+    steps: ["双手拿杯", "接半杯", "坐好慢慢喝", "放回水杯"],
+    homeTask: "回家请孩子自己拿水杯，接半杯，坐好慢慢喝一口。",
+  },
+  {
+    key: "洗手",
+    cue: "挽袖子，打湿手，搓泡泡，冲干净，擦小手。",
+    steps: ["挽袖子", "打湿手", "搓泡泡", "冲干净", "擦小手"],
+    homeTask: "饭前请孩子说出洗手顺序，再完成一次洗手。",
+  },
+  {
+    key: "如厕",
+    cue: "轻轻进，便后冲，整理好，洗小手。",
+    steps: ["轻轻进入", "便后冲水", "整理衣物", "洗小手"],
+    homeTask: "回家提醒孩子如厕后冲水、整理衣物、再洗手。",
+  },
+  {
+    key: "整理",
+    cue: "玩具回家，书本摆齐，椅子归位。",
+    steps: ["玩具回家", "书本摆齐", "椅子归位", "桌面清爽"],
+    homeTask: "睡前请孩子把一本书或一个玩具送回原位。",
+  },
+  {
+    key: "排队",
+    cue: "不推挤，跟上前，静悄悄，排整齐。",
+    steps: ["不推挤", "跟上前", "静悄悄", "排整齐"],
+    homeTask: "外出等待时，请孩子练习排队、等待和跟上前面的人。",
+  },
+  {
+    key: "进餐",
+    cue: "手扶碗，脚放稳，安静嚼，不撒饭，愿意认识新食物。",
+    steps: ["手扶碗", "脚放稳", "安静嚼", "不撒饭", "按需取餐"],
+    homeTask: "晚餐时请孩子练一项：手扶碗、慢慢嚼或餐后整理。",
+  },
+];
+
 export const habitSkillCards = [
   {
     title: "洗手小任务",
     icon: "🫧",
-    hint: "饭前便后先洗手，按顺序打湿、搓泡泡、冲干净。",
+    hint: "饭前便后先洗手，挽袖子、打湿手、搓泡泡、冲干净、擦小手。",
     tone: "bg-cyan-100 text-cyan-900",
     taskName: "洗手常规提醒",
     gameKey: "washSteps",
     badgeName: "洗手闪亮章",
-    command: "小手找清水，泡泡搓一搓，冲净再擦干。",
-    rhyme: "小手洗一洗，泡泡跑一跑，干净小手来报道。",
+    command: "挽袖子，打湿手，搓泡泡，冲干净，擦小手。",
+    rhyme: "小袖子，卷一卷，小泡泡，转圈圈，冲一冲，擦一擦，干净小手来吃饭。",
     question: "饭前第一步可以做什么？",
     actionLabel: "我会先洗手",
     knowledge: "洗手任务用于观察幼儿能否记住饭前便后的基本顺序。",
@@ -64,8 +103,8 @@ export const habitSkillCards = [
     taskName: "喝水常规提醒",
     gameKey: "queue",
     badgeName: "喝水小勇士章",
-    command: "小水杯，手里拿，坐好慢慢喝一口。",
-    rhyme: "小水杯，稳稳坐，慢慢喝水不着急。",
+    command: "小水杯，双手拿，接半杯，慢慢喝。",
+    rhyme: "小水杯，手里拿，接半杯，不洒啦，慢慢喝，身体舒服啦。",
     question: "喝水时身体可以怎么做？",
     actionLabel: "我会慢慢喝",
     knowledge: "喝水任务关注幼儿是否能在活动后主动补水，并保持安全动作。",
@@ -78,8 +117,8 @@ export const habitSkillCards = [
     taskName: "如厕常规提醒",
     gameKey: "queue",
     badgeName: "如厕小提醒章",
-    command: "想如厕，先说明，整理好，再洗手。",
-    rhyme: "小提醒，轻轻说，整理衣服洗小手。",
+    command: "轻轻进，便后冲，整理好，洗小手。",
+    rhyme: "如厕轻轻走，便后冲一冲，小手洗干净，自己真能行。",
     question: "想上厕所时可以先做什么？",
     actionLabel: "我会告诉老师",
     knowledge: "如厕提醒帮助幼儿把表达需要、整理衣物和洗手连成稳定流程。",
@@ -92,8 +131,8 @@ export const habitSkillCards = [
     taskName: "排队过渡提醒",
     gameKey: "queue",
     badgeName: "排队小队长章",
-    command: "小脚跟上队伍，眼睛看前面，慢慢走。",
-    rhyme: "小队伍，一条线，慢慢走到老师边。",
+    command: "不推挤，跟上前，静悄悄，排整齐。",
+    rhyme: "小队伍，一条线，静悄悄，不抢先。",
     question: "排队时可以怎么走？",
     actionLabel: "我会慢慢走",
     knowledge: "排队任务用于观察幼儿在过渡环节是否能等待、跟随和保持安全距离。",
@@ -106,8 +145,8 @@ export const habitSkillCards = [
     taskName: "整理归位提醒",
     gameKey: "queue",
     badgeName: "整理小能手",
-    command: "玩具回篮子，图书回书架，桌面变清爽。",
-    rhyme: "小物品，有个家，送回家，笑哈哈。",
+    command: "玩具回家，书本摆齐，椅子归位。",
+    rhyme: "小玩具，有个家，书本齐，椅子靠，教室笑哈哈。",
     question: "玩完以后可以怎么做？",
     actionLabel: "我送回家",
     knowledge: "整理任务能延伸到阅读区、建构区和餐后桌面，适合老师观察迁移能力。",
@@ -120,8 +159,8 @@ export const habitSkillCards = [
     taskName: "文明进餐动作任务",
     gameKey: "mealManners",
     badgeName: "文明进餐章",
-    command: "小手扶好碗，小脚放稳，嘴巴轻轻嚼。",
-    rhyme: "小碗稳稳坐，饭菜慢慢尝，餐后一起整理好。",
+    command: "手扶碗，脚放稳，安静嚼，不撒饭。",
+    rhyme: "小手扶碗边，小脚稳稳站，饭菜慢慢嚼，餐后整理好。",
     question: "吃饭时可以先做哪一个好动作？",
     actionLabel: "我会扶好碗",
     knowledge: "进餐习惯不是催孩子吃完，而是练坐稳、慢慢嚼、按需取和餐后整理。",
@@ -141,18 +180,18 @@ export const habitSkillCards = [
     knowledge: "红绿牌适合识别进餐、整理、阅读和情绪表达中的正确做法。",
   },
   {
-    title: "阅读习惯延伸",
+    title: "习惯故事小剧场",
     icon: "📚",
-    hint: "听绘本、说一个画面，最后把图书送回家。",
+    hint: "听一个好习惯短故事，选答案卡，再完成一个生活小任务。",
     tone: "bg-violet-100 text-violet-900",
-    taskName: "阅读习惯延伸",
+    taskName: "听故事做任务",
     gameKey: "readingCheckin",
-    badgeName: "阅读小书虫",
-    command: "听一小段故事，看一张画面，说一句我看到了。",
-    rhyme: "小书页，慢慢翻，我把发现说一遍。",
-    question: "听完故事后可以说什么？",
-    actionLabel: "我说发现",
-    knowledge: "阅读在本案例中作为习惯延伸，重点看幼儿是否愿意听、说和归位。",
+    badgeName: "故事小耳朵",
+    command: "听一个短故事，选一张答案卡，再做一个小习惯。",
+    rhyme: "故事听一听，答案选一选，小习惯也亮一点。",
+    question: "听完故事后可以做哪一步？",
+    actionLabel: "我做小任务",
+    knowledge: "故事在本案例中服务一日常规，重点观察幼儿是否能听懂情境并迁移到洗手、喝水、整理、排队或文明进餐。",
   },
 ];
 
@@ -277,23 +316,33 @@ export const mealPhotoChecklist = [
 export const teacherTasks = [
   {
     id: "home",
-    label: "活动课程方案",
+    label: "一日常规跟进建议",
+    starter: "年龄段：中班 4-5 岁。场景：饭前洗手、喝水、排队或整理反复需要提醒。请根据幼儿互动记录生成明日跟进口令、教师观察点和一个可同步家长的小步骤。",
+  },
+  {
+    id: "food-follow",
+    label: "闽食进餐/挑食观察建议",
+    starter: "年龄段：中班 4-5 岁。幼儿正在认识某种食物。请生成温和食育策略，包含原因理解、靠近小步、课堂小活动和家园同步话术，不贴挑食标签。",
+  },
+  {
+    id: "activity",
+    label: "课堂活动方案",
     starter: "年龄段：中班 4-5 岁。活动时长：15-20 分钟。主题：饭前洗手。幼儿已有经验：知道要洗手，但步骤容易漏。希望目标：能按顺序说出并模仿洗手步骤。",
   },
   {
     id: "story",
-    label: "故事引导",
-    starter: "请为 4-5 岁幼儿生成一个 3 分钟内可以讲完的互动故事，主题围绕生活习惯或泉州食育，语言温柔、有提问、有结尾小任务。",
+    label: "故事/绘本引导",
+    starter: "请为 4-5 岁幼儿生成一个 3 分钟内可以讲完的互动故事或绘本导入，围绕生活常规或泉州食育，语言温柔、有提问、有结尾小任务。",
   },
   {
-    id: "picture-book",
-    label: "绘本导入",
-    starter: "请围绕一个幼儿生活情境生成绘本式导入，要求有角色、有画面、有一句能让幼儿回答的问题。",
+    id: "parent-sync",
+    label: "家园同步话术",
+    starter: "请根据幼儿今天的互动记录，生成一段给家长看的同步话术：孩子完成了什么、老师温和观察到什么、回家可以轻轻做哪一步。",
   },
   {
-    id: "extension",
-    label: "活动延伸",
-    starter: "请根据幼儿已完成的互动记录，生成一段活动延伸方案，包含再玩一次的变化玩法、教师观察点和下一次活动建议。",
+    id: "encouragement",
+    label: "鼓励语",
+    starter: "请生成一句适合老师对幼儿说的正向鼓励语，要说具体行为，不比较、不催促，并给出下一小步。",
   },
 ];
 
@@ -349,6 +398,97 @@ export const minnanFoodObserveSteps = [
     icon: "🫶",
     picture: "🥄",
     cue: "选看一看、闻一闻、碰一碰或尝一点点。",
+  },
+];
+
+export const minnanFoodKnowledge = [
+  {
+    label: "海蛎",
+    intro: "海蛎是泉州海边常见的小海味，圆圆软软，常出现在海蛎煎里。",
+    ingredients: ["海蛎"],
+    clue: "灰白小颗、海边鲜味。",
+    approach: "先看一看形状，再闻一闻蛋香，不急着入口。",
+    homeTask: "回家找一找海蛎煎里有没有海蛎，说出名字就完成一步。",
+  },
+  {
+    label: "紫菜",
+    intro: "紫菜像薄薄的小海叶，常在紫菜汤里漂起来。",
+    ingredients: ["紫菜", "汤"],
+    clue: "深紫色、薄薄的、在汤里会散开。",
+    approach: "先看颜色，再喝一小口汤或说出名字。",
+    homeTask: "晚餐看到汤时，找一找有没有紫菜。",
+  },
+  {
+    label: "芥菜",
+    intro: "芥菜是泉州家常饭菜里的绿色朋友，也会和米饭一起做成芥菜饭。",
+    ingredients: ["芥菜", "米饭"],
+    clue: "绿色叶子、切成小段。",
+    approach: "先找绿色小叶子，再说它叫芥菜。",
+    homeTask: "家里吃青菜时，请孩子找一种绿色叶子。",
+  },
+  {
+    label: "蛏子",
+    intro: "蛏子来自海边，有长长的壳，泉州餐桌上常能见到。",
+    ingredients: ["蛏子"],
+    clue: "长长壳、海边味。",
+    approach: "先看壳的形状，愿意的话闻一闻。",
+    homeTask: "看到海鲜时，说说它的形状是长的还是圆的。",
+  },
+  {
+    label: "炸枣",
+    intro: "炸枣是闽南传统小点心，圆圆的，外面香香，里面常有甜甜馅。",
+    ingredients: ["糯米粉", "馅料"],
+    clue: "圆圆金黄、像小球。",
+    approach: "先看圆圆样子，再闻一闻香味。",
+    homeTask: "遇到传统点心时，介绍它的颜色和形状。",
+  },
+  {
+    label: "芥菜饭",
+    intro: "芥菜饭把米饭和芥菜放在一起，是泉州家常味道。",
+    ingredients: ["米饭", "芥菜"],
+    clue: "白白米饭里有绿色芥菜。",
+    approach: "先找绿色芥菜，再尝旁边一小口米饭。",
+    homeTask: "饭桌上找一找米饭里有没有绿色食材。",
+  },
+  {
+    label: "海蛎煎",
+    intro: "海蛎煎是泉州常见小吃，金黄金黄，里面有海蛎、鸡蛋和地瓜粉。",
+    ingredients: ["海蛎", "鸡蛋", "地瓜粉", "小葱"],
+    clue: "金黄边、圆圆饼、能看到小葱点。",
+    approach: "先看金黄边、闻蛋香，再尝一点点边边。",
+    homeTask: "给家人介绍海蛎煎里的一种食材。",
+  },
+  {
+    label: "面线糊",
+    intro: "面线糊是泉州早餐里的暖暖味道，细细软软，适合用勺子慢慢看。",
+    ingredients: ["面线", "汤", "葱花"],
+    clue: "细细面线、热热汤、软软口感。",
+    approach: "先用勺子搅一搅，再说出看到的细面线。",
+    homeTask: "早餐时说一句：我看到细细的面线。",
+  },
+  {
+    label: "香菇",
+    intro: "香菇像一把小伞，气味比较明显，很多孩子可以先从看和闻开始。",
+    ingredients: ["香菇"],
+    clue: "小伞形状、棕色、气味明显。",
+    approach: "先看小伞形状，再远远闻一闻。",
+    homeTask: "今晚不用催入口，只找一找香菇在哪里。",
+  },
+  {
+    label: "小葱",
+    intro: "小葱是绿色细细的小香味，常点在汤和海蛎煎上。",
+    ingredients: ["小葱"],
+    clue: "绿色细条、小小葱花。",
+    approach: "先找葱花点点，再说出名字。",
+    homeTask: "饭桌上找绿色小葱花，说出名字就完成一步。",
+  },
+  {
+    label: "蒜",
+    intro: "蒜有明显气味，常帮助菜变香，可以先远远认识它。",
+    ingredients: ["蒜"],
+    clue: "白色小瓣、气味冲。",
+    approach: "先看白色小瓣，再远远闻一闻。",
+    homeTask: "家长做饭时，让孩子远远看一看蒜瓣，不急着尝。",
   },
 ];
 
@@ -776,14 +916,19 @@ export const habitTrafficLightCards = [
 
 export const foodPreferenceReasons = [
   {
-    label: "味道陌生",
+    label: "味道重",
     icon: "👃",
-    strategy: "先闻一闻、看一看，不急着入口，给孩子一点熟悉时间。",
+    strategy: "先承认味道比较明显，允许孩子先看一看、闻一闻，不急着入口。",
   },
   {
-    label: "口感担心",
+    label: "气味冲",
+    icon: "🌬️",
+    strategy: "先远远闻一闻，说出这是什么气味，再选择是否靠近一点。",
+  },
+  {
+    label: "口感怪",
     icon: "🥄",
-    strategy: "先从边缘或汤汁开始，份量小到孩子愿意尝试即可。",
+    strategy: "先摸一摸或看一看口感特点，也可以只尝一点汤汁或旁边米饭。",
   },
   {
     label: "颜色不熟悉",
@@ -791,25 +936,34 @@ export const foodPreferenceReasons = [
     strategy: "请孩子找一找颜色、形状和食材名字，把陌生感变成观察任务。",
   },
   {
+    label: "太硬",
+    icon: "🥕",
+    strategy: "先看形状和颜色，必要时请成人切小、煮软，再由孩子选择一小步。",
+  },
+  {
+    label: "太滑",
+    icon: "🥣",
+    strategy: "先用勺子看一看、碰一碰，等孩子熟悉后再尝一点点。",
+  },
+  {
     label: "今天没胃口",
     icon: "☁️",
     strategy: "先接纳状态，保留少量尝试机会，不用催促或贴标签。",
   },
   {
-    label: "香菇味明显",
-    icon: "🍄",
-    strategy: "先找香菇像小伞的样子，再闻一闻；可以只尝旁边的米饭或汤汁。",
+    label: "以前没吃过",
+    icon: "❔",
+    strategy: "把陌生感变成认识任务：先说名字、找食材，再选择一个靠近小步。",
   },
-  {
-    label: "葱花太显眼",
-    icon: "🌿",
-    strategy: "先认识绿色葱花，允许孩子用勺子找一找、拨一拨，再选择是否尝一点汤。",
-  },
-  {
-    label: "蒜味有点冲",
-    icon: "🧄",
-    strategy: "先远远闻一闻，说出“这是蒜味”，不把不喜欢说成挑食。",
-  },
+];
+
+export const foodPreferenceApproachSteps = [
+  "看一看",
+  "闻一闻",
+  "碰一碰",
+  "尝一点汤汁",
+  "尝旁边米饭",
+  "说出名字",
 ];
 
 export const peerEncouragementPrompts = [
@@ -1032,12 +1186,12 @@ export const teacherGroupActivityCards: TeacherGroupActivityCard[] = [
     aiCanGenerate: "判断题、正确做法提示、表扬语、家庭复习话术",
   },
   {
-    title: "阅读小书虫打卡",
+    title: "习惯故事小剧场",
     themeId: "habit" as const,
-    scene: "阅读区、午睡前故事、亲子共读延伸",
-    goal: "幼儿能听完短故事，说出一个角色、一个画面或一个喜欢的地方，并愿意把图书归位。",
-    steps: ["听短故事", "选答案卡", "说一个发现", "图书归位打卡"],
-    aiCanGenerate: "短绘本故事、阅读提问、表达句式、亲子共读话术、表扬语",
+    scene: "餐前餐后、排队过渡、整理后、午睡前短故事",
+    goal: "幼儿能听完一个生活习惯短故事，选择答案卡，并完成一个洗手、喝水、排队、整理或文明进餐小任务。",
+    steps: ["说想听的习惯故事", "听短故事", "选答案卡", "完成一个小习惯"],
+    aiCanGenerate: "习惯短故事、答案卡、生活小任务、家园同步话术、表扬语",
   },
   {
     title: "闽食小小播报员",
@@ -1083,14 +1237,19 @@ export const teacherGroupActivityCards: TeacherGroupActivityCard[] = [
 
 export const parentHomeTaskCards = [
   {
-    title: "阅读小书虫居家任务",
+    title: "一日常规小接力",
+    icon: "✨",
+    tasks: ["饭前洗手", "主动喝水", "需要如厕会表达", "等待轮流", "整理玩具图书"],
+  },
+  {
+    title: "习惯故事居家任务",
     icon: "📚",
-    tasks: ["亲子共读 5 分钟", "孩子选一个角色", "孩子说一个画面", "看完书放回原位", "给老师留一句"],
+    tasks: ["亲子共读 5 分钟", "孩子说一个角色", "讲一个画面", "看完书放回原位", "给老师留一句"],
   },
   {
     title: "家庭美食小管家",
     icon: "🏠",
-    tasks: ["饭前洗手", "摆碗筷", "认一种食材", "感谢做饭的人", "餐后整理"],
+    tasks: ["饭前洗手", "摆碗筷", "文明进餐", "感谢做饭的人", "餐后整理"],
   },
   {
     title: "亲子尝新小挑战",

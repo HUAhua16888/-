@@ -233,14 +233,26 @@ function resolveTeacherAgeGroup(text: string) {
 
 function buildTeacherAgeFocus(ageGroup: string) {
   if (ageGroup.includes("小班")) {
-    return "以模仿、感知、短句回应和动作游戏为主。";
+    return "参考《指南》和《纲要》，集中活动建议 10-15 分钟，以模仿、感知、短句回应和动作游戏为主。";
   }
 
   if (ageGroup.includes("大班")) {
-    return "加入合作、简单记录、规则意识和迁移表达。";
+    return "参考《指南》和《纲要》，集中活动建议 20-30 分钟，加入讨论、简单记录、分享、规则意识和迁移表达。";
   }
 
-  return "加入简单排序、比较和说出一点原因。";
+  return "参考《指南》和《纲要》，集中活动建议 15-20 分钟，加入观察、表达、简单排序、比较和初步合作。";
+}
+
+function buildTeacherActivityDuration(ageGroup: string) {
+  if (ageGroup.includes("小班")) {
+    return "10-15 分钟";
+  }
+
+  if (ageGroup.includes("大班")) {
+    return "20-30 分钟";
+  }
+
+  return "15-20 分钟";
 }
 
 function buildTeacherFallback(task: string, userInput = "") {
@@ -254,6 +266,7 @@ function buildTeacherFallback(task: string, userInput = "") {
   const isPraise = /鼓励|表扬|挑食|不愿意|情绪|安抚|紧张/.test(target);
   const ageGroup = resolveTeacherAgeGroup(target);
   const ageFocus = buildTeacherAgeFocus(ageGroup);
+  const activityDuration = buildTeacherActivityDuration(ageGroup);
   const activityName = isFood ? "泉州闽食进餐改善活动" : "幼习宝一日生活常规活动";
   const title = isActivity
     ? "幼儿活动课程方案"
@@ -268,7 +281,8 @@ function buildTeacherFallback(task: string, userInput = "") {
     ? [
         `活动名称：${activityName}`,
         `适用年龄：${ageGroup}`,
-        "活动时长：15-20 分钟",
+        `活动时长：${activityDuration}`,
+        "设计依据：《3-6岁儿童学习与发展指南》《幼儿园教育指导纲要》，以可观察行为、游戏化操作和生活迁移为主。",
         isFood
           ? "活动目标：1. 能说出一种泉州美食名称。2. 能从图片或实物中找到一种食材。3. 愿意用短句介绍一个发现或选择靠近一小步。"
           : "活动目标：1. 能模仿一个一日生活常规动作。2. 能通过图卡或红绿牌判断一种做法是否合适。3. 能把洗手、喝水、如厕、整理、排队或文明进餐中的一个步骤迁移到生活环节。",
@@ -278,12 +292,18 @@ function buildTeacherFallback(task: string, userInput = "") {
         isFood
           ? "活动流程：导入 2 分钟，用闽食小列车口令进站；感知/操作 6 分钟，幼儿看图找美食和食材卡；互动表达 5 分钟，请幼儿做小小美食播报员；生活迁移 3 分钟，选择回家介绍的一种美食；收束 2 分钟，用贴纸肯定具体发现。"
           : "活动流程：导入 2 分钟，用幼习宝一日常规口令热身；感知/操作 6 分钟，幼儿模仿洗手、喝水、如厕表达、整理归位、排队等待或文明进餐动作；互动表达 5 分钟，用红绿牌判断行为并说出替代做法；生活迁移 3 分钟，说说今天在哪个生活环节可以做一步；收束 2 分钟，肯定一个具体常规进步。",
+        isFood
+          ? "儿歌/口令：闽食小列车，慢慢进小站，先看食材卡，再说小发现。"
+          : "儿歌/口令：小水杯，双手拿；小手洗，泡泡花；小队伍，排整齐。",
+        isFood
+          ? "教师引导语：我们先认识泉州美食的名字和食材，愿意靠近一点点就值得记录。"
+          : "教师引导语：老师看到你正在练一个生活小步骤，先做一小步也很棒。",
         "教师提问：你看到了什么？下一步可以怎么做？你愿意试哪一小步？",
         "观察要点：是否能参与操作；是否能说出一个可观察发现；是否愿意尝试或模仿目标动作。",
         isFood
           ? "家园延伸：回家完成睡前美食小回顾，说一种今天认识的美食、一个颜色或食材，以及明天愿意靠近哪一小步。"
           : "家园延伸：回家只选一个小步骤，如饭前洗手、慢慢喝水、整理玩具、餐后整理或睡前共读 5 分钟，并请家长记录一句观察。",
-        `注意事项：${ageFocus} 不考试、不背诵、不要求全部幼儿同一速度完成。`,
+        `注意事项：${ageFocus} 活动目标写成可观察行为，不考试、不背诵、不要求全部幼儿同一速度完成。`,
       ].join("\n")
     : isStory
       ? "有一颗小星星来到教室，它想请小朋友帮忙完成一个小任务：先看一看图片，再说一说自己的发现，最后一起试一试。"
@@ -324,7 +344,7 @@ export async function POST(request: Request) {
   const storyType = body.storyType === "pictureBook" ? "pictureBook" : "chat";
   const userInput = normalizePlainText(
     body.userInput,
-    mode === "teacher" ? "请生成适合幼儿园老师使用的故事或活动课程方案。" : "陪我继续故事吧",
+    mode === "teacher" ? "请生成适合幼儿园老师使用的跟进建议、课堂活动、家园同步话术或鼓励语。" : "陪我继续故事吧",
     mode === "teacher" ? teacherInputMaxLength : childInputMaxLength,
   );
   const teacherTask = normalizePlainText(body.teacherTask, "课堂引导语", teacherTaskMaxLength);
@@ -352,7 +372,7 @@ export async function POST(request: Request) {
   const systemPrompt =
     mode === "teacher"
       ? [
-          "你是一名面向中国幼儿园老师的备课助手。",
+          "你是一名面向中国幼儿园老师的 AI 跟进助手。",
           "你需要生成简洁、温暖、正向、适合 3-6 岁幼儿园真实活动使用的中文内容。",
           "必须符合 3-6 岁幼儿认知特点，多用游戏、故事、图片、动作、操作材料和生活情境。",
           "少讲大道理，少抽象概念，不进行知识灌输。",
@@ -361,15 +381,17 @@ export async function POST(request: Request) {
           "每个活动环节不宜过长，教师提问要短、具体、幼儿能回答。",
           "活动流程必须包含：导入、感知/操作、互动表达、生活迁移、收束。",
           "按年龄差异处理：小班以模仿、感知、短句回应、动作游戏为主；中班加入简单排序、比较、表达原因；大班加入合作、简单记录、规则意识和迁移表达。",
+          "活动设计需参考《3-6岁儿童学习与发展指南》和《幼儿园教育指导纲要》：小班集中活动建议 10-15 分钟，中班 15-20 分钟，大班 20-30 分钟。",
           theme === "food"
             ? "闽食主题要围绕泉州本地食育：认识名称、观察食材和外形、温和接受陌生食物、家园共育介绍一道家乡美食；可生成闽食小列车站点口令、美食猜猜乐线索、小小闽食播报员介绍词、泉州小厨房动作口令、区域活动步骤、家庭延续小任务和温和表扬语，不要只写进食问题处理。"
-          : "幼习宝主题要围绕幼儿一日生活常规和进餐习惯，重点是喝水、洗手、如厕、整理、排队、文明进餐、好习惯红绿牌和少量阅读习惯延伸；可生成 AI 正向提醒口令、文明进餐操口令、红绿牌题目、家长同步话术、表扬语和成效观察线索。",
+          : "幼习宝主题要围绕幼儿一日生活常规和进餐习惯，重点是喝水、洗手、如厕、整理、排队、文明进餐、好习惯红绿牌和习惯故事小剧场；可生成 AI 正向提醒口令、文明进餐操口令、红绿牌题目、听故事做任务问题、家长同步话术、表扬语和成效观察线索。",
           "如果输入包含幼儿互动记录、gameKey、选择记录或家庭反馈，请先提炼观察线索，再给出后续活动、鼓励语、家庭同步建议和一个家庭小任务。",
           "可识别的互动类型包括 readingCheckin、habitTrafficLight、mealManners、foodTrain、foodGuess、foodObserve、foodPreference、foodReporter、foodKitchen、mealTray、peerEncourage、habitJudge。habitJudge、mealTray、peerEncourage 只作为历史记录复习；当前闽食主线应转化为闽食小小播报员或泉州小厨房。",
           "禁止强迫孩子吃完、用“不挑食”压孩子、负面评价孩子、小学化营养知识灌输或复杂说教。",
+          "输出要结构清晰，至少包含步骤、儿歌/口令、教师引导语和家园任务；闽食内容要贴合泉州本土文化和真实食谱。",
           "请严格返回 JSON，格式如下：",
           '{"title":"", "content":"", "tips":["", "", ""]}',
-          "要求：如果是活动课程方案，content 必须按以下小标题分行输出：活动名称、适用年龄、活动时长、活动目标、准备材料、活动流程、教师提问、观察要点、家园延伸、注意事项。",
+          "要求：如果是活动课程方案，content 必须按以下小标题分行输出：活动名称、适用年龄、活动时长、活动目标、准备材料、活动流程、儿歌/口令、教师引导语、教师提问、观察要点、家园延伸、注意事项。",
           "content 在 780 字以内；tips 恰好 3 条，每条不超过 18 字，必须是老师可执行提醒。",
         ].join("\n")
       : storyType === "pictureBook"
@@ -381,11 +403,11 @@ export async function POST(request: Request) {
             theme === "food"
               ? "故事要融入泉州本地美食探索，可轮换海蛎煎、面线糊、土笋冻、闽南肉粽、润饼菜、石花膏、炸醋肉、崇武鱼卷；可出现闽食小列车、美食猜猜乐、美食宝箱、小小播报员和泉州小厨房；重点是认名字、找食材、听小故事、说颜色形状、播报介绍和参与制作小步骤。"
               : "故事要围绕一日生活常规和进餐习惯，可出现喝水、洗手、如厕表达、整理归位、排队等待、正确坐姿、轻声进餐、细嚼慢咽、按需取餐、珍惜粮食和餐后整理；阅读只作为习惯延伸，不要压过常规养成主线。",
-            "故事结尾要自然引出一个阅读打卡问题，例如听到了谁、看到了什么、喜欢哪里或图书放哪里。",
+            "故事结尾要自然引出一个听故事做任务问题，例如故事里做了什么好习惯、我也可以做哪一步、图书或物品放回哪里。",
             "语言要短句、温柔、有画面感，不批评、不吓唬、不小学化。",
             "请严格返回 JSON，格式如下：",
             '{"reply":"", "choices":["", "", ""], "progressSticker":""}',
-            "要求：reply 是完整绘本故事，160-240 字；choices 恰好 3 条，每条不超过 10 个字；progressSticker 填“绘本倾听贴纸”。",
+            "要求：reply 是完整习惯短故事，160-240 字；choices 恰好 3 条，每条不超过 10 个字，并且像答案卡一样能被孩子点击；progressSticker 填“故事小耳朵”。",
           ].join("\n")
         : [
           "你是“幼芽成长智伴”的幼习宝教育智能体儿童互动伙伴。",

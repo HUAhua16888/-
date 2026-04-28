@@ -1,23 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { findChildIdentitySuggestions, formatChildLabel } from "@/lib/child-identity";
 import {
   childRosterStorageKey,
-  createEmptyGrowthArchive,
-  getBadgeLevelSummary,
-  growthArchiveStorageKey,
   parseChildRoster,
-  parseGrowthArchive,
-  selectedChildStorageKey,
-  type BadgeRecord,
   type ChildProfile,
-  type FoodPreferenceRecord,
-  type GrowthArchive,
-  type MiniGameRecord,
 } from "@/lib/growth-archive";
 import { parentHomeTaskCards } from "@/lib/site-data";
 import {
@@ -38,6 +28,39 @@ type ParentPortalProps = {
 };
 
 type ParentHomeTaskCard = (typeof parentHomeTaskCards)[number];
+type ParentAccessState = {
+  childId: string;
+  consentAt: string;
+};
+
+const parentAccessStorageKey = "tongqu-growth-web-parent-access";
+const familyPlateActionSteps = [
+  "愿意尝试一口",
+  "今天吃完自己的饭菜",
+  "尝试一种正在认识的食物",
+  "餐后整理碗筷",
+];
+
+function parseParentAccessState(raw: string | null): ParentAccessState | null {
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const value = JSON.parse(raw) as Partial<ParentAccessState>;
+
+    if (typeof value.childId !== "string" || !value.childId.trim()) {
+      return null;
+    }
+
+    return {
+      childId: value.childId.trim(),
+      consentAt: typeof value.consentAt === "string" ? value.consentAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
 
 function formatRecordTime(value: string) {
   const date = new Date(value);
@@ -52,193 +75,6 @@ function formatRecordTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function getChildBadges(archive: GrowthArchive, child: ChildProfile | null) {
-  return archive.badgeRecords.filter((record) =>
-    child ? record.childId === child.id : false,
-  );
-}
-
-function getUniqueBadgeCards(records: BadgeRecord[]) {
-  const badgeMap = new Map<string, BadgeRecord>();
-
-  for (const record of records) {
-    const current = badgeMap.get(record.name);
-
-    if (!current || new Date(record.earnedAt).getTime() > new Date(current.earnedAt).getTime()) {
-      badgeMap.set(record.name, record);
-    }
-  }
-
-  return Array.from(badgeMap.values()).sort(
-    (left, right) => new Date(right.earnedAt).getTime() - new Date(left.earnedAt).getTime(),
-  );
-}
-
-function getBadgeVisual(record: BadgeRecord) {
-  const name = record.name;
-
-  if (/洗手|清洁|泡泡|小手/.test(name)) {
-    return {
-      icon: "🫧",
-      label: "清洁习惯",
-      description: "能跟着步骤完成小手清洁。",
-      tone: "bg-cyan-50 text-cyan-900",
-      iconTone: "bg-cyan-100",
-    };
-  }
-
-  if (/阅读|故事|小耳朵|书虫|图书/.test(name)) {
-    return {
-      icon: "📚",
-      label: "阅读表达",
-      description: "愿意听故事、说画面，并把图书放回原位。",
-      tone: "bg-violet-50 text-violet-900",
-      iconTone: "bg-violet-100",
-    };
-  }
-
-  if (/安全|判断|交通|防火|如厕/.test(name)) {
-    return {
-      icon: "🛡️",
-      label: "安全判断",
-      description: "能看图说出正确做法。",
-      tone: "bg-blue-50 text-blue-900",
-      iconTone: "bg-blue-100",
-    };
-  }
-
-  if (/排队|整理|习惯|路线|掌握|文明进餐|粮食|餐后/.test(name)) {
-    return {
-      icon: "🌟",
-      label: "生活习惯",
-      description: "能练习一日生活好习惯。",
-      tone: "bg-emerald-50 text-emerald-900",
-      iconTone: "bg-emerald-100",
-    };
-  }
-
-  if (/饮食|闽食|餐|食|海蛎|紫菜|尝|观察|播报|厨师|主厨|寻宝/.test(name)) {
-    return {
-      icon: "🥣",
-      label: "闽食探索",
-      description: "愿意认识食材并尝试表达。",
-      tone: "bg-amber-50 text-amber-900",
-      iconTone: "bg-amber-100",
-    };
-  }
-
-  return {
-    icon: record.themeId === "food" ? "🥢" : "✨",
-    label: record.themeId === "food" ? "食育成长" : "成长表现",
-    description: "完成一次儿童互动任务。",
-    tone: "bg-slate-50 text-slate-900",
-    iconTone: "bg-white",
-  };
-}
-
-function getMiniGameDisplayName(gameKey: MiniGameRecord["gameKey"]) {
-  const labelMap: Record<MiniGameRecord["gameKey"], string> = {
-    washSteps: "小手清洁任务",
-    queue: "一日好习惯路线",
-    habitJudge: "历史安全判断记录",
-    readingCheckin: "阅读小书虫打卡",
-    kindWords: "闽食三步练习",
-    foodObserve: "泉州美食摊位寻宝",
-    foodClue: "泉州美食线索寻宝",
-    foodTrain: "闽食小列车",
-    foodGuess: "美食猜猜乐",
-    foodPreference: "美食认识观察卡",
-    foodReporter: "闽食小小播报员",
-    foodKitchen: "泉州小厨房",
-    peerEncourage: "历史同伴鼓励记录",
-    mealTray: "历史午餐小餐盘记录",
-    mealManners: "文明进餐操",
-    habitTrafficLight: "好习惯红绿牌",
-  };
-
-  return labelMap[gameKey];
-}
-
-function buildMiniGameAnalysis(records: MiniGameRecord[]) {
-  const habitCount = records.filter((record) => record.themeId === "habit").length;
-  const foodCount = records.filter((record) => record.themeId === "food").length;
-  const gameMap = new Map<
-    MiniGameRecord["gameKey"],
-    {
-      gameKey: MiniGameRecord["gameKey"];
-      themeId: MiniGameRecord["themeId"];
-      count: number;
-      latestAt: string;
-      choices: Map<string, number>;
-    }
-  >();
-
-  for (const record of records) {
-    const current =
-      gameMap.get(record.gameKey) ??
-      {
-        gameKey: record.gameKey,
-        themeId: record.themeId,
-        count: 0,
-        latestAt: record.completedAt,
-        choices: new Map<string, number>(),
-      };
-
-    current.count += 1;
-    current.themeId = record.themeId;
-
-    if (new Date(record.completedAt).getTime() > new Date(current.latestAt).getTime()) {
-      current.latestAt = record.completedAt;
-    }
-
-    for (const item of record.pickedItems) {
-      current.choices.set(item, (current.choices.get(item) ?? 0) + 1);
-    }
-
-    gameMap.set(record.gameKey, current);
-  }
-
-  const rows = Array.from(gameMap.values())
-    .map((item) => ({
-      gameKey: item.gameKey,
-      themeId: item.themeId,
-      name: getMiniGameDisplayName(item.gameKey),
-      count: item.count,
-      latestAt: item.latestAt,
-      topChoices: Array.from(item.choices.entries())
-        .sort((left, right) => right[1] - left[1])
-        .slice(0, 3)
-        .map(([label, count]) => `${label} ${count}次`),
-    }))
-    .sort((left, right) => right.count - left.count);
-
-  const compareText =
-    habitCount === foodCount
-      ? "幼习宝和闽食成长岛参与比较均衡。"
-      : habitCount > foodCount
-        ? "幼习宝打卡更多，可继续补充泉州美食探索、找食材和说发现活动。"
-        : "闽食成长岛打卡更多，可同步巩固洗手、整理、排队等生活习惯。";
-
-  return {
-    habitCount,
-    foodCount,
-    rows,
-    compareText,
-  };
-}
-
-function getChildMiniGames(archive: GrowthArchive, child: ChildProfile | null) {
-  return archive.miniGameRecords.filter((record) =>
-    child ? record.childId === child.id : false,
-  );
-}
-
-function getChildFoodPreferences(archive: GrowthArchive, child: ChildProfile | null) {
-  return archive.foodPreferenceRecords.filter((record) =>
-    child ? record.childId === child.id : false,
-  );
 }
 
 function getChildParentSyncs(records: ParentSyncRecord[], child: ChildProfile | null) {
@@ -262,106 +98,14 @@ function dedupeParentHomeTaskCards(cards: ParentHomeTaskCard[]) {
   });
 }
 
-function buildAiTaskFromMiniGame(record: MiniGameRecord): ParentHomeTaskCard {
-  if (record.gameKey === "readingCheckin") {
-    return {
-      title: "AI亲子共读延续",
-      icon: "📚",
-      tasks: ["睡前共读 5 分钟", "孩子说一个角色", "孩子说一个画面", "看完书放回原位"],
-    };
-  }
-
-  if (record.gameKey === "mealManners" || record.gameKey === "habitTrafficLight") {
-    return {
-      title: "AI进餐好习惯延续",
-      icon: "🥣",
-      tasks: ["饭前洗手", "摆碗筷", "坐好慢慢吃", "餐后整理一个小地方"],
-    };
-  }
-
-  if (record.themeId === "food") {
-    return {
-      title: "AI闽食探索延续",
-      icon: "🥢",
-      tasks: ["说出一种泉州美食", "找一个食材", "看一看不急着吃", "给家人介绍一句"],
-    };
-  }
-
-  return {
-    title: "AI好习惯小任务",
-    icon: "✨",
-    tasks: ["说出一个好习惯", "做一个小动作", "请家长观察一句", "明天告诉老师"],
-  };
-}
-
-function buildAiTaskFromFoodPreference(record: FoodPreferenceRecord): ParentHomeTaskCard {
-  const isSensitiveIngredient = /香菇|小葱|葱|蒜|紫菜/.test(record.foodLabel);
-
-  return {
-    title: isSensitiveIngredient ? `${record.foodLabel}温和观察任务` : `${record.foodLabel}靠近一小步`,
-    icon: isSensitiveIngredient ? "🍄" : "🥢",
-    tasks: [
-      `找一找${record.foodLabel}`,
-      /闻/.test(record.reasonLabel) ? "先闻一闻，不急着吃" : "先看一看，不急着吃",
-      "说出它的名字",
-      record.gentleTryTip || "家长只记录一个小变化",
-    ],
-  };
-}
-
-function buildParentChangeLines(
-  miniGameRecords: MiniGameRecord[],
-  foodPreferenceRecords: FoodPreferenceRecord[],
-) {
-  const foodLines = foodPreferenceRecords.slice(0, 2).map((record) => {
-    const stage = /尝|吃|一点/.test(`${record.reasonLabel}${record.gentleTryTip}`)
-      ? "愿意尝一点"
-      : /闻|香|味/.test(`${record.reasonLabel}${record.gentleTryTip}`)
-        ? "愿意闻一闻"
-        : /说|名字/.test(`${record.reasonLabel}${record.gentleTryTip}`)
-          ? "能说出名字"
-          : "愿意看一看";
-
-    return `${record.foodLabel}：从正在认识，到${stage}。`;
-  });
-  const gameLines = miniGameRecords.slice(0, 4).map((record) => {
-    if (record.gameKey === "readingCheckin") {
-      return "阅读：从愿意听故事，到能说出一个角色或画面。";
-    }
-
-    if (record.gameKey === "washSteps") {
-      return "洗手：从需要提醒，到能记住一个清洁步骤。";
-    }
-
-    if (record.gameKey === "queue") {
-      return "一日常规：从愿意听提示，到能选择喝水、如厕、排队或整理的合适做法。";
-    }
-
-    if (record.gameKey === "mealManners") {
-      return "进餐：从听口令，到能练习扶碗、坐稳和餐后整理。";
-    }
-
-    if (record.gameKey === "habitTrafficLight") {
-      return "习惯判断：从愿意选择，到能说出更合适的做法。";
-    }
-
-    if (record.themeId === "food") {
-      return "闽食探索：从认识名字，到能找食材或说一个发现。";
-    }
-
-    return "成长任务：从愿意参与，到完成一个小步骤。";
-  });
-
-  return Array.from(new Set([...foodLines, ...gameLines])).slice(0, 5);
-}
-
 export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [childRoster, setChildRoster] = useState<ChildProfile[]>([]);
-  const [selectedChildId, setSelectedChildId] = useState(initialChildId ?? "");
-  const [archive, setArchive] = useState<GrowthArchive>(() => createEmptyGrowthArchive());
+  const [selectedChildId, setSelectedChildId] = useState("");
   const [parentSyncRecords, setParentSyncRecords] = useState<ParentSyncRecord[]>([]);
   const [parentFeedbackRecords, setParentFeedbackRecords] = useState<ParentFeedbackRecord[]>([]);
   const [accountText, setAccountText] = useState("");
+  const [bindingCodeText, setBindingCodeText] = useState("");
+  const [privacyConsent, setPrivacyConsent] = useState(false);
   const [feedbackCategory, setFeedbackCategory] = useState<ParentFeedbackCategory>("question");
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackPhoto, setFeedbackPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
@@ -379,19 +123,17 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [homeTaskStatus, setHomeTaskStatus] = useState(
     "先选一张居家任务卡，再选一个今天真的完成的小步骤。",
   );
-  const [status, setStatus] = useState("请输入幼儿姓名或号数，选择幼儿身份后查看对应成长记录。");
+  const [plateActionStep, setPlateActionStep] = useState(familyPlateActionSteps[0]);
+  const [plateActionNote, setPlateActionNote] = useState("");
+  const [plateActionPhoto, setPlateActionPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [plateActionPhotoStatus, setPlateActionPhotoStatus] =
+    useState("可选上传一张餐后整理或尝试小步骤照片，仅保存在这台设备上。");
+  const [plateActionStatus, setPlateActionStatus] =
+    useState("选择一个今天真实发生的小步骤，提交后老师端会看到家庭光盘行动反馈。");
+  const [status, setStatus] = useState("请输入幼儿姓名或号数、家庭绑定码，并勾选同意后查看。");
   const selectedChild = useMemo(
     () => childRoster.find((child) => child.id === selectedChildId) ?? null,
     [childRoster, selectedChildId],
-  );
-  const childBadges = useMemo(() => getChildBadges(archive, selectedChild), [archive, selectedChild]);
-  const childMiniGames = useMemo(
-    () => getChildMiniGames(archive, selectedChild),
-    [archive, selectedChild],
-  );
-  const childFoodPreferences = useMemo(
-    () => getChildFoodPreferences(archive, selectedChild),
-    [archive, selectedChild],
   );
   const childParentSyncs = useMemo(
     () => getChildParentSyncs(parentSyncRecords, selectedChild),
@@ -400,27 +142,22 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const aiHomeTaskCards = useMemo(() => {
     const cards: ParentHomeTaskCard[] = [];
     const latestSync = childParentSyncs[0];
-    const latestFoodPreference = childFoodPreferences[0];
-    const latestMiniGame = childMiniGames[0];
 
     if (latestSync) {
       cards.push({
         title: "AI今日居家小任务",
         icon: latestSync.themeId === "food" ? "🥢" : "✨",
-        tasks: [latestSync.homePractice, "家长写一句观察", "完成后反馈老师"],
+        tasks: [
+          latestSync.homePractice,
+          "回家可以轻轻做一步",
+          "家长写一句观察",
+          "完成后反馈老师",
+        ],
       });
     }
 
-    if (latestFoodPreference) {
-      cards.push(buildAiTaskFromFoodPreference(latestFoodPreference));
-    }
-
-    if (latestMiniGame) {
-      cards.push(buildAiTaskFromMiniGame(latestMiniGame));
-    }
-
     return dedupeParentHomeTaskCards([...cards, ...parentHomeTaskCards]).slice(0, 5);
-  }, [childFoodPreferences, childMiniGames, childParentSyncs]);
+  }, [childParentSyncs]);
   const selectedHomeTask = useMemo(
     () =>
       aiHomeTaskCards.find((card) => card.title === selectedHomeTaskTitle) ??
@@ -439,17 +176,17 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     () => getChildParentFeedbacks(parentFeedbackRecords, selectedChild),
     [parentFeedbackRecords, selectedChild],
   );
-  const uniqueBadgeCards = useMemo(() => getUniqueBadgeCards(childBadges), [childBadges]);
-  const uniqueBadgeCount = selectedChild ? uniqueBadgeCards.length : 0;
-  const badgeLevel = useMemo(
-    () => getBadgeLevelSummary(archive, selectedChild?.id),
-    [archive, selectedChild],
-  );
-  const miniGameTotal = childMiniGames.length;
-  const miniGameAnalysis = useMemo(() => buildMiniGameAnalysis(childMiniGames), [childMiniGames]);
   const parentChangeLines = useMemo(
-    () => buildParentChangeLines(childMiniGames, childFoodPreferences),
-    [childFoodPreferences, childMiniGames],
+    () =>
+      childParentSyncs.slice(0, 5).map((record) =>
+        [
+          `${record.childName}：${record.summary}`,
+          record.homePractice ? `回家可以轻轻做一步：${record.homePractice}` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      ),
+    [childParentSyncs],
   );
 
   useEffect(() => {
@@ -460,20 +197,23 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     const restoreHandle = window.setTimeout(() => {
       const roster = parseChildRoster(window.localStorage.getItem(childRosterStorageKey));
       const routeChild = initialChildId ? decodeURIComponent(initialChildId) : "";
-      const matched = routeChild ? roster.find((child) => child.id === routeChild) ?? null : null;
+      const savedAccess = parseParentAccessState(window.localStorage.getItem(parentAccessStorageKey));
+      const accessChild =
+        savedAccess && (!routeChild || routeChild === savedAccess.childId)
+          ? roster.find((child) => child.id === savedAccess.childId) ?? null
+          : null;
 
       setChildRoster(roster);
-      setSelectedChildId(matched?.id ?? "");
-      setArchive(parseGrowthArchive(window.localStorage.getItem(growthArchiveStorageKey)));
+      setSelectedChildId(accessChild?.id ?? "");
       setParentSyncRecords(parseParentSyncRecords(window.localStorage.getItem(parentSyncStorageKey)));
       setParentFeedbackRecords(
         parseParentFeedbackRecords(window.localStorage.getItem(parentFeedbackStorageKey)),
       );
       setStatus(
-        matched
-            ? `${formatChildLabel(matched)} 的成长记录已打开。`
+        accessChild
+            ? `${formatChildLabel(accessChild)} 的家庭延续页已打开。`
             : roster.length > 0
-              ? "请输入幼儿姓名或号数，选择幼儿身份后查看对应成长记录。"
+              ? "请输入幼儿姓名或号数、家庭绑定码，并勾选同意后查看。"
               : "还没有幼儿名单，请联系老师在教师工作台里添加花名册。",
       );
     }, 0);
@@ -481,20 +221,48 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     return () => window.clearTimeout(restoreHandle);
   }, [initialChildId]);
 
-  function chooseChild(child: ChildProfile) {
+  function authorizeChild(child: ChildProfile) {
     setSelectedChildId(child.id);
-    setStatus(`${formatChildLabel(child)} 的成长记录已打开。`);
+    setStatus(`${formatChildLabel(child)} 的家庭延续页已打开。`);
 
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(selectedChildStorageKey, child.id);
+      window.localStorage.setItem(
+        parentAccessStorageKey,
+        JSON.stringify({
+          childId: child.id,
+          consentAt: new Date().toISOString(),
+        } satisfies ParentAccessState),
+      );
+    }
+  }
+
+  function logoutParentAccess() {
+    setSelectedChildId("");
+    setBindingCodeText("");
+    setPrivacyConsent(false);
+    setStatus("已退出家庭延续页。再次查看时，请重新输入家庭绑定码。");
+
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(parentAccessStorageKey);
     }
   }
 
   function loginByAccount() {
     const text = accountText.trim();
+    const code = bindingCodeText.trim().toUpperCase();
 
     if (!text) {
       setStatus("请先输入幼儿姓名或号数。");
+      return;
+    }
+
+    if (!code) {
+      setStatus("请同时输入老师提供的家庭绑定码。");
+      return;
+    }
+
+    if (!privacyConsent) {
+      setStatus("请先勾选同意本班家园共育反馈用途，再进入家庭延续页。");
       return;
     }
 
@@ -505,7 +273,25 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       return;
     }
 
-    chooseChild(suggestions[0]);
+    if (suggestions.length > 1) {
+      setStatus("找到多个可能的小名牌，请把姓名或号数说得更完整一点。");
+      return;
+    }
+
+    const child = suggestions[0];
+    const savedCode = child.familyBindingCode?.trim().toUpperCase();
+
+    if (!savedCode) {
+      setStatus("这个幼儿还没有家庭绑定码，请联系老师在教师工作台花名册里生成。");
+      return;
+    }
+
+    if (code !== savedCode) {
+      setStatus("家庭绑定码不正确，请核对老师发给家长的 6 位绑定码。");
+      return;
+    }
+
+    authorizeChild(child);
   }
 
   function submitParentFeedback() {
@@ -635,6 +421,84 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     setHomeTaskStatus("已提交给老师。老师可以在工作台里看到这次居家延续记录。");
   }
 
+  function choosePlateActionPhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setPlateActionPhotoStatus("请选择图片文件。");
+      return;
+    }
+
+    if (file.size > 1_500_000) {
+      setPlateActionPhotoStatus("图片有点大，请选择 1.5MB 以内的照片。");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+
+      if (!dataUrl.startsWith("data:image/")) {
+        setPlateActionPhotoStatus("照片读取失败，请重新选择。");
+        return;
+      }
+
+      setPlateActionPhoto({ name: file.name, dataUrl });
+      setPlateActionPhotoStatus("照片已添加，提交后老师端可以查看。");
+    };
+    reader.onerror = () => setPlateActionPhotoStatus("照片读取失败，请重新选择。");
+    reader.readAsDataURL(file);
+  }
+
+  function submitPlateAction() {
+    if (!selectedChild) {
+      setPlateActionStatus("请先完成家庭绑定，再提交家庭光盘行动。");
+      return;
+    }
+
+    const note = plateActionNote.trim().slice(0, 180);
+    const content = [
+      `家庭光盘行动：${plateActionStep}`,
+      note ? `家长观察：${note}` : "家长观察：孩子完成了一个进餐或餐后整理小步骤。",
+    ].join("。");
+    const record: ParentFeedbackRecord = {
+      id: `plate-action-${Date.now()}-${selectedChild.id}`,
+      childId: selectedChild.id,
+      childName: selectedChild.name,
+      category: "home-observation",
+      content,
+      createdAt: new Date().toISOString(),
+      status: "new",
+      ...(plateActionPhoto
+        ? {
+            attachmentName: plateActionPhoto.name,
+            attachmentDataUrl: plateActionPhoto.dataUrl,
+          }
+        : {}),
+    };
+
+    setParentFeedbackRecords((current) => {
+      const nextRecords = addParentFeedbackRecord(current, record);
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(parentFeedbackStorageKey, JSON.stringify(nextRecords));
+      }
+
+      return nextRecords;
+    });
+    setPlateActionNote("");
+    setPlateActionPhoto(null);
+    setPlateActionPhotoStatus("可选上传一张餐后整理或尝试小步骤照片，仅保存在这台设备上。");
+    setFeedbackCategory("home-observation");
+    setFeedbackStatus("家庭光盘行动已同步到教师工作台反馈列表。");
+    setPlateActionStatus("已提交给老师。这里只记录个人成长小步骤，不做排名。");
+  }
+
   if (!selectedChild) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 md:px-8">
@@ -644,13 +508,14 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             查看孩子成长记录
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            家长通过幼儿身份查看对应记录。这里显示该幼儿在这台设备上的成长记录、老师建议和家长反馈。
-            正式使用时可升级为家庭查看码。
+            本平台仅用于班级常规养成与家园共育记录。家长仅能通过幼儿姓名或号数和家庭绑定码查看自己孩子的信息，照片/视频需经家长同意后使用。
+            儿童端不设账号，只用小名牌/号数互动；语音只保存识别后的文字，不保存原始语音；照片/视频默认本机预览，不上传云端。
+            当前为班级试用模式，正式使用时需升级为后端账号、加密存储、角色权限和审计机制。
           </p>
 
           <div className="mt-7 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
-            <p className="text-sm font-semibold text-slate-600">幼儿身份</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <p className="text-sm font-semibold text-slate-600">家庭绑定</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <input
                 value={accountText}
                 onChange={(event) => setAccountText(event.target.value)}
@@ -662,33 +527,42 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 placeholder="输入姓名或号数，如 小安 / 3号"
                 className="rounded-[1.2rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-400 focus:bg-white"
               />
+              <input
+                value={bindingCodeText}
+                onChange={(event) => setBindingCodeText(event.target.value.toUpperCase())}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    loginByAccount();
+                  }
+                }}
+                placeholder="输入家庭绑定码，如 K7A3Q9"
+                className="rounded-[1.2rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold tracking-[0.12em] text-slate-800 outline-none transition focus:border-amber-400 focus:bg-white"
+              />
+            </div>
+            <label className="mt-4 flex items-start gap-3 rounded-[1.2rem] bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-950">
+              <input
+                checked={privacyConsent}
+                onChange={(event) => setPrivacyConsent(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-amber-300"
+                type="checkbox"
+              />
+              <span>我同意老师将孩子的成长记录用于本班家园共育反馈。</span>
+            </label>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 onClick={loginByAccount}
                 className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
                 type="button"
               >
-                查看记录
+                进入家庭延续页
               </button>
-            </div>
-            <p className="mt-3 text-sm leading-7 font-semibold text-amber-800">{status}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {childRoster.length > 0 ? (
-                childRoster.map((child) => (
-                  <Link
-                    key={child.id}
-                    href={`/parents/${encodeURIComponent(child.id)}`}
-                    onClick={() => chooseChild(child)}
-                    className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
-                  >
-                    {formatChildLabel(child)}
-                  </Link>
-                ))
-              ) : (
+              {childRoster.length === 0 ? (
                 <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600">
                   暂无幼儿身份，请联系老师添加花名册
                 </span>
-              )}
+              ) : null}
             </div>
+            <p className="mt-3 text-sm leading-7 font-semibold text-amber-800">{status}</p>
           </div>
         </section>
       </main>
@@ -705,155 +579,34 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             <span className="block text-2xl text-slate-700 md:text-3xl">看老师建议，回家做一小步</span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            家庭延续页通过幼儿身份查看对应记录，只显示当前幼儿的信息。家长先看老师今天观察到了什么，再完成一个小步骤并反馈观察。记录、反馈和回复保存在这台设备上。
-            正式使用时可升级为家庭查看码。
+            家庭延续页只显示当前已绑定幼儿的信息。家长先看老师今天观察到了什么，再完成一个小步骤并反馈观察。记录、反馈和回复保存在这台设备上。
+            儿童端不设账号，家长端通过家庭绑定码查看自己孩子；语音只保存识别后的文字，照片/视频默认本机预览，不上传云端。
+            当前为班级试用模式，正式使用时需升级为后端账号、加密存储、角色权限和审计机制。
           </p>
 
           <div className="mt-7 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
-            <p className="text-sm font-semibold text-slate-600">幼儿身份</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-              <input
-                value={accountText}
-                onChange={(event) => setAccountText(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    loginByAccount();
-                  }
-                }}
-                placeholder="输入姓名或号数，如 小安 / 3号"
-                className="rounded-[1.2rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-400 focus:bg-white"
-              />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-600">当前家庭绑定</p>
+                <p className="mt-1 text-xl font-semibold text-slate-950">
+                  {formatChildLabel(selectedChild)}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  家长端不显示班级汇总和其他幼儿姓名；照片/视频只在同意后用于本班反馈。
+                </p>
+              </div>
               <button
-                onClick={loginByAccount}
-                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                onClick={logoutParentAccess}
+                className="rounded-full bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
+                type="button"
               >
-                查看记录
+                退出并重新绑定
               </button>
             </div>
             <p className="mt-3 text-sm leading-7 font-semibold text-amber-800">{status}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {childRoster.length > 0 ? (
-                childRoster.map((child) => (
-                  <Link
-                    key={child.id}
-                    href={`/parents/${encodeURIComponent(child.id)}`}
-                    onClick={() => chooseChild(child)}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${
-                      selectedChild?.id === child.id
-                        ? "bg-amber-600 text-white"
-                        : "bg-slate-100 text-slate-700"
-                    }`}
-                  >
-                    {formatChildLabel(child)}
-                  </Link>
-                ))
-              ) : (
-                <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600">
-                  暂无幼儿身份，请联系老师添加花名册
-                </span>
-              )}
-            </div>
           </div>
         </div>
 
-        <div className="hidden">
-          <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-cyan-700">家庭延续首页</p>
-                <h2 className="mt-1 text-3xl font-semibold text-slate-900">
-                  {selectedChild ? `${selectedChild.name} 的成长记录册` : "请选择幼儿身份"}
-                </h2>
-              </div>
-              {selectedChild ? (
-                <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900">
-                  {formatChildLabel(selectedChild)}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[1.5rem] bg-cyan-50 p-4">
-                <p className="text-xs font-semibold text-cyan-800">获得勋章</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-900">{uniqueBadgeCount}</p>
-              </div>
-              <div className="rounded-[1.5rem] bg-amber-50 p-4">
-                <p className="text-xs font-semibold text-amber-800">互动记录</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-900">{miniGameTotal}</p>
-              </div>
-              <div className="rounded-[1.5rem] bg-emerald-50 p-4">
-                <p className="text-xs font-semibold text-emerald-800">老师同步</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-900">{childParentSyncs.length}</p>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-[1.8rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_58%,#e6fbfa_100%)] p-5">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-amber-700">奖章升级</p>
-                  <h3 className="mt-1 text-2xl font-semibold text-slate-900">{badgeLevel.level}</h3>
-                  <p className="mt-2 text-sm leading-7 text-slate-600">{badgeLevel.description}</p>
-                </div>
-                <div className="rounded-[1.4rem] bg-white/85 px-5 py-4 text-center shadow-sm">
-                  <p className="text-xs font-semibold text-slate-500">距离下一等级</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900">
-                    {badgeLevel.remainingToNext > 0 ? `${badgeLevel.remainingToNext} 枚` : "已达成"}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {badgeLevel.latestBadges.length > 0 ? (
-                  badgeLevel.latestBadges.map((badge) => (
-                    <span
-                      key={`${badge.name}-${badge.earnedAt}`}
-                      className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"
-                    >
-                      {badge.name}
-                    </span>
-                  ))
-                ) : (
-                  <span className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-500 shadow-sm">
-                    完成一个小任务，就会开始点亮奖章。
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-[1.8rem] bg-slate-50 p-5">
-              <p className="font-semibold text-slate-900">已获得勋章</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {uniqueBadgeCards.length > 0 ? (
-                  uniqueBadgeCards.slice(0, 12).map((badge) => {
-                    const visual = getBadgeVisual(badge);
-
-                    return (
-                    <article
-                      key={`${badge.earnedAt}-${badge.name}`}
-                      className={`flex items-center gap-3 rounded-[1.4rem] px-4 py-3 shadow-sm ${visual.tone}`}
-                    >
-                      <div
-                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.2rem] text-3xl ${visual.iconTone}`}
-                        aria-hidden="true"
-                      >
-                        {visual.icon}
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold opacity-75">{visual.label}</p>
-                        <h3 className="mt-1 text-base font-semibold">{badge.name}</h3>
-                        <p className="mt-1 text-xs leading-5 opacity-80">{visual.description}</p>
-                      </div>
-                    </article>
-                    );
-                  })
-                ) : (
-                  <span className="text-sm leading-7 text-slate-500">
-                    暂无绑定到该幼儿身份的勋章记录。
-                  </span>
-                )}
-              </div>
-            </div>
-          </section>
-        </div>
       </section>
 
       <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f5fffe_0%,#ffffff_55%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
@@ -905,7 +658,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             <p className="text-sm font-semibold text-amber-700">AI 生成的居家小任务</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">今天回家接着轻轻做</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              优先根据老师同步和孩子当天记录生成。家长只选一个小步骤，记录孩子愿意认识、愿意靠近和愿意整理的过程。
+              优先根据老师确认后的同步建议生成。家长只选一个小步骤，记录孩子愿意认识、愿意靠近和愿意整理的过程。
             </p>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
@@ -1007,6 +760,105 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         ) : null}
       </section>
 
+      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff9ed_0%,#ffffff_54%,#f0fdf4_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-emerald-700">家庭光盘行动</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">只记录孩子的一小步</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              不是排行，也不是要求一次吃完。家长选择今天真实发生的一步，写一句观察，老师端会收到这条居家任务反馈。
+            </p>
+          </div>
+          <button
+            onClick={submitPlateAction}
+            className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            type="button"
+          >
+            提交光盘行动
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+            <p className="text-sm font-semibold text-emerald-700">选择今天完成的小步骤</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {familyPlateActionSteps.map((step) => (
+                <button
+                  key={step}
+                  onClick={() => {
+                    setPlateActionStep(step);
+                    setPlateActionStatus(`已选择“${step}”，再写一句观察就可以提交。`);
+                  }}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                    plateActionStep === step
+                      ? "bg-emerald-500 text-white"
+                      : "bg-emerald-50 text-emerald-900"
+                  }`}
+                  type="button"
+                >
+                  {step}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={plateActionNote}
+              onChange={(event) => setPlateActionNote(event.target.value)}
+              maxLength={180}
+              placeholder="家长一句观察：孩子今天愿意尝试一口青菜，餐后也帮忙把碗放好。"
+              className="mt-4 min-h-24 w-full rounded-[1.3rem] border border-emerald-100 bg-emerald-50/50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition focus:border-emerald-300 focus:bg-white"
+            />
+            <p className="mt-3 rounded-[1.2rem] bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+              {plateActionStatus}
+            </p>
+          </div>
+
+          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">可选照片</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{plateActionPhotoStatus}</p>
+              </div>
+              <label className="cursor-pointer rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 transition hover:-translate-y-0.5">
+                选择照片
+                <input
+                  accept="image/*"
+                  className="hidden"
+                  onChange={choosePlateActionPhoto}
+                  type="file"
+                />
+              </label>
+            </div>
+            {plateActionPhoto ? (
+              <div className="mt-4 flex items-center gap-3">
+                <div
+                  aria-label="家庭光盘行动照片预览"
+                  className="h-24 w-24 rounded-[1rem] bg-cover bg-center shadow-sm"
+                  role="img"
+                  style={{ backgroundImage: `url(${plateActionPhoto.dataUrl})` }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-800">{plateActionPhoto.name}</p>
+                  <button
+                    className="mt-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
+                    onClick={() => {
+                      setPlateActionPhoto(null);
+                      setPlateActionPhotoStatus("可选上传一张餐后整理或尝试小步骤照片，仅保存在这台设备上。");
+                    }}
+                    type="button"
+                  >
+                    移除照片
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-[1.2rem] bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-600">
+                照片不是必须。平台当前只保留本机图片预览，不默认上传云端。
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fff9_0%,#ffffff_52%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -1035,105 +887,6 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               暂无变化记录。孩子完成儿童互动，或老师同步家庭任务后，这里会逐步出现变化线索。
             </p>
           )}
-        </div>
-      </section>
-
-      <section className="hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-cyan-700">成效记录</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">孩子参与情况</h2>
-            <p className="mt-2 text-sm leading-7 text-slate-600">
-              汇总当前幼儿在两个主题里的打卡次数、常见选择和最近完成时间，方便家长看见孩子在哪些方面练得更多。
-            </p>
-          </div>
-          <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900">
-            共 {miniGameTotal} 次
-          </span>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-          <div className="rounded-[1.8rem] bg-slate-50 p-5">
-            <p className="text-sm font-semibold text-slate-700">主题对比</p>
-            <div className="mt-4 grid gap-3">
-              <div className="rounded-[1.3rem] bg-cyan-50 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-cyan-900">幼习宝</span>
-                  <span className="text-xl font-semibold text-slate-950">
-                    {miniGameAnalysis.habitCount}
-                  </span>
-                </div>
-                <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
-                  <div
-                    className="h-full rounded-full bg-cyan-300"
-                    style={{
-                      width:
-                        miniGameTotal > 0
-                          ? `${Math.max(10, (miniGameAnalysis.habitCount / miniGameTotal) * 100)}%`
-                          : "0%",
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="rounded-[1.3rem] bg-amber-50 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-amber-900">闽食成长岛</span>
-                  <span className="text-xl font-semibold text-slate-950">
-                    {miniGameAnalysis.foodCount}
-                  </span>
-                </div>
-                <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
-                  <div
-                    className="h-full rounded-full bg-amber-300"
-                    style={{
-                      width:
-                        miniGameTotal > 0
-                          ? `${Math.max(10, (miniGameAnalysis.foodCount / miniGameTotal) * 100)}%`
-                          : "0%",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-            <p className="mt-4 rounded-[1.2rem] bg-white px-4 py-3 text-sm leading-7 text-slate-700">
-              {miniGameTotal > 0
-                ? miniGameAnalysis.compareText
-                : "暂无打卡数据，完成儿童互动后这里会自动形成对比。"}
-            </p>
-          </div>
-
-          <div className="rounded-[1.8rem] bg-slate-50 p-5">
-            <p className="text-sm font-semibold text-slate-700">项目汇总</p>
-            <div className="mt-4 grid gap-3">
-              {miniGameAnalysis.rows.length > 0 ? (
-                miniGameAnalysis.rows.slice(0, 6).map((row) => (
-                  <article key={row.gameKey} className="rounded-[1.3rem] bg-white px-4 py-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900">{row.name}</p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">
-                          {row.themeId === "habit" ? "幼习宝" : "闽食成长岛"} · 最近{" "}
-                          {formatRecordTime(row.latestAt)}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                        {row.count} 次
-                      </span>
-                    </div>
-                    {row.topChoices.length > 0 ? (
-                      <p className="mt-2 text-sm leading-7 text-slate-600">
-                        高频选择：{row.topChoices.join("、")}
-                      </p>
-                    ) : null}
-                  </article>
-                ))
-              ) : (
-                <p className="rounded-[1.3rem] bg-white px-4 py-5 text-sm leading-7 text-slate-500">
-                  暂无绑定到该幼儿身份的游戏打卡记录。
-                </p>
-              )}
-            </div>
-          </div>
         </div>
       </section>
 
@@ -1294,61 +1047,6 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         </div>
       </section>
 
-      <section className="hidden">
-        <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-cyan-700">互动记录</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">互动情况</h2>
-          <div className="mt-5 grid gap-3">
-            {childMiniGames.length > 0 ? (
-              childMiniGames.slice(0, 8).map((record) => (
-                <div
-                  key={`${record.completedAt}-${record.gameKey}`}
-                  className="rounded-[1.5rem] bg-slate-50 px-4 py-3"
-                >
-                  <p className="font-semibold text-slate-900">{record.badgeName}</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    {record.themeId === "habit" ? "幼习宝" : "闽食成长岛"} ·{" "}
-                    {formatRecordTime(record.completedAt)}
-                  </p>
-                  {record.pickedItems.length > 0 ? (
-                    <p className="mt-2 text-sm leading-7 text-slate-600">
-                      记录：{record.pickedItems.join("、")}
-                    </p>
-                  ) : null}
-                </div>
-              ))
-            ) : (
-              <p className="rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
-                暂无绑定到该幼儿身份的互动记录。
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-orange-700">闽食观察</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">美食认识记录</h2>
-          <div className="mt-5 grid gap-3">
-            {childFoodPreferences.length > 0 ? (
-              childFoodPreferences.slice(0, 6).map((record) => (
-                <div
-                  key={`${record.recordedAt}-${record.foodLabel}`}
-                  className="rounded-[1.5rem] bg-orange-50 px-4 py-3"
-                >
-                  <p className="font-semibold text-slate-900">{record.foodLabel}</p>
-                  <p className="mt-1 text-sm leading-7 text-slate-600">
-                    原因：{record.reasonLabel}。{record.gentleTryTip}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-[1.5rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
-                暂无绑定到该幼儿身份的美食认识观察。
-              </p>
-            )}
-          </div>
-        </div>
-      </section>
     </main>
   );
 }

@@ -37,6 +37,7 @@ export function ChildIdentityGateway({
   const [childRoster, setChildRoster] = useState<ChildProfile[]>([]);
   const [selectedChildId, setSelectedChildId] = useState(initialChildId ?? "");
   const [voiceSuggestions, setVoiceSuggestions] = useState<ChildProfile[]>([]);
+  const [identityInput, setIdentityInput] = useState("");
   const [status, setStatus] = useState("先找到自己的小名牌，再去玩今天的成长任务。");
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -61,8 +62,8 @@ export function ChildIdentityGateway({
         nextChild
           ? `${formatChildLabel(nextChild)} 的小名牌拿好啦，可以选择今天想去哪里玩。`
           : roster.length > 0
-            ? "点一点自己的名字，也可以按按钮说出名字或号数。"
-            : "还没有看到小朋友名单，请老师先在教师工作台里添加花名册。",
+            ? "可以说出或输入自己的名字、号数，我来帮你找小名牌。"
+            : "请老师先在教师端添加幼儿姓名和号数。",
       );
     }, 0);
 
@@ -86,7 +87,7 @@ export function ChildIdentityGateway({
   function applyIdentityTranscript(transcript: string) {
     if (childRoster.length === 0) {
       setVoiceSuggestions([]);
-      setStatus("还没有看到小朋友名单，请老师先在教师工作台里添加花名册。");
+      setStatus("请老师先在教师端添加幼儿姓名和号数。");
       return;
     }
 
@@ -107,6 +108,17 @@ export function ChildIdentityGateway({
     setStatus(`我听到“${transcript}”，找到几个像的小名牌，请点自己的名字。`);
   }
 
+  function applyTypedIdentity() {
+    const value = identityInput.trim();
+
+    if (!value) {
+      setStatus("可以输入名字或号数，也可以点“点我说名字或号数”。");
+      return;
+    }
+
+    applyIdentityTranscript(value);
+  }
+
   function toggleVoiceInput() {
     if (typeof window === "undefined") {
       return;
@@ -119,7 +131,7 @@ export function ChildIdentityGateway({
     const SpeechRecognitionApi = voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionApi) {
-      setStatus("当前浏览器不支持语音输入，建议用 Chrome 或 Edge 打开。");
+      setStatus("这个浏览器暂时不能听声音，可以在下面输入名字或号数。");
       return;
     }
 
@@ -150,7 +162,7 @@ export function ChildIdentityGateway({
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
-    setStatus("我在听啦，可以说“我是泡泡”或“1号”。");
+    setStatus("我在听啦，可以说：我是小何 / 3号。");
   }
 
   function buildAdventureHref(themeId: ThemeId) {
@@ -186,13 +198,15 @@ export function ChildIdentityGateway({
                 </div>
                 <button
                   onClick={toggleVoiceInput}
-                  className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                  className={`rounded-[1.4rem] px-6 py-4 text-base font-semibold shadow-lg transition hover:-translate-y-0.5 md:text-lg ${
                     isListening ? "bg-rose-100 text-rose-800" : "bg-slate-900 text-white"
                   }`}
+                  type="button"
                 >
-                  {isListening ? "我说完了" : "我来说"}
+                  {isListening ? "正在听，点我停止" : "🎙 点我说名字或号数"}
                 </button>
               </div>
+              <p className="mt-3 text-sm font-semibold text-teal-700">可以说：我是小何 / 3号</p>
 
               {voiceSuggestions.length > 0 ? (
                 <div className="mt-5 rounded-[1.5rem] bg-amber-50 p-4">
@@ -212,31 +226,48 @@ export function ChildIdentityGateway({
                 </div>
               ) : null}
 
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-5">
                 {childRoster.length > 0 ? (
-                  childRoster.map((child) => (
-                    <Link
-                      key={child.id}
-                      href={`/children/${encodeURIComponent(child.id)}`}
-                      onClick={() => chooseChild(child)}
-                      className={`rounded-full px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${
-                        selectedChild?.id === child.id
-                          ? "bg-teal-700 text-white"
-                          : "bg-slate-100 text-slate-700"
-                      }`}
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                    <input
+                      value={identityInput}
+                      onChange={(event) => setIdentityInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          applyTypedIdentity();
+                        }
+                      }}
+                      placeholder="输入名字或号数，如 小何 / 3号"
+                      className="rounded-[1.2rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white"
+                    />
+                    <button
+                      onClick={applyTypedIdentity}
+                      className="rounded-full bg-teal-700 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                      type="button"
                     >
-                      {formatChildLabel(child)}
-                    </Link>
-                  ))
+                      找小名牌
+                    </button>
+                  </div>
                 ) : (
-                  <Link
-                    href="/teachers"
-                    className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:-translate-y-0.5"
-                  >
-                    请老师先添加花名册
-                  </Link>
+                  <div className="rounded-[1.2rem] bg-cyan-50 px-4 py-3">
+                    <p className="text-sm font-semibold text-cyan-900">
+                      请老师先在教师端添加幼儿姓名和号数。
+                    </p>
+                    <Link
+                      href="/teachers"
+                      className="mt-3 inline-flex rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:-translate-y-0.5"
+                    >
+                      去教师端添加
+                    </Link>
+                  </div>
                 )}
               </div>
+
+              {selectedChild ? (
+                <div className="mt-4 inline-flex rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white">
+                  {formatChildLabel(selectedChild)}
+                </div>
+              ) : null}
 
               <div className="mt-5 rounded-[1.4rem] border border-dashed border-teal-200 bg-teal-50/70 px-4 py-3">
                 <p className="text-xs font-semibold text-teal-800">小记录提示</p>

@@ -7,7 +7,9 @@ export const selectedChildStorageKey = "tongqu-growth-web-selected-child";
 export type ChildProfile = {
   id: string;
   name: string;
+  className?: string;
   rosterNumber?: string;
+  familyBindingCode?: string;
   createdAt: string;
 };
 
@@ -58,6 +60,13 @@ export type FoodPreferenceRecord = {
   reasonLabel: string;
   strategy: string;
   gentleTryTip: string;
+  approachStep?: string;
+  themeSource?: string;
+  menuDate?: string;
+  mealType?: string;
+  dishName?: string;
+  ingredientName?: string;
+  reason?: string;
 } & ChildRecordFields;
 
 export type MiniGameRecord = {
@@ -66,6 +75,13 @@ export type MiniGameRecord = {
   themeId: ThemeId;
   completedAt: string;
   pickedItems: string[];
+  storyTopic?: string;
+  answerContent?: string;
+  habitTask?: string;
+  foodLabel?: string;
+  uploadedFileName?: string;
+  childUtterance?: string;
+  aiBroadcastText?: string;
 } & ChildRecordFields;
 
 export type MiniGameProgress = Record<MiniGameKey, number>;
@@ -465,9 +481,17 @@ export function parseChildRoster(raw: string | null): ChildProfile[] {
       .map((item) => ({
         id: item.id,
         name: item.name.trim(),
+        className:
+          "className" in item && typeof item.className === "string"
+            ? item.className.trim().slice(0, 16)
+            : undefined,
         rosterNumber:
           "rosterNumber" in item && typeof item.rosterNumber === "string"
             ? item.rosterNumber.trim().slice(0, 8)
+            : undefined,
+        familyBindingCode:
+          "familyBindingCode" in item && typeof item.familyBindingCode === "string"
+            ? item.familyBindingCode.trim().toUpperCase().slice(0, 12)
             : undefined,
         createdAt: item.createdAt,
       }))

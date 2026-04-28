@@ -242,11 +242,11 @@ export function getMiniGameFollowUp(record: MiniGameRecord) {
       focus: true,
     },
     readingCheckin: {
-      displayName: "阅读小书虫打卡",
-      observation: "孩子完成了阅读表达任务，能听故事并说出一个角色、画面或喜欢的地方。",
-      activityScenario: `阅读小书虫打卡记录：${pickedText}。请生成阅读延伸活动，包含听故事、故事复述、讲一个画面和图书整理。`,
-      homeTask: "亲子共读 5 分钟，请孩子说一句“我看到了……”，看完书放回原位。",
-      encouragement: "你认真听故事，还能说出自己的发现，阅读小书虫亮起来啦。",
+      displayName: "习惯故事小剧场",
+      observation: "孩子完成了听故事做任务流程，能听一个习惯短故事、选择答案卡，并完成一个生活小任务。",
+      activityScenario: `习惯故事小剧场记录：${pickedText}。请生成生活常规故事延伸活动，包含听短故事、选择答案卡、完成一个洗手/喝水/排队/整理/文明进餐小任务。`,
+      homeTask: "睡前或饭前听一个短故事，请孩子说出一个好习惯，并完成一个小步骤。",
+      encouragement: "你认真听故事，还能把故事里的好习惯做到一步，故事小耳朵亮起来啦。",
       focus: false,
     },
     habitTrafficLight: {
@@ -307,10 +307,10 @@ export function getMiniGameFollowUp(record: MiniGameRecord) {
     },
     foodKitchen: {
       displayName: "泉州小厨房",
-      observation: "孩子愿意参与泉州美食制作步骤和角色扮演，可继续发展顺序表达和生活参与。",
-      activityScenario: `泉州小厨房记录：${pickedText}。请生成区域活动方案，包含食材图片、锅铲玩具、步骤卡、围裙和家园延伸。`,
-      homeTask: "在家参与一个小步骤：摆碗筷、洗菜、搅拌、端盘或餐后整理。",
-      encouragement: "你会按步骤做小厨师任务，也懂得帮忙和整理。",
+      observation: "孩子在泉州小厨房中选择美食、按步骤操作，并借助 AI 整理了一句播报词，可继续发展区域展示和语言表达。",
+      activityScenario: `泉州小厨房播报记录：${pickedText}。请生成食育活动延伸建议，包含班级展示鼓励语、家园同步话术、区域材料和幼儿播报支持。`,
+      homeTask: "在家发现或参与一道食物的小步骤，拍照或说一句介绍，家长只帮孩子补成短短一句播报词。",
+      encouragement: "你会展示作品，也愿意把泉州美食介绍给大家，小小播报员很认真。",
       focus: false,
     },
     mealTray: {
@@ -343,12 +343,17 @@ export function getMiniGameFollowUp(record: MiniGameRecord) {
 }
 
 export function getFoodPreferenceFollowUp(record: FoodPreferenceRecord) {
+  const approachStep = record.approachStep?.trim() || "看一看";
+  const observedFood = record.ingredientName?.trim() || record.foodLabel;
+  const dishContext =
+    record.dishName && record.dishName !== observedFood ? `（来自今日菜品：${record.dishName}）` : "";
+
   return {
     displayName: "美食认识观察卡",
-    observation: `孩子正在认识“${record.foodLabel}”，感受原因是“${record.reasonLabel}”。`,
-    activityScenario: `儿童端美食认识观察：孩子正在认识“${record.foodLabel}”，原因选择为“${record.reasonLabel}”。已有温和策略：${record.strategy}${record.gentleTryTip}。请生成亲近美食小步任务，不贴标签，围绕看一看、闻一闻、说发现和选择靠近一小步设计。`,
-    homeTask: record.gentleTryTip || "看一看、闻一闻、尝一点、说发现；不催促，不比较。",
-    encouragement: `你愿意靠近${record.foodLabel}一点点，就是很棒的尝试。`,
+    observation: `孩子正在认识“${observedFood}”${dishContext}，原因是“${record.reasonLabel}”，今天选择了“${approachStep}”这个靠近小步。`,
+    activityScenario: `儿童端美食认识观察：孩子正在认识“${observedFood}”${dishContext}，原因选择为“${record.reasonLabel}”，靠近小步为“${approachStep}”。已有温和策略：${record.strategy}${record.gentleTryTip}。请生成亲近美食小步任务，不贴标签，围绕看一看、闻一闻、说发现和选择靠近一小步设计。`,
+    homeTask: `孩子正在认识${observedFood}，今天选择了一个靠近小步：${approachStep}。回家可以在饭桌上找一找${observedFood}的形状，不催促入口。`,
+    encouragement: `你愿意用“${approachStep}”靠近${observedFood}一点点，就是很棒的尝试。`,
     focus: true,
   };
 }
@@ -391,7 +396,7 @@ export function buildParentSyncFromFoodPreference(
     childName: record.childName,
     title: `${record.childName}的美食认识观察`,
     themeId: "food",
-    summary: `${record.childName}今天正在认识“${record.foodLabel}”，选择的感受原因是“${record.reasonLabel}”。老师观察：${followUp.observation}`,
+    summary: `${record.childName}今天正在认识“${record.ingredientName ?? record.foodLabel}”，选择的原因是“${record.reasonLabel}”，靠近小步是“${record.approachStep ?? "看一看"}”。老师观察：${followUp.observation}`,
     strategy: followUp.observation,
     homePractice: followUp.homeTask,
     sourceLabel: "美食认识观察",
