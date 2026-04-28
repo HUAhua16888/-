@@ -41,27 +41,6 @@ const familyPlateActionSteps = [
   "餐后整理碗筷",
 ];
 
-function parseParentAccessState(raw: string | null): ParentAccessState | null {
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    const value = JSON.parse(raw) as Partial<ParentAccessState>;
-
-    if (typeof value.childId !== "string" || !value.childId.trim()) {
-      return null;
-    }
-
-    return {
-      childId: value.childId.trim(),
-      consentAt: typeof value.consentAt === "string" ? value.consentAt : "",
-    };
-  } catch {
-    return null;
-  }
-}
-
 function formatRecordTime(value: string) {
   const date = new Date(value);
 
@@ -196,25 +175,18 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
     const restoreHandle = window.setTimeout(() => {
       const roster = parseChildRoster(window.localStorage.getItem(childRosterStorageKey));
-      const routeChild = initialChildId ? decodeURIComponent(initialChildId) : "";
-      const savedAccess = parseParentAccessState(window.localStorage.getItem(parentAccessStorageKey));
-      const accessChild =
-        savedAccess && (!routeChild || routeChild === savedAccess.childId)
-          ? roster.find((child) => child.id === savedAccess.childId) ?? null
-          : null;
 
       setChildRoster(roster);
-      setSelectedChildId(accessChild?.id ?? "");
+      setSelectedChildId("");
       setParentSyncRecords(parseParentSyncRecords(window.localStorage.getItem(parentSyncStorageKey)));
       setParentFeedbackRecords(
         parseParentFeedbackRecords(window.localStorage.getItem(parentFeedbackStorageKey)),
       );
+      window.localStorage.removeItem(parentAccessStorageKey);
       setStatus(
-        accessChild
-            ? `${formatChildLabel(accessChild)} 的家庭延续页已打开。`
-            : roster.length > 0
-              ? "请输入幼儿姓名或号数、家庭绑定码，并勾选同意后查看。"
-              : "还没有幼儿名单，请联系老师在教师工作台里添加花名册。",
+        roster.length > 0
+          ? "为保护隐私，请输入幼儿姓名或号数、家庭绑定码，并勾选同意后查看。"
+          : "还没有幼儿名单，请联系老师在教师工作台里添加花名册。",
       );
     }, 0);
 

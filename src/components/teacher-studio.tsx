@@ -273,12 +273,15 @@ function buildTeacherCopyText(
     `主题：${themeId === "habit" ? "好习惯练习" : "闽食探索"}`,
     `任务：${task}`,
     `场景：${scenario.trim()}`,
+    "【确认】AI生成，需教师确认后再使用",
     "",
     `【标题】${result.title}`,
     `【生成内容】${result.content}`,
     extensionLine ? `【活动延伸】${extensionLine}` : "",
     result.tips.length > 0 ? `【使用建议】\n${result.tips.map((tip, index) => `${index + 1}. ${tip}`).join("\n")}` : "",
-    result.fallbackUsed ? "【提醒】当前是备用内容，请人工确认后再使用。" : "【提醒】请老师人工确认后再使用。",
+    result.fallbackUsed
+      ? "【提醒】当前是备用内容，请教师确认后再使用。"
+      : "【提醒】AI生成，需教师确认后再使用。",
   ]
     .filter(Boolean)
     .join("\n");
@@ -2056,13 +2059,13 @@ export function TeacherStudio() {
         ...current,
         [record.id]: nextDraft,
       }));
-      setParentSyncStatus("已生成一版回复和育儿指导，请老师确认后保存。");
+      setParentSyncStatus("AI生成，需教师确认后保存。");
     } catch {
       setParentFeedbackDrafts((current) => ({
         ...current,
         [record.id]: fallback,
       }));
-      setParentSyncStatus("AI 生成暂时不可用，已先填入本地育儿指导模板，请老师确认后保存。");
+      setParentSyncStatus("AI 生成暂时不可用，已先填入本地育儿指导模板，需教师确认后保存。");
     } finally {
       setParentFeedbackAiLoadingId("");
     }
@@ -2346,8 +2349,8 @@ export function TeacherStudio() {
       return;
     }
 
-    const savedAccount = window.localStorage.getItem(teacherAccountStorageKey) ?? "";
-    const savedPasscode = window.localStorage.getItem(teacherPasscodeStorageKey) ?? "";
+    const savedAccount = (window.localStorage.getItem(teacherAccountStorageKey) ?? "").trim();
+    const savedPasscode = (window.localStorage.getItem(teacherPasscodeStorageKey) ?? "").trim();
 
     if (account === savedAccount && passcode === savedPasscode) {
       window.sessionStorage.setItem(teacherSessionStorageKey, account);
@@ -2554,7 +2557,14 @@ export function TeacherStudio() {
           </button>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="mt-6">
+          <p className="text-sm font-semibold text-teal-700">班级今日概览</p>
+          <p className="mt-1 text-sm leading-7 text-slate-600">
+            先看今日参与、任务、奖章和待跟进数量，再进入 AI 分析与跟进生成。
+          </p>
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {[
             { label: "班级幼儿", value: classOverview.rosterCount, tone: "bg-white" },
             { label: "今日参与幼儿", value: classOverview.participatedCount, tone: "bg-cyan-50" },
@@ -3133,7 +3143,7 @@ export function TeacherStudio() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-rose-700">家园共育</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">家庭同步与反馈跟进</h2>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">家园同步与反馈</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
               这里只显示家长提交的疑惑、想法和在家观察。老师选择一条反馈后，回复家长并给出可执行的家庭育儿指导。
             </p>
@@ -3439,7 +3449,7 @@ export function TeacherStudio() {
 
       <section ref={generationSectionRef} className="order-3 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-amber-700">生成结果与修改区</p>
+          <p className="text-sm font-semibold text-amber-700">跟进生成与修改区</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-900">确认草稿后再生成</h2>
           <p className="mt-2 text-sm leading-7 text-slate-600">
             先选主题、年龄段和生成类型；也可以从上方互动记录带入线索，再生成可修改的跟进建议、课堂活动、家园同步话术或鼓励语。
@@ -3612,10 +3622,10 @@ export function TeacherStudio() {
                     : "bg-emerald-100 text-emerald-800"
                 }`}
               >
-                {result.fallbackUsed ? "备用内容" : "生成内容"}
+                {result.fallbackUsed ? "备用内容，需教师确认" : "AI生成，需教师确认"}
               </span>
               <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                需人工确认
+                老师确认后再同步或使用
               </span>
             </div>
           ) : null}

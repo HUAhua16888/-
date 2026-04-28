@@ -6308,7 +6308,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 logMiniGameCompletion("habitTrafficLight", "好习惯判断章", pickedItems)
               }
             />
-            <details className="rounded-[2rem] bg-white/80 p-5 shadow-sm xl:col-span-2">
+            <details open className="rounded-[2rem] bg-white/80 p-5 shadow-sm xl:col-span-2">
               <summary className="cursor-pointer list-none text-sm font-semibold text-slate-700">
                 习惯故事小剧场：听短故事、做小任务
               </summary>
