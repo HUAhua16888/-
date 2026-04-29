@@ -3,7 +3,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
-import { projectDisplayName, projectFullName } from "@/lib/project-brand";
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 
 const introMusicNotes = [392, 523.25, 659.25];
@@ -12,22 +11,22 @@ const premiumIntroEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true
 
 function getIntroText(pathname: string) {
   if (pathname.startsWith("/teachers")) {
-    return `欢迎来到${projectDisplayName}，${projectFullName}。这里是教师工作台，老师可以查看 AI 成长记录，生成跟进建议，并同步家庭任务。`;
+    return "欢迎来到幼芽成长智伴，幼习宝一日生活习惯养成和闽食成长岛食育改善协同教育智能体。这里是教师工作台，老师可以查看 AI 成长记录，生成跟进建议，并同步家庭任务。";
   }
 
   if (pathname.startsWith("/adventure")) {
-    return `欢迎来到${projectDisplayName}。今天跟着幼习宝练洗手、喝水、如厕、整理、排队和文明进餐，也可以到闽食成长岛温和认识食材。`;
+    return "欢迎来到幼芽成长智伴。今天跟着幼习宝练洗手、喝水、如厕、整理、排队和文明进餐，也可以到闽食成长岛温和认识食材。";
   }
 
   if (pathname.startsWith("/parents")) {
-    return `欢迎来到${projectDisplayName}。这里是家庭延续，可以查看老师今天的观察，回家做一个小步骤，再提交家庭观察。`;
+    return "欢迎来到幼芽成长智伴。这里是家庭延续，可以查看老师今天的观察，回家做一个小步骤，再提交家庭观察。";
   }
 
   if (pathname.startsWith("/children")) {
-    return `欢迎来到${projectDisplayName}。这里是儿童互动，先找到自己的小名牌，再进入幼习宝一日生活习惯或闽食成长岛任务。`;
+    return "欢迎来到幼芽成长智伴。这里是儿童互动，先找到自己的小名牌，再进入幼习宝一日生活习惯或闽食成长岛任务。";
   }
 
-  return `欢迎来到${projectDisplayName}，${projectFullName}。请选择儿童互动、教师工作台或家庭延续。`;
+  return "欢迎来到幼芽成长智伴，幼习宝一日生活习惯养成和闽食成长岛食育改善协同教育智能体。请选择儿童互动、教师工作台或家庭延续。";
 }
 
 function getAudioContext() {

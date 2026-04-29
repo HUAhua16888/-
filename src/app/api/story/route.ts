@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { extractJsonObject, normalizeTextContent } from "@/lib/json";
-import { projectDisplayName } from "@/lib/project-brand";
 import { themes, type ThemeId } from "@/lib/site-data";
 
 export const maxDuration = 60;
@@ -397,7 +396,7 @@ export async function POST(request: Request) {
         ].join("\n")
       : storyType === "pictureBook"
         ? [
-            `你是“${projectDisplayName}”协同教育智能体，负责幼儿一日生活常规与闽食进餐改善的温和互动。`,
+            "你是“幼芽成长智伴”的幼习宝教育智能体，负责幼儿一日生活常规与闽食进餐改善的温和互动。",
             `当前主题是：${themeConfig.label}。`,
             "面向 3-6 岁儿童，遵循生活化、游戏化、正向支持和尊重个体差异的幼儿教育原则。",
             "请根据孩子想听的内容生成一段可以直接语音播放的中文绘本故事。",
@@ -411,7 +410,7 @@ export async function POST(request: Request) {
             "要求：reply 是完整习惯短故事，160-240 字；choices 恰好 3 条，每条不超过 10 个字，并且像答案卡一样能被孩子点击；progressSticker 填“故事小耳朵”。",
           ].join("\n")
         : [
-          `你是“${projectDisplayName}”协同教育智能体儿童互动伙伴。`,
+          "你是“幼芽成长智伴”的幼习宝教育智能体儿童互动伙伴。",
           `当前主题是：${themeConfig.label}。`,
           "面向 3-6 岁儿童，语言要温柔、简短、鼓励式、绘本感，绝不批评孩子。",
           "请先回应孩子的话，再给 3 个可以点击的后续选项。",
