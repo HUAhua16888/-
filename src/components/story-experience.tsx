@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
-import { formatChildLabel } from "@/lib/child-identity";
+import { findChildIdentitySuggestions, formatChildLabel } from "@/lib/child-identity";
+import { buildFoodNutritionIntro, buildIngredientNutritionIntro } from "@/lib/food-nutrition";
 import {
   defaultGameContentConfigs,
   gameContentConfigStorageKey,
@@ -646,6 +647,14 @@ function buildFoodPreferenceOption(label: string) {
     gentleTryTip: `如果今天还不熟悉${label}，可以先看一看或闻一闻，不急着吃完。`,
     approachSteps: foodPreferenceApproachSteps,
   };
+}
+
+function buildFoodRoleIntro(food: ReturnType<typeof buildFoodPreferenceOption>) {
+  const ingredientText =
+    food.ingredients.length > 0 ? `我的身体里有${food.ingredients.join("、")}。` : "";
+  const nutritionIntro = buildFoodNutritionIntro(food.label, food.ingredients);
+
+  return `我是${food.label}。${ingredientText}${food.ingredientIntro}${nutritionIntro}你今天还在认识我也没关系，先看见名字、食材和一个营养小发现就很好。`;
 }
 
 function createFoodPreferenceChoices() {
@@ -3401,6 +3410,9 @@ function FoodTreasureQuestGame({
   const clueText = currentFood
     ? `第 ${Math.min(currentIndex + 1, questFoods.length)} 站，${currentFood.stall}。线索：${currentFood.clue}${currentFood.pictureHint}`
     : "摊位寻宝完成啦。";
+  const currentFoodNutritionText = currentFood
+    ? buildFoodNutritionIntro(currentFood.label, currentFood.ingredients)
+    : "";
 
   function handlePickFood(label: string) {
     if (completed || matched.includes(label) || !currentFood) {
@@ -3425,7 +3437,7 @@ function FoodTreasureQuestGame({
     setSelectedFood(label);
     setCollectedIngredients([]);
     setSelectedApproachStep("");
-    const message = `找对啦，这是${currentFood.label}，在${currentFood.stall}。这里有${currentFood.ingredients.join("、")}。先收集食材卡，再听一个小故事。`;
+    const message = `找对啦，这是${currentFood.label}，在${currentFood.stall}。这里有${currentFood.ingredients.join("、")}。${currentFoodNutritionText}先收集食材卡，再听一个小故事。`;
     setFeedback(message);
     onSpeak?.(message);
   }
@@ -3437,10 +3449,11 @@ function FoodTreasureQuestGame({
 
     const nextIngredients = [...collectedIngredients, ingredient];
     setCollectedIngredients(nextIngredients);
+    const nutritionText = buildIngredientNutritionIntro(ingredient);
     const message =
       nextIngredients.length === ingredientTotal
-        ? `${ingredient}食材卡收好啦。${currentFood.label}的食材卡集齐了，可以听故事、选小步，再去下一摊。`
-        : `${ingredient}食材卡收好啦，继续找下一张食材卡。`;
+        ? `${ingredient}食材卡收好啦。${nutritionText}${currentFood.label}的食材卡集齐了，可以听故事、选小步，再去下一摊。`
+        : `${ingredient}食材卡收好啦。${nutritionText}继续找下一张食材卡。`;
     setFeedback(message);
     onSpeak?.(message);
   }
@@ -3632,6 +3645,9 @@ function FoodTreasureQuestGame({
               <p className="mt-2 text-sm leading-7 text-slate-600">
                 样子线索：{currentFood.colorShape}
               </p>
+              <p className="mt-2 rounded-[1.2rem] bg-emerald-50 px-4 py-3 text-sm leading-7 text-emerald-900">
+                {currentFoodNutritionText}
+              </p>
               <p className="mt-2 rounded-[1.2rem] bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-900">
                 小故事：{currentFood.cultureStory}
               </p>
@@ -3642,7 +3658,7 @@ function FoodTreasureQuestGame({
               ) : null}
             </div>
             <SpeechCueButton
-              text={`${currentFood.label}的食材有${currentFood.ingredients.join("、")}。${currentFood.ingredientIntro}样子线索：${currentFood.colorShape}。小故事：${currentFood.cultureStory}${currentStep ? `探味动作是${currentStep.label}，${currentStep.cue}` : ""}`}
+              text={`${currentFood.label}的食材有${currentFood.ingredients.join("、")}。${currentFood.ingredientIntro}${currentFoodNutritionText}样子线索：${currentFood.colorShape}。小故事：${currentFood.cultureStory}${currentStep ? `探味动作是${currentStep.label}，${currentStep.cue}` : ""}`}
               onSpeak={onSpeak}
               label="听食材"
               tone="teal"
@@ -3850,6 +3866,10 @@ function FoodPreferenceGame({
 
     return [...menuChoices, ...customAndFallbackChoices].slice(0, 18);
   }, [foodChoices, todayMenuEntries]);
+  const menuChoiceLabels = useMemo(
+    () => new Set(createMenuFoodPreferenceChoices(todayMenuEntries).map((item) => item.label)),
+    [todayMenuEntries],
+  );
   const selectedFoodInfo =
     displayFoodChoices.find((food) => food.label === selectedFood) ??
     (selectedFood ? buildFoodPreferenceOption(selectedFood) : null);
@@ -3857,7 +3877,7 @@ function FoodPreferenceGame({
     contentConfig?.childGoal.trim() ||
     "这不是给孩子贴标签，只记录今天还在认识的食物，帮助老师和家长温和陪伴。";
   const foodRoleIntroText = selectedFoodInfo
-    ? `我是${selectedFoodInfo.label}。我的身体里有${selectedFoodInfo.ingredients.join("、")}。${selectedFoodInfo.ingredientIntro}你今天还在认识我也没关系，先看见名字和食材就很好。`
+    ? buildFoodRoleIntro(selectedFoodInfo)
     : "";
 
   function submitPreference(nextReason = selectedReason, nextApproach = selectedApproachStep) {
@@ -3888,9 +3908,7 @@ function FoodPreferenceGame({
     setSelectedReason("");
     setSelectedApproachStep("");
     setCustomFoodMode(false);
-    const message = food
-      ? `我是${food.label}。我的身体里有${food.ingredients.join("、")}。${food.ingredientIntro}你今天还在认识我也没关系，先看见名字和食材就很好。`
-      : "记录下来：今天有一种食物还在慢慢认识。";
+    const message = food ? buildFoodRoleIntro(food) : "记录下来：今天有一种食物还在慢慢认识。";
     setFeedback(message);
     onSpeak?.(message);
     completionReportedRef.current = false;
@@ -3909,7 +3927,7 @@ function FoodPreferenceGame({
     setSelectedReason(label);
     const message =
       food && reason
-        ? `谢谢你告诉我：今天可能是${reason.label}。我是${food.label}，我里面有${food.ingredients.join("、")}。接下来选一个愿意靠近的小步就好。`
+        ? `谢谢你告诉我：今天可能是${reason.label}。${buildFoodNutritionIntro(food.label, food.ingredients)}接下来选一个愿意靠近的小步就好。`
         : "已经记录原因，先认识这种食物就很好。";
     setFeedback(message);
     onSpeak?.(message);
@@ -4037,10 +4055,29 @@ function FoodPreferenceGame({
       </div>
 
       <div className="mt-5 rounded-[1.6rem] bg-cyan-50 p-4">
-        <p className="text-sm font-semibold text-cyan-900">今天哪一种正在认识？</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-cyan-900">今天哪一种正在认识？</p>
+            {todayMenuEntries.length > 0 ? (
+              <p className="mt-1 text-xs leading-6 text-cyan-800">
+                已优先放入今日食谱里的菜品和食材；点击任一卡片会听到对应营养小发现。
+              </p>
+            ) : (
+              <p className="mt-1 text-xs leading-6 text-cyan-800">
+                老师发布今日食谱后，这里会自动把食谱里的菜品和食材排在前面。
+              </p>
+            )}
+          </div>
+          {todayMenuEntries.length > 0 ? (
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-cyan-900 shadow-sm">
+              今日食谱优先
+            </span>
+          ) : null}
+        </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           {displayFoodChoices.map((food) => {
             const selected = selectedFood === food.label;
+            const fromTodayMenu = menuChoiceLabels.has(food.label);
 
             return (
               <button
@@ -4054,6 +4091,15 @@ function FoodPreferenceGame({
               >
                 <span className="block text-4xl">{food.icon}</span>
                 <span className="mt-2 block">{food.label}</span>
+                {fromTodayMenu ? (
+                  <span
+                    className={`mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
+                      selected ? "bg-white/20 text-white" : "bg-cyan-50 text-cyan-800"
+                    }`}
+                  >
+                    今日食谱
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -4760,7 +4806,11 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   });
   const [childRoster, setChildRoster] = useState<ChildProfile[]>([]);
   const [selectedChildId, setSelectedChildId] = useState("");
+  const [childIdentityInput, setChildIdentityInput] = useState("");
+  const [childIdentitySuggestions, setChildIdentitySuggestions] = useState<ChildProfile[]>([]);
+  const [isChildIdentityListening, setIsChildIdentityListening] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const childIdentityRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const speechAbortRef = useRef<AbortController | null>(null);
@@ -4976,6 +5026,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   useEffect(() => {
     return () => {
       speechAbortRef.current?.abort();
+      childIdentityRecognitionRef.current?.stop();
       cleanupAudioPlayback();
 
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -5004,14 +5055,15 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       const savedRoster = parseChildRoster(window.localStorage.getItem(childRosterStorageKey));
       const savedChildId = window.localStorage.getItem(selectedChildStorageKey) ?? "";
       const routeChildId = initialChildId ? decodeURIComponent(initialChildId) : "";
+      const nextChildId = savedRoster.some((child) => child.id === routeChildId)
+        ? routeChildId
+        : savedRoster.some((child) => child.id === savedChildId)
+          ? savedChildId
+          : "";
+      const nextChild = savedRoster.find((child) => child.id === nextChildId);
       setChildRoster(savedRoster);
-      setSelectedChildId(
-        savedRoster.some((child) => child.id === routeChildId)
-          ? routeChildId
-          : savedRoster.some((child) => child.id === savedChildId)
-            ? savedChildId
-          : (savedRoster[0]?.id ?? ""),
-      );
+      setSelectedChildId(nextChildId);
+      setChildIdentityInput(nextChild ? formatChildLabel(nextChild) : "");
       growthArchiveHydratedRef.current = true;
       setGrowthArchiveHydrated(true);
     }, 0);
@@ -5028,12 +5080,126 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   }, [growthArchive]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !selectedChildId) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!selectedChildId) {
+      window.localStorage.removeItem(selectedChildStorageKey);
       return;
     }
 
     window.localStorage.setItem(selectedChildStorageKey, selectedChildId);
   }, [selectedChildId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handleSharedDataUpdate(event: StorageEvent) {
+      if (event.key === weeklyMenuStorageKey) {
+        setTodayMenuEntries(
+          getPublishedMenuForDate(parseWeeklyMenuEntries(event.newValue), getLocalDateKey()),
+        );
+      }
+
+      if (event.key === childRosterStorageKey) {
+        const nextRoster = parseChildRoster(event.newValue);
+        setChildRoster(nextRoster);
+        setSelectedChildId((current) =>
+          current && nextRoster.some((child) => child.id === current) ? current : "",
+        );
+      }
+    }
+
+    window.addEventListener("storage", handleSharedDataUpdate);
+
+    return () => window.removeEventListener("storage", handleSharedDataUpdate);
+  }, []);
+
+  function chooseChildIdentity(child: ChildProfile) {
+    setSelectedChildId(child.id);
+    setChildIdentityInput(formatChildLabel(child));
+    setChildIdentitySuggestions([]);
+    setStatus(`${formatChildLabel(child)} 的小名牌拿好啦，今天的任务会记到这个名字下面。`);
+  }
+
+  function applyChildIdentityText(rawValue = childIdentityInput) {
+    const value = rawValue.trim();
+
+    if (!value) {
+      setStatus("可以手动输入名字或号数，也可以点语音说出“我是小何 / 3号”。");
+      return;
+    }
+
+    if (childRoster.length === 0) {
+      setChildIdentitySuggestions([]);
+      setStatus("请老师先在教师工作台添加花名册，再选择小名牌。");
+      return;
+    }
+
+    setChildIdentityInput(value);
+    const suggestions = findChildIdentitySuggestions(value, childRoster);
+    setChildIdentitySuggestions(suggestions);
+
+    if (suggestions.length === 0) {
+      setStatus(`没有找到“${value}”对应的小名牌，可以改一下输入框，或说完整姓名/号数。`);
+      return;
+    }
+
+    if (suggestions.length === 1) {
+      chooseChildIdentity(suggestions[0]);
+      return;
+    }
+
+    setStatus(`找到 ${suggestions.length} 个相近的小名牌，请点自己的名字确认。`);
+  }
+
+  function toggleChildIdentityVoiceInput() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const voiceWindow = window as Window & {
+      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    };
+    const SpeechRecognitionApi = voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionApi) {
+      setStatus("当前浏览器不能听声音，可以直接在小名牌输入框里输入名字或号数。");
+      return;
+    }
+
+    if (isChildIdentityListening && childIdentityRecognitionRef.current) {
+      childIdentityRecognitionRef.current.stop();
+      setIsChildIdentityListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognitionApi();
+    recognition.lang = "zh-CN";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
+
+      if (transcript) {
+        setChildIdentityInput(transcript);
+        applyChildIdentityText(transcript);
+      }
+    };
+    recognition.onerror = () => {
+      setStatus("刚才没听清楚，可以再说一次，也可以直接手动输入。");
+      setIsChildIdentityListening(false);
+    };
+    recognition.onend = () => setIsChildIdentityListening(false);
+    childIdentityRecognitionRef.current = recognition;
+    recognition.start();
+    setIsChildIdentityListening(true);
+    setStatus("我在听小名牌，可以说：我是小何 / 3号。识别后也会填进输入框。");
+  }
 
   useEffect(() => {
     if (!growthArchiveHydrated || !storyStateHydrated || lastRecordedThemeRef.current === themeId) {
@@ -5740,6 +5906,49 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 <p className="mt-3 max-w-3xl text-base leading-7 font-semibold text-slate-900">
                   {latestBadgeFeedback || status}
                 </p>
+                <div className="mt-4 grid max-w-3xl gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <input
+                    value={childIdentityInput}
+                    onChange={(event) => setChildIdentityInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        applyChildIdentityText();
+                      }
+                    }}
+                    placeholder="手动输入小名牌：姓名 / 号数 / 3号 小何"
+                    className="rounded-[1.1rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white"
+                  />
+                  <button
+                    onClick={() => applyChildIdentityText()}
+                    className="rounded-full bg-teal-700 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                    type="button"
+                  >
+                    找小名牌
+                  </button>
+                  <button
+                    onClick={toggleChildIdentityVoiceInput}
+                    className={`rounded-full px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                      isChildIdentityListening ? "bg-rose-100 text-rose-800" : "bg-cyan-100 text-cyan-900"
+                    }`}
+                    type="button"
+                  >
+                    {isChildIdentityListening ? "停止识别" : "语音识别"}
+                  </button>
+                </div>
+                {childIdentitySuggestions.length > 1 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {childIdentitySuggestions.map((child) => (
+                      <button
+                        key={child.id}
+                        onClick={() => chooseChildIdentity(child)}
+                        className="rounded-full bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-900 transition hover:-translate-y-0.5 hover:bg-amber-200"
+                        type="button"
+                      >
+                        {formatChildLabel(child)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className="grid w-full max-w-sm grid-cols-2 gap-3 sm:w-auto sm:grid-cols-3">
                 <div className="rounded-[1.2rem] bg-teal-50 px-3 py-3 text-center">

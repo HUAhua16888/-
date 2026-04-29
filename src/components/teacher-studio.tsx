@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { formatChildLabel } from "@/lib/child-identity";
+import { buildFoodNutritionIntro } from "@/lib/food-nutrition";
 import {
   childRosterStorageKey,
   createEmptyGrowthArchive,
@@ -75,6 +76,7 @@ const teacherHistoryLimit = 6;
 const teacherAccountStorageKey = "tongqu-growth-web-teacher-account";
 const teacherPasscodeStorageKey = "tongqu-growth-web-teacher-passcode";
 const teacherSessionStorageKey = "tongqu-growth-web-teacher-session";
+const teacherSharedSessionStorageKey = "tongqu-growth-web-teacher-shared-session";
 const trialTeacherAccount = "班级试用教师";
 const trialTeacherPasscode = "1234";
 const menuFocusIngredientSuggestions = ["香菇", "小葱", "蒜", "青菜", "芥菜", "海蛎", "紫菜", "蛏子"];
@@ -97,6 +99,83 @@ const teacherAgeOptions = [
 const defaultTeacherAgeGroup = teacherAgeOptions[1].label;
 const defaultTeacherTask = teacherTasks.find((item) => item.id === "home") ?? teacherTasks[0];
 type TeacherTaskItem = (typeof teacherTasks)[number];
+
+type TeacherAuthSnapshot = {
+  account: string;
+  passcode: string;
+  sessionAccount: string;
+  hasCompleteAccount: boolean;
+  hasPartialAccount: boolean;
+};
+
+function readTeacherSharedSessionAccount(rawValue: string | null) {
+  if (!rawValue) {
+    return "";
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+
+    if (typeof parsed === "string") {
+      return parsed.trim();
+    }
+
+    if (parsed && typeof parsed === "object" && typeof (parsed as { account?: unknown }).account === "string") {
+      return (parsed as { account: string }).account.trim();
+    }
+  } catch {
+    return rawValue.trim();
+  }
+
+  return rawValue.trim();
+}
+
+function readTeacherAuthSnapshot(): TeacherAuthSnapshot {
+  const account = (window.localStorage.getItem(teacherAccountStorageKey) ?? "").trim();
+  const passcode = (window.localStorage.getItem(teacherPasscodeStorageKey) ?? "").trim();
+  const tabSession = (window.sessionStorage.getItem(teacherSessionStorageKey) ?? "").trim();
+  const sharedSession = readTeacherSharedSessionAccount(
+    window.localStorage.getItem(teacherSharedSessionStorageKey),
+  );
+  const sessionAccount = sharedSession || tabSession;
+
+  return {
+    account,
+    passcode,
+    sessionAccount,
+    hasCompleteAccount: Boolean(account && passcode),
+    hasPartialAccount: Boolean((account && !passcode) || (!account && passcode)),
+  };
+}
+
+function persistTeacherSession(account: string) {
+  window.sessionStorage.setItem(teacherSessionStorageKey, account);
+  window.localStorage.setItem(
+    teacherSharedSessionStorageKey,
+    JSON.stringify({
+      account,
+      authenticatedAt: new Date().toISOString(),
+    }),
+  );
+}
+
+function clearTeacherSession() {
+  window.sessionStorage.removeItem(teacherSessionStorageKey);
+  window.localStorage.removeItem(teacherSharedSessionStorageKey);
+}
+
+function buildWeeklyMenuNutritionPreview(entry: Pick<WeeklyMenuEntry, "dishName" | "ingredients" | "focusIngredients">) {
+  const nutritionBase =
+    entry.focusIngredients.length > 0 ? entry.focusIngredients : entry.ingredients;
+  const nutritionText = buildFoodNutritionIntro(entry.dishName, nutritionBase);
+  const optionText = Array.from(new Set([entry.dishName, ...entry.focusIngredients, ...entry.ingredients]))
+    .filter(Boolean)
+    .slice(0, 6)
+    .join("、");
+
+  return `${nutritionText}观察卡会优先出现：${optionText || entry.dishName}。`;
+}
+
 const quickTeacherKeywords = [
   "洗手",
   "喝水",
@@ -814,6 +893,22 @@ export function TeacherStudio() {
     () => weeklyMenuEntries.filter((entry) => entry.date === todayMenuDateKey && entry.publishedAt),
     [todayMenuDateKey, weeklyMenuEntries],
   );
+  const menuNutritionPreview = useMemo(() => {
+    const dishName = menuDishName.trim();
+    const ingredients = splitMenuText(menuIngredients);
+
+    if (!dishName || ingredients.length === 0) {
+      return "";
+    }
+
+    const focusIngredients = splitMenuText(menuFocusIngredients);
+
+    return buildWeeklyMenuNutritionPreview({
+      dishName,
+      ingredients,
+      focusIngredients: focusIngredients.length > 0 ? focusIngredients : ingredients.slice(0, 2),
+    });
+  }, [menuDishName, menuFocusIngredients, menuIngredients]);
   const todayMenuObservationRows = useMemo(() => {
     const todayMenuLabels = new Set(
       todayPublishedMenuEntries.flatMap((entry) => [
@@ -1132,15 +1227,12 @@ export function TeacherStudio() {
     }
 
     const timer = window.setTimeout(() => {
-      const savedAccount = (window.localStorage.getItem(teacherAccountStorageKey) ?? "").trim();
-      const savedPasscode = (window.localStorage.getItem(teacherPasscodeStorageKey) ?? "").trim();
-      const savedSession = window.sessionStorage.getItem(teacherSessionStorageKey) ?? "";
-      const hasCompleteAccount = Boolean(savedAccount && savedPasscode);
+      const authSnapshot = readTeacherAuthSnapshot();
 
-      if ((savedAccount && !savedPasscode) || (!savedAccount && savedPasscode)) {
+      if (authSnapshot.hasPartialAccount) {
         window.localStorage.removeItem(teacherAccountStorageKey);
         window.localStorage.removeItem(teacherPasscodeStorageKey);
-        window.sessionStorage.removeItem(teacherSessionStorageKey);
+        clearTeacherSession();
         setTeacherHasAccount(false);
         setTeacherAccountInput("");
         setTeacherAuthenticated(false);
@@ -1149,15 +1241,19 @@ export function TeacherStudio() {
         return;
       }
 
-      if (!hasCompleteAccount || (savedSession && savedSession !== savedAccount)) {
-        window.sessionStorage.removeItem(teacherSessionStorageKey);
+      if (!authSnapshot.hasCompleteAccount || (authSnapshot.sessionAccount && authSnapshot.sessionAccount !== authSnapshot.account)) {
+        clearTeacherSession();
+      } else if (authSnapshot.sessionAccount === authSnapshot.account) {
+        window.sessionStorage.setItem(teacherSessionStorageKey, authSnapshot.account);
       }
 
-      setTeacherHasAccount(hasCompleteAccount);
-      setTeacherAccountInput(savedAccount);
-      setTeacherAuthenticated(Boolean(hasCompleteAccount && savedSession && savedSession === savedAccount));
+      setTeacherHasAccount(authSnapshot.hasCompleteAccount);
+      setTeacherAccountInput(authSnapshot.account);
+      setTeacherAuthenticated(
+        Boolean(authSnapshot.hasCompleteAccount && authSnapshot.sessionAccount === authSnapshot.account),
+      );
       setTeacherAuthStatus(
-        hasCompleteAccount
+        authSnapshot.hasCompleteAccount
           ? "班级试用模式：请输入本机班级试用账号口令，验证后进入教师工作台。"
           : "班级试用模式：首次使用请先创建本机班级试用账号和口令。",
       );
@@ -1165,6 +1261,78 @@ export function TeacherStudio() {
     }, 0);
 
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let syncTimer = 0;
+    const watchedKeys = new Set([
+      teacherAccountStorageKey,
+      teacherPasscodeStorageKey,
+      teacherSharedSessionStorageKey,
+    ]);
+
+    function applyTeacherAuthSnapshotFromStorage() {
+      const authSnapshot = readTeacherAuthSnapshot();
+
+      if (authSnapshot.hasPartialAccount) {
+        setTeacherHasAccount(false);
+        setTeacherAuthenticated(false);
+        setTeacherAccountInput("");
+        setTeacherPasscodeInput("");
+        setTeacherAuthStatus("检测到教师账号正在同步，请稍等后重新进入；若仍异常，可重置本机教师账号。");
+        return;
+      }
+
+      if (!authSnapshot.hasCompleteAccount) {
+        window.sessionStorage.removeItem(teacherSessionStorageKey);
+        setTeacherHasAccount(false);
+        setTeacherAuthenticated(false);
+        setTeacherAccountInput("");
+        setTeacherPasscodeInput("");
+        setTeacherAuthStatus("另一教师端已重置本机教师账号，请重新创建或使用班级试用快速进入。");
+        return;
+      }
+
+      setTeacherHasAccount(true);
+      setTeacherAccountInput(authSnapshot.account);
+
+      if (authSnapshot.sessionAccount === authSnapshot.account) {
+        window.sessionStorage.setItem(teacherSessionStorageKey, authSnapshot.account);
+        setTeacherAuthenticated(true);
+        setTeacherPasscodeInput("");
+        setTeacherAuthStatus("教师账号状态已同步：本标签页已进入教师工作台。");
+        return;
+      }
+
+      window.sessionStorage.removeItem(teacherSessionStorageKey);
+      setTeacherAuthenticated(false);
+      setTeacherPasscodeInput("");
+      setTeacherAuthStatus("另一教师端已退出教师工作台，请重新输入口令后进入。");
+    }
+
+    function handleTeacherAuthStorage(event: StorageEvent) {
+      if (!event.key || !watchedKeys.has(event.key)) {
+        return;
+      }
+
+      if (event.key === teacherSharedSessionStorageKey && event.newValue === null) {
+        window.sessionStorage.removeItem(teacherSessionStorageKey);
+      }
+
+      window.clearTimeout(syncTimer);
+      syncTimer = window.setTimeout(applyTeacherAuthSnapshotFromStorage, 80);
+    }
+
+    window.addEventListener("storage", handleTeacherAuthStorage);
+
+    return () => {
+      window.clearTimeout(syncTimer);
+      window.removeEventListener("storage", handleTeacherAuthStorage);
+    };
   }, []);
 
   useEffect(() => {
@@ -1323,8 +1491,54 @@ export function TeacherStudio() {
       return;
     }
 
-    window.localStorage.setItem(childRosterStorageKey, JSON.stringify(childRoster));
+    const nextRoster = JSON.stringify(childRoster);
+
+    if (window.localStorage.getItem(childRosterStorageKey) !== nextRoster) {
+      window.localStorage.setItem(childRosterStorageKey, nextRoster);
+    }
   }, [childRoster, draftHydrated]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handleSharedClassDataStorage(event: StorageEvent) {
+      if (event.key === growthArchiveStorageKey) {
+        setGrowthArchive(parseGrowthArchive(event.newValue));
+      }
+
+      if (event.key === childRosterStorageKey) {
+        const nextRoster = parseChildRoster(event.newValue);
+        setChildRoster(nextRoster);
+        setSelectedChildSummaryId((current) =>
+          current && nextRoster.some((child) => child.id === current) ? current : "",
+        );
+        setRosterStatus(
+          nextRoster.length > 0
+            ? `已同步 ${nextRoster.length} 位幼儿，儿童端可以按姓名或号数识别身份。`
+            : "花名册已同步为空。请先添加姓名和号数，儿童端记录才会对应到幼儿。",
+        );
+      }
+
+      if (event.key === parentSyncStorageKey) {
+        setParentSyncRecords(parseParentSyncRecords(event.newValue));
+      }
+
+      if (event.key === parentFeedbackStorageKey) {
+        setParentFeedbackRecords(parseParentFeedbackRecords(event.newValue));
+      }
+
+      if (event.key === weeklyMenuStorageKey) {
+        setWeeklyMenuEntries(parseWeeklyMenuEntries(event.newValue));
+        setMenuStatus("已同步其他教师端更新的本周食谱。");
+      }
+    }
+
+    window.addEventListener("storage", handleSharedClassDataStorage);
+
+    return () => window.removeEventListener("storage", handleSharedClassDataStorage);
+  }, []);
 
   function scrollToGenerationSection() {
     if (typeof window === "undefined") {
@@ -1874,7 +2088,7 @@ export function TeacherStudio() {
     setMenuDishName("");
     setMenuIngredients("");
     setMenuFocusIngredients("");
-    setMenuStatus(`${menuDate} ${menuMealType}「${dishName}」已保存到本周食谱。`);
+    setMenuStatus(`${menuDate} ${menuMealType}「${dishName}」已保存；发布后会进入儿童端今日播报，并优先成为观察卡选项。`);
   }
 
   function publishTodayMenuToChildren() {
@@ -1897,7 +2111,7 @@ export function TeacherStudio() {
           : entry,
       ),
     );
-    setMenuStatus(`已发布今日 ${todayEntries.length} 条食谱到儿童端“今日闽食播报”。`);
+    setMenuStatus(`已发布今日 ${todayEntries.length} 条食谱到儿童端；观察卡会优先显示今日菜品和重点食材，并播放对应营养小发现。`);
   }
 
   function removeWeeklyMenuEntry(entryId: string) {
@@ -2330,7 +2544,7 @@ export function TeacherStudio() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(teacherAccountStorageKey, account);
       window.localStorage.setItem(teacherPasscodeStorageKey, passcode);
-      window.sessionStorage.setItem(teacherSessionStorageKey, account);
+      persistTeacherSession(account);
     }
 
     setTeacherHasAccount(true);
@@ -2353,7 +2567,7 @@ export function TeacherStudio() {
     const savedPasscode = (window.localStorage.getItem(teacherPasscodeStorageKey) ?? "").trim();
 
     if (account === savedAccount && passcode === savedPasscode) {
-      window.sessionStorage.setItem(teacherSessionStorageKey, account);
+      persistTeacherSession(account);
       setTeacherAuthenticated(true);
       setTeacherPasscodeInput("");
       setTeacherAuthStatus("本机班级试用身份已确认，可以查看互动汇总和生成方案。");
@@ -2367,7 +2581,7 @@ export function TeacherStudio() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(teacherAccountStorageKey, trialTeacherAccount);
       window.localStorage.setItem(teacherPasscodeStorageKey, trialTeacherPasscode);
-      window.sessionStorage.setItem(teacherSessionStorageKey, trialTeacherAccount);
+      persistTeacherSession(trialTeacherAccount);
     }
 
     setTeacherHasAccount(true);
@@ -2381,7 +2595,7 @@ export function TeacherStudio() {
 
   function logoutTeacherAccount() {
     if (typeof window !== "undefined") {
-      window.sessionStorage.removeItem(teacherSessionStorageKey);
+      clearTeacherSession();
     }
 
     cleanupAudio();
@@ -2401,7 +2615,7 @@ export function TeacherStudio() {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(teacherAccountStorageKey);
       window.localStorage.removeItem(teacherPasscodeStorageKey);
-      window.sessionStorage.removeItem(teacherSessionStorageKey);
+      clearTeacherSession();
     }
 
     setTeacherHasAccount(false);
@@ -2856,7 +3070,7 @@ export function TeacherStudio() {
             <p className="text-sm font-semibold text-cyan-700">闽食每日探味</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">每周食谱发布</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              老师录入本周食谱后，可发布今日食谱到儿童端。孩子会先听幼儿化播报，再进入美食认识观察卡。
+              老师录入本周食谱后，可发布今日食谱到儿童端。孩子会先听幼儿化播报；观察卡会优先显示今日菜品、重点食材，并说出不同营养小发现。
             </p>
           </div>
           <button
@@ -2914,7 +3128,7 @@ export function TeacherStudio() {
               />
             </label>
             <label className="mt-4 block text-sm font-semibold text-slate-700">
-              重点观察食材
+              重点观察食材（优先进入观察卡）
               <input
                 value={menuFocusIngredients}
                 onChange={(event) => setMenuFocusIngredients(event.target.value)}
@@ -2939,6 +3153,15 @@ export function TeacherStudio() {
                 </button>
               ))}
             </div>
+            {menuNutritionPreview ? (
+              <p className="mt-4 rounded-[1.2rem] bg-emerald-50 px-4 py-3 text-sm leading-7 text-emerald-900">
+                {menuNutritionPreview}
+              </p>
+            ) : (
+              <p className="mt-4 rounded-[1.2rem] bg-cyan-50 px-4 py-3 text-sm leading-7 text-cyan-900">
+                填好菜名和主要食材后，这里会预览儿童端听到的营养提示。
+              </p>
+            )}
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 onClick={saveWeeklyMenuEntry}
@@ -2974,6 +3197,9 @@ export function TeacherStudio() {
                           </p>
                           <p className="mt-2 text-sm leading-7 text-slate-700">
                             食材：{entry.ingredients.join("、")}；重点观察：{entry.focusIngredients.join("、")}
+                          </p>
+                          <p className="mt-2 rounded-[1rem] bg-white/85 px-3 py-2 text-sm leading-7 text-cyan-900">
+                            {buildWeeklyMenuNutritionPreview(entry)}
                           </p>
                         </div>
                         <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${

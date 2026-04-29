@@ -193,6 +193,38 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     return () => window.clearTimeout(restoreHandle);
   }, [initialChildId]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handleParentSharedDataStorage(event: StorageEvent) {
+      if (event.key === childRosterStorageKey) {
+        const roster = parseChildRoster(event.newValue);
+        setChildRoster(roster);
+        setSelectedChildId((current) =>
+          current && roster.some((child) => child.id === current) ? current : "",
+        );
+
+        if (roster.length === 0) {
+          setStatus("老师端花名册已更新为空，请联系老师确认家庭绑定码。");
+        }
+      }
+
+      if (event.key === parentSyncStorageKey) {
+        setParentSyncRecords(parseParentSyncRecords(event.newValue));
+      }
+
+      if (event.key === parentFeedbackStorageKey) {
+        setParentFeedbackRecords(parseParentFeedbackRecords(event.newValue));
+      }
+    }
+
+    window.addEventListener("storage", handleParentSharedDataStorage);
+
+    return () => window.removeEventListener("storage", handleParentSharedDataStorage);
+  }, []);
+
   function authorizeChild(child: ChildProfile) {
     setSelectedChildId(child.id);
     setStatus(`${formatChildLabel(child)} 的家庭延续页已打开。`);

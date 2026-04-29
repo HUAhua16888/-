@@ -71,12 +71,45 @@ export function ChildIdentityGateway({
   }, [initialChildId]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !selectedChild) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!selectedChild) {
+      window.localStorage.removeItem(selectedChildStorageKey);
       return;
     }
 
     window.localStorage.setItem(selectedChildStorageKey, selectedChild.id);
   }, [selectedChild]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handleRosterStorage(event: StorageEvent) {
+      if (event.key !== childRosterStorageKey) {
+        return;
+      }
+
+      const nextRoster = parseChildRoster(event.newValue);
+      setChildRoster(nextRoster);
+      setSelectedChildId((current) =>
+        current && nextRoster.some((child) => child.id === current) ? current : "",
+      );
+      setVoiceSuggestions([]);
+      setStatus(
+        nextRoster.length > 0
+          ? "老师更新了花名册，可以输入或说出自己的名字、号数来找小名牌。"
+          : "请老师先在教师端添加幼儿姓名和号数。",
+      );
+    }
+
+    window.addEventListener("storage", handleRosterStorage);
+
+    return () => window.removeEventListener("storage", handleRosterStorage);
+  }, []);
 
   function chooseChild(child: ChildProfile) {
     setSelectedChildId(child.id);
@@ -85,6 +118,8 @@ export function ChildIdentityGateway({
   }
 
   function applyIdentityTranscript(transcript: string) {
+    setIdentityInput(transcript);
+
     if (childRoster.length === 0) {
       setVoiceSuggestions([]);
       setStatus("请老师先在教师端添加幼儿姓名和号数。");
@@ -95,17 +130,17 @@ export function ChildIdentityGateway({
     setVoiceSuggestions(suggestions);
 
     if (suggestions.length === 0) {
-      setStatus(`我听到“${transcript}”，还没找到小名牌。可以再说一次名字或号数。`);
+      setStatus(`我识别到“${transcript}”，还没找到小名牌。可以改一下输入框，或再说一次名字/号数。`);
       return;
     }
 
     if (suggestions.length === 1) {
       chooseChild(suggestions[0]);
-      setStatus(`我听到“${transcript}”，找到 ${formatChildLabel(suggestions[0])} 的小名牌啦。`);
+      setStatus(`我识别到“${transcript}”，找到 ${formatChildLabel(suggestions[0])} 的小名牌啦。`);
       return;
     }
 
-    setStatus(`我听到“${transcript}”，找到几个像的小名牌，请点自己的名字。`);
+    setStatus(`我识别到“${transcript}”，找到几个像的小名牌，请点自己的名字，或继续修改输入框。`);
   }
 
   function applyTypedIdentity() {
@@ -207,6 +242,9 @@ export function ChildIdentityGateway({
                 </button>
               </div>
               <p className="mt-3 text-sm font-semibold text-teal-700">可以说：我是小何 / 3号</p>
+              <p className="mt-1 text-xs leading-6 text-slate-500">
+                语音识别到的内容会自动填进输入框，也可以直接手动输入姓名、号数或“3号 小何”。
+              </p>
 
               {voiceSuggestions.length > 0 ? (
                 <div className="mt-5 rounded-[1.5rem] bg-amber-50 p-4">

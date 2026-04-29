@@ -1,3 +1,5 @@
+import { buildFoodNutritionIntro, buildIngredientNutritionIntro } from "@/lib/food-nutrition";
+
 export const weeklyMenuStorageKey = "tongqu-growth-web-weekly-menu";
 
 export const mealTypeOptions = ["早餐", "午餐", "点心"] as const;
@@ -105,15 +107,21 @@ export function buildTodayMenuSpeech(entries: WeeklyMenuEntry[]) {
   const dishText = entries
     .map((item) => {
       const ingredientText = item.ingredients.length > 0 ? `里面有${item.ingredients.join("、")}` : "里面有家常食材";
+      const nutritionText =
+        item.focusIngredients.length > 0
+          ? `营养小发现：${item.focusIngredients
+              .slice(0, 3)
+              .map((ingredient) => buildIngredientNutritionIntro(ingredient))
+              .join("")}`
+          : buildFoodNutritionIntro(item.dishName, item.ingredients);
       const focusText =
         item.focusIngredients.length > 0
           ? `今天可以重点认识${item.focusIngredients.join("、")}`
           : "可以先观察颜色、形状和气味";
 
-      return `${item.mealType}会遇见${item.dishName}，${ingredientText}，${focusText}`;
+      return `${item.mealType}会遇见${item.dishName}，${ingredientText}。${nutritionText}${focusText}`;
     })
     .join("。");
 
   return `今天我们会遇见${entries.map((item) => item.dishName).join("、")}。${dishText}。可以先看一看、闻一闻，不着急入口。`;
 }
-

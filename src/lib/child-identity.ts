@@ -5,7 +5,7 @@ export function formatChildLabel(child: ChildProfile) {
 }
 
 function normalizeIdentityText(value: string) {
-  return value.replace(/[\s，。,.、：:；;！!？?“”"'（）()]/g, "").toLowerCase();
+  return value.replace(/[\s，。,.、：:；;！!？?“”"'（）()]/g, "").replace(/^第/, "").toLowerCase();
 }
 
 function parseChineseNumber(value: string) {
@@ -44,14 +44,14 @@ function parseChineseNumber(value: string) {
 function extractRosterNumberCandidates(transcript: string) {
   const candidates = new Set<string>();
 
-  for (const match of transcript.matchAll(/(\d{1,2})\s*(?:号|號|名|位)?/g)) {
+  for (const match of transcript.matchAll(/(?:第)?(\d{1,3})\s*(?:号|號|名|位)?/g)) {
     const value = Number(match[1]);
     if (Number.isFinite(value) && value > 0) {
       candidates.add(String(value));
     }
   }
 
-  for (const match of transcript.matchAll(/([一二两三四五六七八九十]{1,3})\s*(?:号|號|名|位)/g)) {
+  for (const match of transcript.matchAll(/(?:第)?([一二两三四五六七八九十]{1,3})\s*(?:号|號|名|位)?/g)) {
     const value = parseChineseNumber(match[1]);
     if (Number.isFinite(value) && value > 0) {
       candidates.add(String(value));
@@ -67,7 +67,12 @@ export function findChildIdentitySuggestions(transcript: string, roster: ChildPr
   const matches = roster.filter((child) => {
     const normalizedName = normalizeIdentityText(child.name);
     const normalizedNumber = child.rosterNumber ? String(Number(child.rosterNumber)) : "";
-    const numberMatched = normalizedNumber ? numberCandidates.has(normalizedNumber) : false;
+    const numberMatched = Boolean(
+      normalizedNumber &&
+      (numberCandidates.has(normalizedNumber) ||
+        normalizedTranscript === normalizedNumber ||
+        normalizedTranscript === `${normalizedNumber}号`),
+    );
     const nameMatched =
       normalizedName.length > 0 &&
       (normalizedTranscript.includes(normalizedName) ||
