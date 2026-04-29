@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { projectDisplayName, projectFullName } from "@/lib/project-brand";
+
 export const maxDuration = 10;
 
 type CapabilityStatus = {
@@ -103,8 +105,8 @@ export async function GET(request: Request) {
   if (!canShowInternal) {
     return NextResponse.json({
       ok: true,
-      app: "幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体",
-      platform: "幼芽成长智伴",
+      app: projectFullName,
+      platform: projectDisplayName,
       now: new Date().toISOString(),
       status: publicMode === "local-demo" ? "basic" : "available",
     });
@@ -121,8 +123,8 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    app: "幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体",
-    platform: "幼芽成长智伴",
+    app: projectFullName,
+    platform: projectDisplayName,
     now: new Date().toISOString(),
     summary: {
       readyCapabilities: readyCount,

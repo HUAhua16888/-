@@ -32,6 +32,7 @@ import {
 } from "@/lib/parent-sync";
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
+import { projectDisplayName, projectFullName } from "@/lib/project-brand";
 import {
   getLocalDateKey,
   mealTypeOptions,
@@ -348,7 +349,7 @@ function buildTeacherCopyText(
   themeId: ThemeId,
 ) {
   return [
-    "【幼芽成长智伴｜幼习宝教育智能体教师工作台生成】",
+    `【${projectDisplayName}｜教师工作台生成】`,
     `主题：${themeId === "habit" ? "好习惯练习" : "闽食探索"}`,
     `任务：${task}`,
     `场景：${scenario.trim()}`,
@@ -2746,7 +2747,7 @@ export function TeacherStudio() {
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">
-              幼芽成长智伴 · 教师工作台
+              {projectDisplayName} · 教师工作台
             </p>
             <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
               看常规记录，
@@ -2755,7 +2756,7 @@ export function TeacherStudio() {
               </span>
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-              幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体。
+              {projectFullName}。
               一个教育智能体平台，两条主线：幼习宝关注洗手、喝水、如厕、整理、排队、文明进餐；闽食成长岛关注每日食谱播报、泉州食材认识、食物观察和家园延续。
             </p>
             <p className="mt-3 max-w-3xl text-base leading-8 text-slate-600">
