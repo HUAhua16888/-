@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { formatChildLabel } from "@/lib/child-identity";
 import { buildFoodNutritionIntro } from "@/lib/food-nutrition";
+import { gameContentConfigStorageKey } from "@/lib/game-content-config";
 import {
   childRosterStorageKey,
   createEmptyGrowthArchive,
@@ -33,6 +34,17 @@ import {
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
+  buildHabitTemplateFromFocus,
+  buildTeacherPictureBook,
+  habitTemplatesStorageKey,
+  parseHabitTemplates,
+  parseTeacherPictureBooks,
+  teacherPictureBooksStorageKey,
+  type HabitCheckinTemplate,
+  type TeacherPictureBook,
+} from "@/lib/teacher-published-content";
+import {
+  getPublishedMenuForDate,
   getLocalDateKey,
   mealTypeOptions,
   parseWeeklyMenuEntries,
@@ -616,7 +628,7 @@ export function TeacherStudio() {
   const [menuDishName, setMenuDishName] = useState("");
   const [menuIngredients, setMenuIngredients] = useState("");
   const [menuFocusIngredients, setMenuFocusIngredients] = useState("");
-  const [menuStatus, setMenuStatus] = useState("录入本周食谱后，可以发布今日食谱到儿童端。");
+  const [menuStatus, setMenuStatus] = useState("录入本周食谱后，系统会按日期自动进入儿童端；当天食谱会立即可见。");
   const [parentSyncRecords, setParentSyncRecords] = useState<ParentSyncRecord[]>([]);
   const [parentFeedbackRecords, setParentFeedbackRecords] = useState<ParentFeedbackRecord[]>([]);
   const [selectedParentFeedbackId, setSelectedParentFeedbackId] = useState("");
@@ -624,6 +636,20 @@ export function TeacherStudio() {
   const [parentFeedbackAiLoadingId, setParentFeedbackAiLoadingId] = useState("");
   const [parentSyncStatus, setParentSyncStatus] =
     useState("请选择一条家长反馈，给出老师回复和可执行的家庭育儿指导。");
+  const [teacherPictureBooks, setTeacherPictureBooks] = useState<TeacherPictureBook[]>([]);
+  const [habitTemplates, setHabitTemplates] = useState<HabitCheckinTemplate[]>([]);
+  const [pictureBookThemeId, setPictureBookThemeId] = useState<ThemeId>("habit");
+  const [pictureBookTitle, setPictureBookTitle] = useState("");
+  const [pictureBookText, setPictureBookText] = useState("");
+  const [pictureBookStatus, setPictureBookStatus] =
+    useState("教师可以把生成结果或自写内容发布成幼儿区域自主选听绘本。");
+  const [habitTemplateFocus, setHabitTemplateFocus] = useState("");
+  const [habitTemplateChildPrompt, setHabitTemplateChildPrompt] = useState("");
+  const [habitTemplateStatus, setHabitTemplateStatus] =
+    useState("输入当前要打卡的习惯，AI 会整理成幼儿可语音或文字回应的待定模板。");
+  const [cloudSyncStatus, setCloudSyncStatus] =
+    useState("云同步先在本地服务验证：上传后，换设备可用同一教师账号拉取班级快照。");
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("");
@@ -890,7 +916,7 @@ export function TeacherStudio() {
       .slice(0, 6);
   }, [growthArchive.foodPreferenceRecords]);
   const todayPublishedMenuEntries = useMemo(
-    () => weeklyMenuEntries.filter((entry) => entry.date === todayMenuDateKey && entry.publishedAt),
+    () => getPublishedMenuForDate(weeklyMenuEntries, todayMenuDateKey),
     [todayMenuDateKey, weeklyMenuEntries],
   );
   const menuNutritionPreview = useMemo(() => {
@@ -1420,6 +1446,10 @@ export function TeacherStudio() {
           parseParentFeedbackRecords(window.localStorage.getItem(parentFeedbackStorageKey)),
         );
         setWeeklyMenuEntries(parseWeeklyMenuEntries(window.localStorage.getItem(weeklyMenuStorageKey)));
+        setTeacherPictureBooks(
+          parseTeacherPictureBooks(window.localStorage.getItem(teacherPictureBooksStorageKey)),
+        );
+        setHabitTemplates(parseHabitTemplates(window.localStorage.getItem(habitTemplatesStorageKey)));
         setRosterStatus(
           savedRoster.length > 0
             ? `已读取 ${savedRoster.length} 位幼儿，首页可以按姓名或号数识别身份。`
@@ -1499,6 +1529,22 @@ export function TeacherStudio() {
   }, [childRoster, draftHydrated]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !draftHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(teacherPictureBooksStorageKey, JSON.stringify(teacherPictureBooks));
+  }, [draftHydrated, teacherPictureBooks]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !draftHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(habitTemplatesStorageKey, JSON.stringify(habitTemplates));
+  }, [draftHydrated, habitTemplates]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -1532,6 +1578,16 @@ export function TeacherStudio() {
       if (event.key === weeklyMenuStorageKey) {
         setWeeklyMenuEntries(parseWeeklyMenuEntries(event.newValue));
         setMenuStatus("已同步其他教师端更新的本周食谱。");
+      }
+
+      if (event.key === teacherPictureBooksStorageKey) {
+        setTeacherPictureBooks(parseTeacherPictureBooks(event.newValue));
+        setPictureBookStatus("已同步其他教师端发布的绘本。");
+      }
+
+      if (event.key === habitTemplatesStorageKey) {
+        setHabitTemplates(parseHabitTemplates(event.newValue));
+        setHabitTemplateStatus("已同步其他教师端创建的待定习惯模板。");
       }
     }
 
@@ -2088,7 +2144,7 @@ export function TeacherStudio() {
     setMenuDishName("");
     setMenuIngredients("");
     setMenuFocusIngredients("");
-    setMenuStatus(`${menuDate} ${menuMealType}「${dishName}」已保存；发布后会进入儿童端今日播报，并优先成为观察卡选项。`);
+    setMenuStatus(`${menuDate} ${menuMealType}「${dishName}」已保存；到对应日期会自动进入儿童端今日播报，并优先成为观察卡选项。`);
   }
 
   function publishTodayMenuToChildren() {
@@ -2099,24 +2155,204 @@ export function TeacherStudio() {
       return;
     }
 
-    const publishedAt = new Date().toISOString();
-
-    updateWeeklyMenuEntries((current) =>
-      current.map((entry) =>
-        entry.date === todayMenuDateKey
-          ? {
-              ...entry,
-              publishedAt,
-            }
-          : entry,
-      ),
-    );
-    setMenuStatus(`已发布今日 ${todayEntries.length} 条食谱到儿童端；观察卡会优先显示今日菜品和重点食材，并播放对应营养小发现。`);
+    setMenuStatus(`今日 ${todayEntries.length} 条食谱已按日期在儿童端自动生效；观察卡会优先显示今日菜品和重点食材，并播放对应营养小发现。`);
   }
 
   function removeWeeklyMenuEntry(entryId: string) {
     updateWeeklyMenuEntries((current) => current.filter((entry) => entry.id !== entryId));
     setMenuStatus("已从本周食谱中移除这条记录。");
+  }
+
+  function fillPictureBookFromResult() {
+    if (!result?.content?.trim()) {
+      setPictureBookStatus("请先在跟进生成区生成或填写一段绘本/故事内容。");
+      return;
+    }
+
+    setPictureBookThemeId(themeId);
+    setPictureBookTitle(result.title || (themeId === "food" ? "闽食自主绘本" : "好习惯自主绘本"));
+    setPictureBookText(result.content);
+    setPictureBookStatus("已带入当前生成结果，老师可继续修改后发布给儿童端。");
+  }
+
+  function publishTeacherPictureBook() {
+    const book = buildTeacherPictureBook(pictureBookThemeId, pictureBookTitle, pictureBookText);
+
+    if (book.storyText === "老师还没有填写故事正文。") {
+      setPictureBookStatus("请先填写绘本正文，或从生成结果带入。");
+      return;
+    }
+
+    setTeacherPictureBooks((current) => [book, ...current.filter((item) => item.id !== book.id)].slice(0, 24));
+    setPictureBookTitle("");
+    setPictureBookText("");
+    setPictureBookStatus(`已发布《${book.title}》到儿童端，幼儿可自主选听并完成阅读打卡。`);
+  }
+
+  function removeTeacherPictureBook(bookId: string) {
+    setTeacherPictureBooks((current) => current.filter((item) => item.id !== bookId));
+    setPictureBookStatus("已移除这本教师发布绘本。");
+  }
+
+  function createHabitTemplate() {
+    const template = buildHabitTemplateFromFocus(habitTemplateFocus, habitTemplateChildPrompt);
+
+    setHabitTemplates((current) => [template, ...current.filter((item) => item.id !== template.id)].slice(0, 24));
+    setHabitTemplateFocus("");
+    setHabitTemplateChildPrompt("");
+    setHabitTemplateStatus(`已创建「${template.title}」，儿童端可语音或文字对老师说并打卡。`);
+  }
+
+  function removeHabitTemplate(templateId: string) {
+    setHabitTemplates((current) => current.filter((item) => item.id !== templateId));
+    setHabitTemplateStatus("已移除这个待定习惯模板。");
+  }
+
+  function buildClassCloudPayload() {
+    const gameContentConfigs =
+      typeof window !== "undefined" ? window.localStorage.getItem(gameContentConfigStorageKey) ?? "" : "";
+
+    return {
+      childRoster: JSON.stringify(childRoster),
+      growthArchive: JSON.stringify(growthArchive),
+      weeklyMenuEntries: serializeWeeklyMenuEntries(weeklyMenuEntries),
+      parentSyncRecords: JSON.stringify(parentSyncRecords),
+      parentFeedbackRecords: JSON.stringify(parentFeedbackRecords),
+      gameContentConfigs,
+      teacherPictureBooks: JSON.stringify(teacherPictureBooks),
+      habitTemplates: JSON.stringify(habitTemplates),
+      savedResults: JSON.stringify(limitTeacherHistory(savedResults)),
+    };
+  }
+
+  function applyClassCloudPayload(payload: Record<string, unknown>) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const readText = (key: string) => typeof payload[key] === "string" ? payload[key] : "";
+    const rosterRaw = readText("childRoster");
+    const archiveRaw = readText("growthArchive");
+    const weeklyMenuRaw = readText("weeklyMenuEntries");
+    const parentSyncRaw = readText("parentSyncRecords");
+    const parentFeedbackRaw = readText("parentFeedbackRecords");
+    const gameContentRaw = readText("gameContentConfigs");
+    const pictureBooksRaw = readText("teacherPictureBooks");
+    const habitTemplatesRaw = readText("habitTemplates");
+    const savedResultsRaw = readText("savedResults");
+
+    if (rosterRaw) {
+      window.localStorage.setItem(childRosterStorageKey, rosterRaw);
+      setChildRoster(parseChildRoster(rosterRaw));
+    }
+
+    if (archiveRaw) {
+      window.localStorage.setItem(growthArchiveStorageKey, archiveRaw);
+      setGrowthArchive(parseGrowthArchive(archiveRaw));
+    }
+
+    if (weeklyMenuRaw) {
+      window.localStorage.setItem(weeklyMenuStorageKey, weeklyMenuRaw);
+      setWeeklyMenuEntries(parseWeeklyMenuEntries(weeklyMenuRaw));
+    }
+
+    if (parentSyncRaw) {
+      window.localStorage.setItem(parentSyncStorageKey, parentSyncRaw);
+      setParentSyncRecords(parseParentSyncRecords(parentSyncRaw));
+    }
+
+    if (parentFeedbackRaw) {
+      window.localStorage.setItem(parentFeedbackStorageKey, parentFeedbackRaw);
+      setParentFeedbackRecords(parseParentFeedbackRecords(parentFeedbackRaw));
+    }
+
+    if (gameContentRaw) {
+      window.localStorage.setItem(gameContentConfigStorageKey, gameContentRaw);
+    }
+
+    if (pictureBooksRaw) {
+      window.localStorage.setItem(teacherPictureBooksStorageKey, pictureBooksRaw);
+      setTeacherPictureBooks(parseTeacherPictureBooks(pictureBooksRaw));
+    }
+
+    if (habitTemplatesRaw) {
+      window.localStorage.setItem(habitTemplatesStorageKey, habitTemplatesRaw);
+      setHabitTemplates(parseHabitTemplates(habitTemplatesRaw));
+    }
+
+    if (savedResultsRaw) {
+      try {
+        const parsed = JSON.parse(savedResultsRaw) as unknown;
+        const nextHistory = Array.isArray(parsed)
+          ? limitTeacherHistory(
+              parsed.filter(
+                (item): item is SavedTeacherResult =>
+                  Boolean(
+                    item &&
+                      typeof item === "object" &&
+                      typeof (item as SavedTeacherResult).id === "string" &&
+                      typeof (item as SavedTeacherResult).title === "string" &&
+                      typeof (item as SavedTeacherResult).content === "string" &&
+                      Array.isArray((item as SavedTeacherResult).tips),
+                  ),
+              ),
+            )
+          : [];
+        window.localStorage.setItem(historyStorageKey, JSON.stringify(nextHistory));
+        setSavedResults(nextHistory);
+      } catch {
+        setCloudSyncStatus("云同步已拉取主要班级数据，但历史生成记录解析失败，已跳过。");
+      }
+    }
+  }
+
+  async function syncClassCloud(action: "push" | "pull") {
+    const authSnapshot = readTeacherAuthSnapshot();
+
+    if (!authSnapshot.hasCompleteAccount) {
+      setCloudSyncStatus("请先创建本机教师账号，再进行云同步验证。");
+      return;
+    }
+
+    setIsCloudSyncing(true);
+    setCloudSyncStatus(action === "push" ? "正在上传班级快照..." : "正在拉取班级快照...");
+
+    try {
+      const response = await fetch("/api/class-cloud-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          account: authSnapshot.account,
+          passcode: authSnapshot.passcode,
+          ...(action === "push" ? { payload: buildClassCloudPayload() } : {}),
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        updatedAt?: string;
+        payload?: Record<string, unknown>;
+      };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "云同步接口暂时不可用。");
+      }
+
+      if (action === "pull") {
+        applyClassCloudPayload(data.payload ?? {});
+        setCloudSyncStatus(`已从云同步快照拉取班级数据：${data.updatedAt ?? "刚刚"}。`);
+        return;
+      }
+
+      setCloudSyncStatus(`已上传班级快照：${data.updatedAt ?? "刚刚"}。可在另一台设备用同一教师账号拉取。`);
+    } catch (error) {
+      setCloudSyncStatus(error instanceof Error ? error.message : "云同步失败，请稍后再试。");
+    } finally {
+      setIsCloudSyncing(false);
+    }
   }
 
   function bringDailyMenuSummaryToGeneration(
@@ -3070,7 +3306,7 @@ export function TeacherStudio() {
             <p className="text-sm font-semibold text-cyan-700">闽食每日探味</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">每周食谱发布</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              老师录入本周食谱后，可发布今日食谱到儿童端。孩子会先听幼儿化播报；观察卡会优先显示今日菜品、重点食材，并说出不同营养小发现。
+              老师提前录入本周食谱后，系统会按日期自动进入儿童端。孩子会先听幼儿化播报；观察卡会优先显示今日菜品、重点食材，并说出不同营养小发现。
             </p>
           </div>
           <button
@@ -3078,7 +3314,7 @@ export function TeacherStudio() {
             className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
             type="button"
           >
-            发布今日食谱到儿童端
+            检查今日自动播报
           </button>
         </div>
 
@@ -3177,7 +3413,7 @@ export function TeacherStudio() {
           <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-cyan-700">今日已发布</p>
+                <p className="text-sm font-semibold text-cyan-700">今日自动发布</p>
                 <h3 className="mt-1 text-xl font-semibold text-slate-900">儿童端今日闽食播报来源</h3>
               </div>
               <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900">
@@ -3202,10 +3438,8 @@ export function TeacherStudio() {
                             {buildWeeklyMenuNutritionPreview(entry)}
                           </p>
                         </div>
-                        <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                          entry.publishedAt ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-600"
-                        }`}>
-                          {entry.publishedAt ? "已发布" : "未发布"}
+                        <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+                          按日期自动发布
                         </span>
                       </div>
                       <button
@@ -3219,7 +3453,7 @@ export function TeacherStudio() {
                   ))
               ) : (
                 <p className="rounded-[1.4rem] bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-600">
-                  今天还没有食谱。先在左侧录入，再点击“发布今日食谱到儿童端”。
+                  今天还没有食谱。可先在左侧录入今天或本周对应日期的菜品，系统会按日期自动进入儿童端。
                 </p>
               )}
             </div>
@@ -3233,7 +3467,7 @@ export function TeacherStudio() {
             <p className="text-sm font-semibold text-orange-700">每日食谱观察汇总</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">今日菜品与食材接受度</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              按今日已发布食谱聚合儿童端观察记录，只用于温和食育跟进和班级聚合建议。
+              按今日自动发布食谱聚合儿童端观察记录，只用于温和食育跟进和班级聚合建议。
             </p>
           </div>
           <span className="rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-900">
@@ -3835,9 +4069,27 @@ export function TeacherStudio() {
 
         <div className="rounded-[2.5rem] bg-[linear-gradient(180deg,#e6fbfa_0%,#ffffff_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
           <p className="text-sm font-semibold text-teal-700">生成结果</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">
-            {result?.title ?? "还没有生成内容"}
-          </h2>
+          {result ? (
+            <input
+              value={result.title}
+              onChange={(event) => {
+                const nextTitle = event.target.value.slice(0, 48);
+                setResult((current) =>
+                  current
+                    ? {
+                        ...current,
+                        title: nextTitle,
+                        needsReview: true,
+                      }
+                    : current,
+                );
+                setCopyStatus("标题已修改，复制和试播会使用老师确认后的内容。");
+              }}
+              className="mt-2 w-full rounded-[1.3rem] border border-teal-100 bg-white/90 px-4 py-3 text-xl font-semibold text-slate-900 outline-none transition focus:border-teal-400"
+            />
+          ) : (
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">还没有生成内容</h2>
+          )}
 
           {result ? (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -3857,9 +4109,34 @@ export function TeacherStudio() {
           ) : null}
 
           <div className="mt-5 rounded-[2rem] bg-white/80 p-5">
-            <p className="whitespace-pre-line text-sm leading-8 text-slate-700">
-              {result?.content ?? "点击左侧按钮后，这里会出现可以继续修改的跟进建议、课堂活动、家园同步话术或鼓励语。"}
-            </p>
+            {result ? (
+              <label className="block">
+                <span className="text-xs font-semibold text-teal-700">
+                  老师可直接修改生成内容，确认后再复制、试播或同步使用
+                </span>
+                <textarea
+                  value={result.content}
+                  onChange={(event) => {
+                    const nextContent = event.target.value.slice(0, 900);
+                    setResult((current) =>
+                      current
+                        ? {
+                            ...current,
+                            content: nextContent,
+                            needsReview: true,
+                          }
+                        : current,
+                    );
+                    setCopyStatus("生成内容已修改，后续复制和试播会使用修改后的版本。");
+                  }}
+                  className="mt-3 min-h-72 w-full resize-y rounded-[1.5rem] border border-teal-100 bg-slate-50 px-4 py-3 text-sm leading-8 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white"
+                />
+              </label>
+            ) : (
+              <p className="whitespace-pre-line text-sm leading-8 text-slate-700">
+                点击左侧按钮后，这里会出现可以继续修改的跟进建议、课堂活动、家园同步话术或鼓励语。
+              </p>
+            )}
           </div>
 
           {parentShareLine ? (
@@ -3935,6 +4212,176 @@ export function TeacherStudio() {
             </p>
           ) : null}
         </div>
+      </section>
+
+      <section className="order-5 rounded-[2.5rem] bg-[linear-gradient(135deg,#f6f0ff_0%,#ffffff_52%,#e7fbf7_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-violet-700">幼习宝内容发布</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">教师绘本与待定习惯模板</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              老师可以把生成结果发布成绘本，也可以按当下需要创建习惯打卡模板，幼儿在儿童端自主选听、语音或文字回应并打卡。
+            </p>
+          </div>
+          <span className="rounded-full bg-white/88 px-4 py-2 text-sm font-semibold text-violet-900 shadow-sm">
+            绘本 {teacherPictureBooks.length} · 模板 {habitTemplates.length}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-violet-700">教师发布绘本</p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-900">区域时间自主选听</h3>
+              </div>
+              <button
+                onClick={fillPictureBookFromResult}
+                className="rounded-full bg-violet-100 px-4 py-2 text-sm font-semibold text-violet-900 transition hover:-translate-y-0.5"
+                type="button"
+              >
+                用生成结果填入
+              </button>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-[auto_1fr]">
+              <select
+                value={pictureBookThemeId}
+                onChange={(event) => setPictureBookThemeId(event.target.value === "food" ? "food" : "habit")}
+                className="rounded-[1.1rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
+              >
+                <option value="habit">幼习宝绘本</option>
+                <option value="food">闽食绘本</option>
+              </select>
+              <input
+                value={pictureBookTitle}
+                onChange={(event) => setPictureBookTitle(event.target.value.slice(0, 36))}
+                placeholder="绘本标题，如 饭前洗手小星"
+                className="rounded-[1.1rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
+              />
+            </div>
+            <textarea
+              value={pictureBookText}
+              onChange={(event) => setPictureBookText(event.target.value.slice(0, 900))}
+              placeholder="填写绘本正文，或从右侧生成结果带入后再修改。"
+              className="mt-3 min-h-40 w-full rounded-[1.4rem] border border-violet-100 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-violet-300"
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                onClick={publishTeacherPictureBook}
+                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                type="button"
+              >
+                发布到儿童端
+              </button>
+              <p className="text-sm font-semibold text-violet-900">{pictureBookStatus}</p>
+            </div>
+            <div className="mt-4 grid gap-2">
+              {teacherPictureBooks.slice(0, 3).map((book) => (
+                <article key={book.id} className="rounded-[1.2rem] bg-violet-50 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">{book.title}</p>
+                      <p className="mt-1 text-xs font-semibold text-violet-700">
+                        {book.themeId === "food" ? "闽食绘本" : "幼习宝绘本"} · {formatParentSyncTime(book.publishedAt)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removeTeacherPictureBook(book.id)}
+                      className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm"
+                      type="button"
+                    >
+                      移除
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+            <p className="text-sm font-semibold text-emerald-700">待定习惯模板</p>
+            <h3 className="mt-1 text-xl font-semibold text-slate-900">幼儿对老师说</h3>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              用于临时习惯主题，例如“午睡整理”“排队等待”“轻声表达”。儿童端会提供语音或文字回应入口。
+            </p>
+            <input
+              value={habitTemplateFocus}
+              onChange={(event) => setHabitTemplateFocus(event.target.value.slice(0, 30))}
+              placeholder="习惯主题，如 午睡整理 / 轻声表达"
+              className="mt-4 w-full rounded-[1.1rem] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-300"
+            />
+            <input
+              value={habitTemplateChildPrompt}
+              onChange={(event) => setHabitTemplateChildPrompt(event.target.value.slice(0, 100))}
+              placeholder="幼儿提示语，如 我想对老师说：我今天排队等一等"
+              className="mt-3 w-full rounded-[1.1rem] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-300"
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                onClick={createHabitTemplate}
+                className="rounded-full bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                type="button"
+              >
+                AI创建模板
+              </button>
+              <p className="text-sm font-semibold text-emerald-900">{habitTemplateStatus}</p>
+            </div>
+            <div className="mt-4 grid gap-2">
+              {habitTemplates.slice(0, 3).map((template) => (
+                <article key={template.id} className="rounded-[1.2rem] bg-emerald-50 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">{template.title}</p>
+                      <p className="mt-1 text-xs font-semibold text-emerald-800">
+                        {template.childPrompt}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removeHabitTemplate(template.id)}
+                      className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm"
+                      type="button"
+                    >
+                      移除
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="order-5 rounded-[2.5rem] bg-[linear-gradient(135deg,#edf7ff_0%,#ffffff_52%,#f7fff2_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-cyan-700">班级云同步</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">换设备不换账号</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              当前先在本地服务验证上传/拉取班级快照。通过人工验收后，再定版本并同步到服务器。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => void syncClassCloud("push")}
+              disabled={isCloudSyncing}
+              className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:opacity-60"
+              type="button"
+            >
+              上传班级快照
+            </button>
+            <button
+              onClick={() => void syncClassCloud("pull")}
+              disabled={isCloudSyncing}
+              className="rounded-full bg-cyan-100 px-5 py-3 text-sm font-semibold text-cyan-900 transition hover:-translate-y-0.5 disabled:opacity-60"
+              type="button"
+            >
+              从云同步拉取
+            </button>
+          </div>
+        </div>
+        <p className="mt-4 rounded-[1.4rem] bg-white/86 px-4 py-3 text-sm font-semibold text-cyan-900 shadow-sm">
+          {cloudSyncStatus}
+        </p>
       </section>
 
       <section className="order-6 rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">

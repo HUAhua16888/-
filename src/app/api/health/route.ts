@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import packageJson from "../../../../package.json";
 
 export const maxDuration = 10;
+
+const appVersion = packageJson.version;
 
 type CapabilityStatus = {
   label: string;
@@ -105,6 +108,7 @@ export async function GET(request: Request) {
       ok: true,
       app: "幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体",
       platform: "幼芽成长智伴",
+      version: appVersion,
       now: new Date().toISOString(),
       status: publicMode === "local-demo" ? "basic" : "available",
     });
@@ -123,6 +127,7 @@ export async function GET(request: Request) {
     ok: true,
     app: "幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体",
     platform: "幼芽成长智伴",
+    version: appVersion,
     now: new Date().toISOString(),
     summary: {
       readyCapabilities: readyCount,

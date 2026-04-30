@@ -40,6 +40,14 @@ import {
   type MiniGameRecord,
 } from "@/lib/growth-archive";
 import { getFoodPreferenceFollowUp, getMiniGameFollowUp } from "@/lib/parent-sync";
+import {
+  habitTemplatesStorageKey,
+  parseHabitTemplates,
+  parseTeacherPictureBooks,
+  teacherPictureBooksStorageKey,
+  type HabitCheckinTemplate,
+  type TeacherPictureBook,
+} from "@/lib/teacher-published-content";
 import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
@@ -87,6 +95,8 @@ type StoryApiResponse = {
   fallbackUsed?: boolean;
   error?: string;
 };
+
+type FoodKitchenRecipe = (typeof foodKitchenRecipes)[number];
 
 type StoryInteractionMode = "pictureBook" | "adventure";
 
@@ -313,11 +323,84 @@ function buildHabitStoryMission(input: string): HabitStoryMission {
   };
 }
 
-function buildKitchenBroadcastText(
-  recipe: (typeof foodKitchenRecipes)[number],
-  childThought: string,
-  uploadedFileName = "",
-) {
+function normalizeKitchenDishLabel(value: string) {
+  return value
+    .replace(/我想做|我想要做|我要做|想做|做一个|做一道|。|！|!|，|,|\s/g, "")
+    .trim()
+    .slice(0, 16);
+}
+
+function getKitchenDishIcon(label: string) {
+  if (/海蛎|蛏|鱼|虾|贝/.test(label)) return "🐟";
+  if (/面|汤|糊|粥/.test(label)) return "🥣";
+  if (/饼|卷/.test(label)) return "🌯";
+  if (/甜|膏|冻|水果/.test(label)) return "🍧";
+  if (/粽|饭|米/.test(label)) return "🍙";
+  if (/菜|青|菇|葱|蒜|南瓜|豆腐/.test(label)) return "🥬";
+  return "🍽️";
+}
+
+function buildKitchenActionsForDish(label: string) {
+  if (/汤|糊|粥|面/.test(label)) {
+    return [`看一看${label}食材`, "搅一搅热汤", "盛一盛小碗", "说一句暖暖的发现"];
+  }
+
+  if (/饼|卷/.test(label)) {
+    return ["铺一铺材料", "放一放蔬菜或馅料", "卷一卷食材", "介绍一下颜色和形状"];
+  }
+
+  if (/甜|膏|冻|水果/.test(label)) {
+    return [`舀一舀${label}`, "加一加清甜配料", "拌一拌小勺子", "分享一句甜甜发现"];
+  }
+
+  if (/粽|饭|米/.test(label)) {
+    return ["看一看米粒", "找一找配料", "闻一闻香味", "介绍一下形状"];
+  }
+
+  return [`看一看${label}`, "洗一洗或摆一摆食材", "拌一拌小盘子", "说一句我发现了什么"];
+}
+
+function buildCustomKitchenRecipe(rawLabel: string): FoodKitchenRecipe {
+  const label = normalizeKitchenDishLabel(rawLabel) || "我的小厨房菜";
+
+  return {
+    label,
+    icon: getKitchenDishIcon(label),
+    area: "幼儿点菜小厨房",
+    actions: buildKitchenActionsForDish(label),
+    chant: `${label}，看一看，闻一闻，小厨师慢慢说发现。`,
+  };
+}
+
+function getKitchenActionIcon(action: string) {
+  if (/看|找/.test(action)) return "👀";
+  if (/洗/.test(action)) return "💧";
+  if (/拌|搅/.test(action)) return "🥄";
+  if (/煎|热/.test(action)) return "🔥";
+  if (/卷|包/.test(action)) return "🤲";
+  if (/盛|舀|摆/.test(action)) return "🍽️";
+  if (/闻/.test(action)) return "🌿";
+  if (/说|介绍|分享/.test(action)) return "💬";
+  return "⭐";
+}
+
+function buildKitchenStepVisual(action: string, recipe: FoodKitchenRecipe) {
+  return `${getKitchenActionIcon(action)} ${recipe.label}步骤图卡：${action}`;
+}
+
+function getKitchenRecipeIngredients(recipe: FoodKitchenRecipe) {
+  const label = recipe.label;
+
+  if (/海蛎煎/.test(label)) return ["海蛎", "鸡蛋", "地瓜粉"];
+  if (/面线糊/.test(label)) return ["面线", "清汤", "小葱"];
+  if (/润饼/.test(label)) return ["青菜", "薄饼皮", "花生"];
+  if (/石花膏/.test(label)) return ["石花膏", "水果", "蜂蜜水"];
+  if (/肉粽/.test(label)) return ["糯米", "香菇", "肉"];
+
+  return [label];
+}
+
+function buildKitchenBroadcastText(recipe: FoodKitchenRecipe, childThought: string, uploadedFileName = "") {
   const cleanThought = childThought.trim().replace(/[。！!]+$/g, "");
   const unsure = !cleanThought || /不知道|不会|不懂|随便|没有/.test(cleanThought);
   const textureMap: Record<string, string> = {
@@ -328,17 +411,19 @@ function buildKitchenBroadcastText(
     闽南肉粽: "粽叶香香、米粒亮亮，里面可能有香菇和家常配料",
   };
   const description = textureMap[recipe.label] ?? "有自己的颜色、形状和家乡味道";
+  const stepText = recipe.actions.slice(0, 3).join("、");
+  const nutritionText = buildFoodNutritionIntro(recipe.label, getKitchenRecipeIngredients(recipe));
   const uploadText = uploadedFileName ? "我上传了作品。" : "";
 
   if (unsure) {
-    return `我今天介绍的是${recipe.label}。它${description}。${uploadText}我愿意把它介绍给大家。`;
+    return `我今天介绍的是${recipe.label}。它${description}。我做了${stepText}。${nutritionText}${uploadText}我愿意把它介绍给大家。`;
   }
 
   if (cleanThought.length <= 8) {
-    return `我今天介绍的是${recipe.label}。我发现它${cleanThought}。${uploadText}我愿意把它介绍给大家。`;
+    return `我今天介绍的是${recipe.label}。我发现它${cleanThought}。我做了${stepText}。${nutritionText}${uploadText}我愿意把它介绍给大家。`;
   }
 
-  return `我今天介绍的是${recipe.label}。${cleanThought}。${uploadText}我愿意把它介绍给大家。`;
+  return `我今天介绍的是${recipe.label}。${cleanThought}。我做了${stepText}。${nutritionText}${uploadText}我愿意把它介绍给大家。`;
 }
 
 const habitTaskAnswerOptions: Record<
@@ -548,35 +633,39 @@ function createFoodTrainRound() {
   };
 }
 
-function createFoodTreasureRound() {
+function createFoodTreasureRound(randomize = true) {
   const sensitiveFoods = minnanFoodClues.filter((item) => /^(香菇|小葱|蒜)$/.test(item.label));
-  const shuffledTargets = shuffleItems(minnanFoodClues).slice(0, Math.min(5, minnanFoodClues.length));
+  const targetSource = randomize ? shuffleItems(minnanFoodClues) : [...minnanFoodClues];
+  const shuffledTargets = targetSource.slice(0, Math.min(5, minnanFoodClues.length));
   const hasSensitiveFood = shuffledTargets.some((item) => sensitiveFoods.some((food) => food.label === item.label));
   const targets =
     hasSensitiveFood || sensitiveFoods.length === 0
       ? shuffledTargets
       : [
           ...shuffledTargets.slice(0, Math.max(0, shuffledTargets.length - 1)),
-          shuffleItems(sensitiveFoods)[0],
+          randomize ? shuffleItems(sensitiveFoods)[0] : sensitiveFoods[0],
         ];
   const targetLabels = new Set(targets.map((item) => item.label));
-  const distractors = shuffleItems(minnanFoodClues.filter((item) => !targetLabels.has(item.label))).slice(
+  const distractorSource = minnanFoodClues.filter((item) => !targetLabels.has(item.label));
+  const distractors = (randomize ? shuffleItems(distractorSource) : distractorSource).slice(
     0,
     Math.max(0, 8 - targets.length),
   );
 
   return {
     targets,
-    choices: shuffleItems([...targets, ...distractors]),
+    choices: randomize ? shuffleItems([...targets, ...distractors]) : [...targets, ...distractors],
   };
 }
 
-function createFoodGuessRound() {
-  return shuffleItems(foodGuessRounds)
+function createFoodGuessRound(randomize = true) {
+  const sourceRounds = randomize ? shuffleItems(foodGuessRounds) : [...foodGuessRounds];
+
+  return sourceRounds
     .slice(0, Math.min(4, foodGuessRounds.length))
     .map((round) => ({
       ...round,
-      options: shuffleItems(round.options),
+      options: randomize ? shuffleItems(round.options) : [...round.options],
     }));
 }
 
@@ -593,17 +682,17 @@ function createMenuFoodPreferenceChoices(todayMenuEntries: WeeklyMenuEntry[] = [
   return uniqueMenuLabels.map(buildFoodPreferenceOption);
 }
 
-function createFoodPreferenceRound(todayMenuEntries: WeeklyMenuEntry[] = []) {
+function createFoodPreferenceRound(todayMenuEntries: WeeklyMenuEntry[] = [], randomize = true) {
   const menuChoices = createMenuFoodPreferenceChoices(todayMenuEntries);
   const menuLabelSet = new Set(menuChoices.map((item) => item.label));
-  const fallbackChoices = createFoodPreferenceChoices().filter((item) => !menuLabelSet.has(item.label));
+  const fallbackChoices = createFoodPreferenceChoices(randomize).filter((item) => !menuLabelSet.has(item.label));
   const foods = menuChoices.length > 0
     ? [...menuChoices, ...fallbackChoices].slice(0, 18)
     : fallbackChoices;
 
   return {
     foods,
-    reasons: shuffleItems(foodPreferenceReasons),
+    reasons: randomize ? shuffleItems(foodPreferenceReasons) : [...foodPreferenceReasons],
   };
 }
 
@@ -657,8 +746,10 @@ function buildFoodRoleIntro(food: ReturnType<typeof buildFoodPreferenceOption>) 
   return `我是${food.label}。${ingredientText}${food.ingredientIntro}${nutritionIntro}你今天还在认识我也没关系，先看见名字、食材和一个营养小发现就很好。`;
 }
 
-function createFoodPreferenceChoices() {
-  return shuffleItems(foodPreferenceFixedLabels.map(buildFoodPreferenceOption));
+function createFoodPreferenceChoices(randomize = true) {
+  const choices = foodPreferenceFixedLabels.map(buildFoodPreferenceOption);
+
+  return randomize ? shuffleItems(choices) : choices;
 }
 
 function resolveFoodMenuContext(label: string, todayMenuEntries: WeeklyMenuEntry[] = []) {
@@ -725,8 +816,10 @@ function getFoodPreferenceShapeHint(label: string) {
   return `${label}的颜色、形状和气味可以先观察。`;
 }
 
-function createFoodKitchenRound() {
-  return shuffleItems(foodKitchenRecipes);
+function createFoodKitchenRound(randomize = true) {
+  const recipes = [...foodKitchenRecipes];
+
+  return randomize ? shuffleItems(recipes) : recipes;
 }
 
 function getThemeReadyStatus(themeId: ThemeId) {
@@ -845,7 +938,7 @@ function buildAiMiniGameCompletionCopy(
   };
 }
 
-function buildKitchenStepSpeech(recipe: (typeof foodKitchenRecipes)[number], nextAction?: string) {
+function buildKitchenStepSpeech(recipe: FoodKitchenRecipe, nextAction?: string) {
   return nextAction
     ? `${recipe.label}小厨房，下一步是：${nextAction}。${recipe.chant}`
     : `${recipe.label}小厨房完成啦。${recipe.chant}你愿意参与制作步骤，也会帮忙整理。`;
@@ -2806,6 +2899,338 @@ function ReadingCheckinGame({
   );
 }
 
+function TeacherPictureBookShelf({
+  books,
+  themeId,
+  onSpeak,
+  onComplete,
+}: {
+  books: TeacherPictureBook[];
+  themeId: ThemeId;
+  onSpeak?: SpeakHandler;
+  onComplete?: (
+    pickedItems: string[],
+    detail?: Partial<Omit<MiniGameRecord, "completedAt" | "gameKey" | "badgeName" | "themeId" | "pickedItems">>,
+  ) => void;
+}) {
+  const visibleBooks = books.filter((book) => book.themeId === themeId).slice(0, 6);
+  const [activeBookId, setActiveBookId] = useState("");
+  const [selectedOption, setSelectedOption] = useState("");
+  const [feedback, setFeedback] = useState("选一本老师发布的绘本，听完后选一张答案卡打卡。");
+  const activeBook = visibleBooks.find((book) => book.id === activeBookId) ?? visibleBooks[0];
+  const completed = Boolean(activeBook && selectedOption && activeBookId === activeBook.id);
+
+  if (visibleBooks.length === 0) {
+    return (
+      <div className="rounded-[2rem] border border-dashed border-violet-200 bg-white/78 p-5 shadow-sm xl:col-span-2">
+        <p className="text-sm font-semibold text-violet-700">教师绘本馆</p>
+        <h3 className="mt-1 text-xl font-semibold text-slate-900">等待老师发布绘本</h3>
+        <p className="mt-2 text-sm leading-7 text-slate-600">
+          教师端发布绘本后，幼儿可以在区域时间自主选听并完成阅读打卡。
+        </p>
+      </div>
+    );
+  }
+
+  function pickBook(book: TeacherPictureBook) {
+    setActiveBookId(book.id);
+    setSelectedOption("");
+    const message = `选好了《${book.title}》。可以点播放绘本，听完再选答案卡。`;
+    setFeedback(message);
+    onSpeak?.(message);
+  }
+
+  function playBook() {
+    if (!activeBook) {
+      return;
+    }
+
+    setFeedback("绘本正在播放，听完后选一张答案卡。");
+    onSpeak?.(activeBook.storyText);
+  }
+
+  function completeBook(option: string) {
+    if (!activeBook || selectedOption) {
+      return;
+    }
+
+    const message = `阅读打卡完成：你听了《${activeBook.title}》，选择了“${option}”，也完成了“${activeBook.habitTask}”。`;
+    setActiveBookId(activeBook.id);
+    setSelectedOption(option);
+    setFeedback(message);
+    onSpeak?.(message);
+    onComplete?.([
+      `教师绘本:${activeBook.title}`,
+      `回答:${option}`,
+      `小任务:${activeBook.habitTask}`,
+    ], {
+      storyTopic: activeBook.title,
+      answerContent: option,
+      habitTask: activeBook.habitTask,
+    });
+  }
+
+  return (
+    <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)] xl:col-span-2">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-violet-700">教师绘本馆</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">区域时间自主选听</h3>
+          <p className="mt-2 text-sm leading-7 text-slate-600">
+            老师发布的绘本会出现在这里，孩子可以自己选、自己听、自己完成阅读打卡。
+          </p>
+        </div>
+        <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听提示" tone="violet" />
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        {visibleBooks.map((book) => (
+          <button
+            key={book.id}
+            onClick={() => pickBook(book)}
+            className={`rounded-[1.4rem] px-4 py-4 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
+              activeBook?.id === book.id ? "bg-violet-100 text-violet-950 ring-2 ring-violet-200" : "bg-slate-50 text-slate-800"
+            }`}
+            type="button"
+          >
+            <span className="text-3xl">📖</span>
+            <span className="mt-2 block">{book.title}</span>
+            <span className="mt-1 block text-xs leading-5 text-violet-700">
+              {book.themeId === "food" ? "闽食绘本" : "幼习宝绘本"}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {activeBook ? (
+        <div className="mt-5 rounded-[1.6rem] bg-violet-50 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-violet-700">正在听</p>
+              <h4 className="mt-1 text-xl font-semibold text-slate-900">{activeBook.title}</h4>
+              <p className="mt-2 line-clamp-3 text-sm leading-7 text-slate-700">{activeBook.storyText}</p>
+            </div>
+            <button
+              onClick={playBook}
+              className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+              type="button"
+            >
+              播放绘本
+            </button>
+          </div>
+          <p className="mt-4 text-sm font-semibold text-violet-900">{activeBook.question}</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {activeBook.options.map((option) => (
+              <button
+                key={option}
+                onClick={() => completeBook(option)}
+                disabled={completed}
+                className={`rounded-[1.3rem] px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  selectedOption === option ? "bg-emerald-100 text-emerald-900" : "bg-white text-violet-950"
+                }`}
+                type="button"
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+          <p className="mt-4 rounded-[1.2rem] bg-white/80 px-4 py-3 text-sm font-semibold text-violet-950">
+            {feedback}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function HabitTemplateCheckinPanel({
+  templates,
+  onSpeak,
+  onComplete,
+}: {
+  templates: HabitCheckinTemplate[];
+  onSpeak?: SpeakHandler;
+  onComplete?: (
+    pickedItems: string[],
+    detail?: Partial<Omit<MiniGameRecord, "completedAt" | "gameKey" | "badgeName" | "themeId" | "pickedItems">>,
+  ) => void;
+}) {
+  const [activeTemplateId, setActiveTemplateId] = useState("");
+  const [childReply, setChildReply] = useState("");
+  const [selectedCard, setSelectedCard] = useState("");
+  const [feedback, setFeedback] = useState("选一个老师发布的待定模板，可以用语音或文字对老师说。");
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const activeTemplate = templates.find((template) => template.id === activeTemplateId) ?? templates[0];
+  const completed = Boolean(selectedCard);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, []);
+
+  if (templates.length === 0) {
+    return null;
+  }
+
+  function pickTemplate(template: HabitCheckinTemplate) {
+    setActiveTemplateId(template.id);
+    setChildReply("");
+    setSelectedCard("");
+    const message = `老师发布了${template.title}。你可以听故事，也可以对老师说一句。`;
+    setFeedback(message);
+    onSpeak?.(message);
+  }
+
+  function toggleVoiceInput() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const voiceWindow = window as Window & {
+      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    };
+    const SpeechRecognitionApi =
+      voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionApi) {
+      setFeedback("当前浏览器不支持语音输入，可以先用文字对老师说。");
+      return;
+    }
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognitionApi();
+    recognition.lang = "zh-CN";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
+      if (transcript) {
+        setChildReply(transcript.slice(0, 80));
+        setFeedback("老师听到你的想法啦。再选一张打卡答案卡。");
+      }
+    };
+    recognition.onerror = () => {
+      setFeedback("刚才没有听清楚，可以再说一次或用文字输入。");
+      setIsListening(false);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+    setFeedback("正在听你对老师说。");
+  }
+
+  function completeTemplate(card: string) {
+    if (!activeTemplate || completed) {
+      return;
+    }
+
+    const reply = childReply.trim() || activeTemplate.childPrompt;
+    const message = `待定模板打卡完成：你选择了“${card}”，也对老师说：“${reply}”。`;
+    setSelectedCard(card);
+    setFeedback(message);
+    onSpeak?.(message);
+    onComplete?.([
+      `待定模板:${activeTemplate.title}`,
+      `回应:${reply}`,
+      `答案:${card}`,
+      `小任务:${activeTemplate.habitTask}`,
+    ], {
+      storyTopic: activeTemplate.title,
+      answerContent: card,
+      habitTask: activeTemplate.habitTask,
+    });
+  }
+
+  return (
+    <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)] xl:col-span-2">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-emerald-700">老师发布的待定模板</p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">我想对老师说</h3>
+          <p className="mt-2 text-sm leading-7 text-slate-600">
+            幼儿可以选择当前班级需要练习的习惯，用语音或文字说给老师，再完成一张打卡答案卡。
+          </p>
+        </div>
+        <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听提示" tone="emerald" />
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        {templates.slice(0, 6).map((template) => (
+          <button
+            key={template.id}
+            onClick={() => pickTemplate(template)}
+            className={`rounded-[1.4rem] px-4 py-4 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
+              activeTemplate?.id === template.id ? "bg-emerald-100 text-emerald-950 ring-2 ring-emerald-200" : "bg-slate-50 text-slate-800"
+            }`}
+            type="button"
+          >
+            <span className="text-3xl">🗣️</span>
+            <span className="mt-2 block">{template.title}</span>
+            <span className="mt-1 block text-xs leading-5 text-emerald-700">{template.habitFocus}</span>
+          </button>
+        ))}
+      </div>
+
+      {activeTemplate ? (
+        <div className="mt-5 rounded-[1.6rem] bg-emerald-50 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-emerald-800">当前模板故事</p>
+              <h4 className="mt-1 text-xl font-semibold text-slate-900">{activeTemplate.title}</h4>
+              <p className="mt-2 text-sm leading-7 text-slate-700">{activeTemplate.storyText}</p>
+            </div>
+            <SpeechCueButton text={activeTemplate.storyText} onSpeak={onSpeak} label="听故事" tone="emerald" />
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <input
+              value={childReply}
+              onChange={(event) => setChildReply(event.target.value.slice(0, 80))}
+              placeholder={activeTemplate.childPrompt}
+              className="rounded-[1.1rem] border border-emerald-100 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-emerald-300"
+            />
+            <button
+              onClick={toggleVoiceInput}
+              className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                isListening ? "bg-rose-100 text-rose-800" : "bg-slate-900 text-white"
+              }`}
+              type="button"
+            >
+              {isListening ? "停止听写" : "语音对老师说"}
+            </button>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {activeTemplate.answerCards.map((card) => (
+              <button
+                key={card}
+                onClick={() => completeTemplate(card)}
+                disabled={completed}
+                className={`rounded-[1.3rem] px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  selectedCard === card ? "bg-emerald-700 text-white" : "bg-white text-emerald-950"
+                }`}
+                type="button"
+              >
+                {card}
+              </button>
+            ))}
+          </div>
+          <p className="mt-4 rounded-[1.2rem] bg-white/80 px-4 py-3 text-sm font-semibold text-emerald-950">
+            {feedback}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MealMannersGame({
   contentConfig,
   onComplete,
@@ -3249,7 +3674,7 @@ function FoodGuessGame({
   onComplete?: (pickedItems: string[]) => void;
   onSpeak?: SpeakHandler;
 }) {
-  const [rounds, setRounds] = useState(() => createFoodGuessRound());
+  const [rounds, setRounds] = useState(() => createFoodGuessRound(false));
   const [roundIndex, setRoundIndex] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
   const [feedback, setFeedback] = useState("打开美食宝箱，听线索猜食材。");
@@ -3387,7 +3812,7 @@ function FoodTreasureQuestGame({
   onComplete?: (pickedItems?: string[]) => void;
   onSpeak?: SpeakHandler;
 }) {
-  const [initialRound] = useState(() => createFoodTreasureRound());
+  const [initialRound] = useState(() => createFoodTreasureRound(false));
   const [questFoods, setQuestFoods] = useState(initialRound.targets);
   const [choiceBoard, setChoiceBoard] = useState(initialRound.choices);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -3771,9 +4196,9 @@ function TodayMenuBroadcast({
     return (
       <div className="rounded-[2rem] border border-dashed border-cyan-200 bg-white/78 p-5 shadow-sm xl:col-span-2">
         <p className="text-sm font-semibold text-cyan-700">今日闽食播报</p>
-        <h3 className="mt-1 text-xl font-semibold text-slate-900">等待老师发布今日食谱</h3>
+        <h3 className="mt-1 text-xl font-semibold text-slate-900">等待老师录入今日食谱</h3>
         <p className="mt-2 text-sm leading-7 text-slate-600">
-          老师在教师工作台发布今日食谱后，这里会先播报今天会遇见的菜品和重点食材。
+          老师在教师工作台录入本周食谱后，到了对应日期这里会先播报今天会遇见的菜品和重点食材。
         </p>
       </div>
     );
@@ -3786,7 +4211,7 @@ function TodayMenuBroadcast({
           <p className="text-sm font-semibold text-cyan-700">今日闽食播报</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">先听今天会遇见的菜和食材</h3>
           <p className="mt-2 text-sm leading-7 text-slate-600">
-            老师发布的今日食谱会优先进入美食认识观察卡，孩子可以先看一看、闻一闻，不着急入口。
+            老师录入的今日食谱会优先进入美食认识观察卡，孩子可以先看一看、闻一闻，不着急入口。
           </p>
         </div>
         <SpeechCueButton text={menuSpeech} onSpeak={onSpeak} label="听今日食谱" tone="cyan" />
@@ -3839,13 +4264,13 @@ function FoodPreferenceGame({
 }) {
   const cleanPreferredFood = preferredFoodLabel.trim();
   const [foodChoices, setFoodChoices] = useState(() => {
-    const initialFoods = createFoodPreferenceRound(todayMenuEntries).foods;
+    const initialFoods = createFoodPreferenceRound(todayMenuEntries, false).foods;
 
     return cleanPreferredFood && !initialFoods.some((food) => food.label === cleanPreferredFood)
       ? [buildFoodPreferenceOption(cleanPreferredFood), ...initialFoods].slice(0, 18)
       : initialFoods;
   });
-  const [reasonChoices, setReasonChoices] = useState(() => createFoodPreferenceRound(todayMenuEntries).reasons);
+  const [reasonChoices, setReasonChoices] = useState(() => createFoodPreferenceRound(todayMenuEntries, false).reasons);
   const [selectedFood, setSelectedFood] = useState(cleanPreferredFood);
   const [selectedReason, setSelectedReason] = useState("");
   const [selectedApproachStep, setSelectedApproachStep] = useState("");
@@ -4064,7 +4489,7 @@ function FoodPreferenceGame({
               </p>
             ) : (
               <p className="mt-1 text-xs leading-6 text-cyan-800">
-                老师发布今日食谱后，这里会自动把食谱里的菜品和食材排在前面。
+                老师录入本周食谱后，这里会按日期自动把当天菜品和食材排在前面。
               </p>
             )}
           </div>
@@ -4237,8 +4662,10 @@ function FoodKitchenGame({
   ) => void;
   onSpeak?: SpeakHandler;
 }) {
-  const [recipeChoices, setRecipeChoices] = useState(() => createFoodKitchenRound());
+  const [recipeChoices, setRecipeChoices] = useState(() => createFoodKitchenRound(false));
   const [selectedRecipeLabel, setSelectedRecipeLabel] = useState("");
+  const [customRecipeInput, setCustomRecipeInput] = useState("");
+  const [isListeningForKitchen, setIsListeningForKitchen] = useState(false);
   const [completedActions, setCompletedActions] = useState<string[]>([]);
   const [feedback, setFeedback] = useState("选一道泉州美食，按顺序点制作动作卡。");
   const [kitchenSentence, setKitchenSentence] = useState("");
@@ -4247,6 +4674,7 @@ function FoodKitchenGame({
   const [workMediaName, setWorkMediaName] = useState("");
   const [workMediaType, setWorkMediaType] = useState<"image" | "video" | "">("");
   const completionReportedRef = useRef(false);
+  const kitchenRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const selectedRecipe =
     recipeChoices.find((item) => item.label === selectedRecipeLabel) ?? recipeChoices[0] ?? foodKitchenRecipes[0];
   const introText =
@@ -4265,6 +4693,12 @@ function FoodKitchenGame({
       }
     };
   }, [workMediaPreview]);
+
+  useEffect(() => {
+    return () => {
+      kitchenRecognitionRef.current?.stop();
+    };
+  }, []);
 
   function handleWorkMediaSelect(file?: File) {
     if (!file) {
@@ -4286,18 +4720,100 @@ function FoodKitchenGame({
     setWorkMediaPreview(URL.createObjectURL(file));
   }
 
-  function pickRecipe(label: string) {
-    const recipe = recipeChoices.find((item) => item.label === label);
-
-    setSelectedRecipeLabel(label);
+  function selectKitchenRecipe(recipe: FoodKitchenRecipe) {
+    setSelectedRecipeLabel(recipe.label);
     setCompletedActions([]);
     setKitchenSentence("");
     setAiBroadcastText("");
     handleWorkMediaSelect();
     completionReportedRef.current = false;
-    const message = recipe
-      ? `${recipe.area}开张啦。第一步：${recipe.actions[0]}。`
-      : "泉州小厨房开张啦，请选一道美食。";
+    const message = `${recipe.area}开张啦。第一步：${recipe.actions[0]}。`;
+    setFeedback(message);
+    onSpeak?.(message);
+  }
+
+  function pickRecipe(label: string) {
+    const recipe = recipeChoices.find((item) => item.label === label);
+
+    if (!recipe) {
+      const message = "泉州小厨房还没找到这道菜，可以用语音或文字告诉我想做什么。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    selectKitchenRecipe(recipe);
+  }
+
+  function applyCustomKitchenRecipe(rawValue = customRecipeInput) {
+    const label = normalizeKitchenDishLabel(rawValue);
+
+    if (!label) {
+      const message = "可以说或输入一道想做的菜，比如紫菜蛋汤、青菜豆腐或润饼菜。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const recipe = buildCustomKitchenRecipe(label);
+    setCustomRecipeInput(recipe.label);
+    setRecipeChoices((current) => [
+      recipe,
+      ...current.filter((item) => item.label !== recipe.label),
+    ].slice(0, 8));
+    selectKitchenRecipe(recipe);
+    const message = `AI已经把“${recipe.label}”整理成小厨房步骤图卡。先看第一步：${recipe.actions[0]}。`;
+    setFeedback(message);
+    onSpeak?.(message);
+  }
+
+  function toggleKitchenVoiceInput() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const voiceWindow = window as Window & {
+      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    };
+    const SpeechRecognitionApi =
+      voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionApi) {
+      const message = "当前浏览器不支持语音输入，可以先用文字输入想做的菜。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    if (isListeningForKitchen && kitchenRecognitionRef.current) {
+      kitchenRecognitionRef.current.stop();
+      setIsListeningForKitchen(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognitionApi();
+    recognition.lang = "zh-CN";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
+      if (transcript) {
+        setCustomRecipeInput(transcript.slice(0, 24));
+        applyCustomKitchenRecipe(transcript);
+      }
+    };
+    recognition.onerror = () => {
+      const message = "刚才没听清楚，可以再说一次想做的菜，也可以直接输入。";
+      setFeedback(message);
+      onSpeak?.(message);
+      setIsListeningForKitchen(false);
+    };
+    recognition.onend = () => setIsListeningForKitchen(false);
+    kitchenRecognitionRef.current = recognition;
+    recognition.start();
+    setIsListeningForKitchen(true);
+    const message = "我在听啦，可以说：我想做紫菜蛋汤，或者我要做青菜豆腐。";
     setFeedback(message);
     onSpeak?.(message);
   }
@@ -4327,6 +4843,8 @@ function FoodKitchenGame({
   function resetGame() {
     const nextRecipes = createFoodKitchenRound();
     setRecipeChoices(nextRecipes);
+    setCustomRecipeInput("");
+    setIsListeningForKitchen(false);
     setSelectedRecipeLabel(nextRecipes[0]?.label ?? "");
     setCompletedActions([]);
     setKitchenSentence("");
@@ -4429,6 +4947,42 @@ function FoodKitchenGame({
         <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="orange" />
       </div>
 
+      <div className="mt-5 rounded-[1.6rem] bg-orange-50 p-4">
+        <p className="text-sm font-semibold text-orange-900">我想做什么菜</p>
+        <p className="mt-1 text-xs leading-6 text-orange-800">
+          幼儿可以说或输入一道想做的菜，AI 会整理成可点选的步骤图卡和播报词。
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+          <input
+            value={customRecipeInput}
+            onChange={(event) => setCustomRecipeInput(event.target.value.slice(0, 24))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                applyCustomKitchenRecipe();
+              }
+            }}
+            placeholder="例如：紫菜蛋汤、青菜豆腐、南瓜饭"
+            className="rounded-[1.1rem] border border-orange-100 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-orange-300"
+          />
+          <button
+            onClick={() => applyCustomKitchenRecipe()}
+            className="rounded-full bg-orange-200 px-4 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5"
+            type="button"
+          >
+            AI生成步骤
+          </button>
+          <button
+            onClick={toggleKitchenVoiceInput}
+            className={`rounded-full px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+              isListeningForKitchen ? "bg-rose-100 text-rose-800" : "bg-slate-900 text-white"
+            }`}
+            type="button"
+          >
+            {isListeningForKitchen ? "停止听写" : "语音说菜"}
+          </button>
+        </div>
+      </div>
+
       <div className="mt-5 flex flex-wrap gap-3">
         {recipeChoices.map((recipe) => (
           <button
@@ -4468,7 +5022,13 @@ function FoodKitchenGame({
                 type="button"
               >
                 <span className="block text-xs text-slate-500">第 {index + 1} 步</span>
-                <span className="mt-1 block">{action}</span>
+                <span className="mt-2 flex min-h-16 items-center gap-3 rounded-[1rem] bg-white/70 px-3 py-3">
+                  <span className="text-3xl">{getKitchenActionIcon(action)}</span>
+                  <span className="text-sm leading-6">{action}</span>
+                </span>
+                <span className="mt-2 block text-xs leading-5 text-slate-600">
+                  {buildKitchenStepVisual(action, selectedRecipe)}
+                </span>
               </button>
             );
           })}
@@ -4800,6 +5360,8 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   const [gameContentConfigs, setGameContentConfigs] =
     useState<EditableGameContent[]>(defaultGameContentConfigs);
   const [todayMenuEntries, setTodayMenuEntries] = useState<WeeklyMenuEntry[]>([]);
+  const [teacherPictureBooks, setTeacherPictureBooks] = useState<TeacherPictureBook[]>([]);
+  const [habitTemplates, setHabitTemplates] = useState<HabitCheckinTemplate[]>([]);
   const [preferredFoodRequest, setPreferredFoodRequest] = useState({
     label: "",
     nonce: 0,
@@ -5052,6 +5614,10 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
           getLocalDateKey(),
         ),
       );
+      setTeacherPictureBooks(
+        parseTeacherPictureBooks(window.localStorage.getItem(teacherPictureBooksStorageKey)),
+      );
+      setHabitTemplates(parseHabitTemplates(window.localStorage.getItem(habitTemplatesStorageKey)));
       const savedRoster = parseChildRoster(window.localStorage.getItem(childRosterStorageKey));
       const savedChildId = window.localStorage.getItem(selectedChildStorageKey) ?? "";
       const routeChildId = initialChildId ? decodeURIComponent(initialChildId) : "";
@@ -5110,6 +5676,14 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
         setSelectedChildId((current) =>
           current && nextRoster.some((child) => child.id === current) ? current : "",
         );
+      }
+
+      if (event.key === teacherPictureBooksStorageKey) {
+        setTeacherPictureBooks(parseTeacherPictureBooks(event.newValue));
+      }
+
+      if (event.key === habitTemplatesStorageKey) {
+        setHabitTemplates(parseHabitTemplates(event.newValue));
       }
     }
 
@@ -6058,7 +6632,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
         </div>
       </section>
 
-      <section className="hidden">
+      <section className="order-1">
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -6487,7 +7061,15 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       </section>
 
       <section className="order-1 grid gap-6 xl:grid-cols-2">
-        {themeId === "habit" ? (
+        {!growthArchiveHydrated ? (
+          <div className="rounded-[2rem] bg-white/85 p-6 shadow-sm xl:col-span-2">
+            <p className="text-sm font-semibold text-teal-700">正在同步本机成长数据</p>
+            <h3 className="mt-1 text-xl font-semibold text-slate-900">稍等一下，正在准备今日任务</h3>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              系统正在读取小名牌、教师发布内容和今日食谱，准备好后会显示对应任务卡。
+            </p>
+          </div>
+        ) : themeId === "habit" ? (
           <>
             <div className="xl:col-span-2">
               <HabitVisualBoard
@@ -6531,6 +7113,27 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                     logMiniGameCompletion("readingCheckin", "故事小耳朵", pickedItems, detail)
                   }
                 />
+                <div className="mt-5 grid gap-4">
+                  <TeacherPictureBookShelf
+                    books={teacherPictureBooks}
+                    themeId={themeId}
+                    onSpeak={(text) => {
+                      void startSpeechPlayback(text);
+                    }}
+                    onComplete={(pickedItems, detail) =>
+                      logMiniGameCompletion("readingCheckin", "教师绘本阅读章", pickedItems, detail)
+                    }
+                  />
+                  <HabitTemplateCheckinPanel
+                    templates={habitTemplates}
+                    onSpeak={(text) => {
+                      void startSpeechPlayback(text);
+                    }}
+                    onComplete={(pickedItems, detail) =>
+                      logMiniGameCompletion("readingCheckin", "待定习惯表达章", pickedItems, detail)
+                    }
+                  />
+                </div>
               </div>
             </details>
           </>
@@ -6551,6 +7154,28 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 void startSpeechPlayback(message);
               }}
             />
+            <FoodPreferenceGame
+              key={`food-preference-${preferredFoodRequest.nonce}`}
+              contentConfig={getConfiguredGameContent("foodPreference")}
+              todayMenuEntries={todayMenuEntries}
+              preferredFoodLabel={preferredFoodRequest.label}
+              onSpeak={(text) => {
+                void startSpeechPlayback(text);
+              }}
+              onComplete={logFoodPreferenceObservation}
+            />
+            {teacherPictureBooks.some((book) => book.themeId === "food") ? (
+              <TeacherPictureBookShelf
+                books={teacherPictureBooks}
+                themeId={themeId}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={(pickedItems, detail) =>
+                  logMiniGameCompletion("readingCheckin", "闽食绘本阅读章", pickedItems, detail)
+                }
+              />
+            ) : null}
             <FoodTrainGame
               contentConfig={getConfiguredGameContent("foodTrain")}
               onSpeak={(text) => {
@@ -6568,16 +7193,6 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
               onComplete={(pickedItems = []) =>
                 logMiniGameCompletion("foodObserve", "美食摊位寻宝章", pickedItems)
               }
-            />
-            <FoodPreferenceGame
-              key={`food-preference-${preferredFoodRequest.nonce}`}
-              contentConfig={getConfiguredGameContent("foodPreference")}
-              todayMenuEntries={todayMenuEntries}
-              preferredFoodLabel={preferredFoodRequest.label}
-              onSpeak={(text) => {
-                void startSpeechPlayback(text);
-              }}
-              onComplete={logFoodPreferenceObservation}
             />
             <FoodKitchenGame
               contentConfig={getConfiguredGameContent("foodKitchen")}

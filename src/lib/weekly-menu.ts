@@ -96,7 +96,7 @@ export function serializeWeeklyMenuEntries(entries: WeeklyMenuEntry[]) {
 }
 
 export function getPublishedMenuForDate(entries: WeeklyMenuEntry[], dateKey = getLocalDateKey()) {
-  return entries.filter((item) => item.date === dateKey && item.publishedAt);
+  return entries.filter((item) => item.date === dateKey);
 }
 
 export function buildTodayMenuSpeech(entries: WeeklyMenuEntry[]) {

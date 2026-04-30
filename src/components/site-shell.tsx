@@ -59,6 +59,32 @@ export function SiteShell({ children }: SiteShellProps) {
       <div className="pb-24 md:pb-10">{children}</div>
       <SiteSoundIntro />
 
+      <nav
+        aria-label="桌面身份切换"
+        className="fixed right-6 bottom-6 z-50 hidden items-center gap-2 rounded-full bg-white/92 px-2 py-2 shadow-[0_18px_50px_rgba(35,88,95,0.16)] backdrop-blur md:flex"
+      >
+        {visibleNavItems.map((item) => {
+          const isActive =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname === item.href ||
+                pathname.startsWith(`${item.href}/`) ||
+                (item.href === "/children" && pathname.startsWith("/adventure"));
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                isActive ? "bg-slate-900 text-white" : "bg-white text-slate-700 shadow-sm"
+              }`}
+            >
+              {item.href === "/" ? "回首页" : item.href === "/children" ? "更换小名牌" : item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
       <nav className="fixed inset-x-2 bottom-4 z-50 mx-auto flex max-w-md items-center gap-1 rounded-full bg-white/92 px-1.5 py-2 shadow-[0_18px_50px_rgba(35,88,95,0.18)] backdrop-blur md:hidden">
         {visibleNavItems.map((item) => {
           const isActive =
