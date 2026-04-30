@@ -35,7 +35,7 @@ echo "==> 构建生产版本"
 npm run build
 
 echo "==> 重启挂载服务"
-if systemctl list-unit-files "$SERVICE_NAME" | grep -q "^$SERVICE_NAME"; then
+if systemctl cat "$SERVICE_NAME" >/dev/null 2>&1; then
   sudo systemctl restart "$SERVICE_NAME"
   systemctl --no-pager --full status "$SERVICE_NAME" | head -40
 elif command -v pm2 >/dev/null 2>&1; then
