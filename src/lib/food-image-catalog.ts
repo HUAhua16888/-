@@ -893,6 +893,18 @@ function getFoodPhotoAssetUrl(asset: FoodAsset) {
   return asset.image.replace("/assets/foods/single/", "/assets/foods/photos/");
 }
 
+function getFoodAssetSourceLabel(asset: FoodAsset, label: string, kind: "image" | "photo" = "image") {
+  const sourceName = kind === "photo" ? "AI生成/整理菜品照片" : "AI生成/整理菜品图";
+
+  return asset.name === label ? `${sourceName}，教师审核后使用` : `${sourceName}：${asset.name}，教师审核后使用`;
+}
+
+function getIngredientAssetSourceLabel(ingredient: IngredientAsset, label: string) {
+  return ingredient.name === label
+    ? "AI生成/整理食材图，教师审核后使用"
+    : `AI生成/整理食材图：${ingredient.name}，教师审核后使用`;
+}
+
 function uniqueImageCandidates(candidates: SafeFoodImageCandidate[]) {
   const seen = new Set<string>();
 
@@ -1039,25 +1051,29 @@ export function resolveSafeFoodImage(foodName: string, context: FoodImageContext
   const asset = findFoodAsset(foodName || label);
 
   if (asset) {
+    const assetSourceLabel = getFoodAssetSourceLabel(asset, label);
+
     candidates.push({
       url: asset.image,
       sourceType: "local_food_asset",
-      sourceLabel: asset.name === label ? "素材包菜品图" : `素材包菜品图：${asset.name}`,
-      fallbackSource: "素材包菜品图",
+      sourceLabel: assetSourceLabel,
+      fallbackSource: assetSourceLabel,
       teacherConfirmed: true,
-      aiGenerated: false,
+      aiGenerated: true,
     });
 
     const photoUrl = getFoodPhotoAssetUrl(asset);
 
     if (photoUrl) {
+      const photoSourceLabel = getFoodAssetSourceLabel(asset, label, "photo");
+
       candidates.push({
         url: photoUrl,
         sourceType: "local_food_asset",
-        sourceLabel: "素材包菜品照片",
-        fallbackSource: "素材包菜品照片",
+        sourceLabel: photoSourceLabel,
+        fallbackSource: photoSourceLabel,
         teacherConfirmed: true,
-        aiGenerated: false,
+        aiGenerated: true,
       });
     }
   }
@@ -1073,10 +1089,10 @@ export function resolveSafeFoodImage(foodName: string, context: FoodImageContext
     candidates.push({
       url: ingredient.image,
       sourceType: "local_ingredient_asset",
-      sourceLabel: ingredient.name === label ? "素材包食材图" : `素材包食材图：${ingredient.name}`,
-      fallbackSource: `对应材料图：${ingredient.name}`,
+      sourceLabel: getIngredientAssetSourceLabel(ingredient, label),
+      fallbackSource: getIngredientAssetSourceLabel(ingredient, label),
       teacherConfirmed: true,
-      aiGenerated: false,
+      aiGenerated: true,
     });
   });
 
@@ -1189,13 +1205,15 @@ export function resolveFoodImage(foodName: string, context: FoodImageContext = {
   const asset = findFoodAsset(foodName || label);
 
   if (asset) {
+      const assetSourceLabel = getFoodAssetSourceLabel(asset, label);
+
       return {
         label: asset.name,
         url: asset.image,
       sourceType: "local_food_asset",
-      sourceLabel: asset.name === label ? "素材包菜品图" : `素材包菜品图：${asset.name}`,
+      sourceLabel: assetSourceLabel,
       teacherConfirmed: true,
-      aiGenerated: false,
+      aiGenerated: true,
       sourceUrl: asset.image,
       assetUrl: asset.image,
     };
@@ -1204,13 +1222,15 @@ export function resolveFoodImage(foodName: string, context: FoodImageContext = {
   const ingredientAsset = findIngredientAsset(foodName || label);
 
   if (ingredientAsset) {
+      const ingredientSourceLabel = getIngredientAssetSourceLabel(ingredientAsset, label);
+
       return {
         label: ingredientAsset.name,
         url: ingredientAsset.image,
       sourceType: "local_ingredient_asset",
-      sourceLabel: ingredientAsset.name === label ? "素材包食材图" : `素材包食材图：${ingredientAsset.name}`,
+      sourceLabel: ingredientSourceLabel,
       teacherConfirmed: true,
-      aiGenerated: false,
+      aiGenerated: true,
       sourceUrl: ingredientAsset.image,
       assetUrl: ingredientAsset.image,
     };

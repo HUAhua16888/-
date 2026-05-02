@@ -1320,6 +1320,7 @@ export function TeacherStudio() {
   const [pictureBookQuestion, setPictureBookQuestion] = useState("");
   const [pictureBookTask, setPictureBookTask] = useState("");
   const [pictureBookAgeGroup, setPictureBookAgeGroup] = useState<string>(defaultTeacherAgeGroup);
+  const [pictureBookType, setPictureBookType] = useState("生活习惯绘本");
   const [pictureBookStatus, setPictureBookStatus] =
     useState("教师可以把生成结果或自写内容发布成幼儿区域自主选听绘本。");
   const [habitTemplateFocus, setHabitTemplateFocus] = useState("");
@@ -3841,7 +3842,8 @@ export function TeacherStudio() {
           userInput: [
             `绘本名：${draftTitle}`,
             `年龄阶段：${pictureBookAgeGroup}`,
-            teacherIdea ? `绘本大概内容：${teacherIdea}` : "请生成适合区域时间自主选听的原创幼儿绘本。",
+            `绘本类型：${pictureBookType}`,
+            teacherIdea ? `绘本大概内容：${teacherIdea}` : "请生成适合区域阅读和自主选听的原创幼儿绘本。",
             "要求：2-4页，温暖短句，有封面/每页图片提示词，阅读后只做阅读打卡，不做闯关问答。",
           ].join("\n"),
         }),
@@ -3869,7 +3871,7 @@ export function TeacherStudio() {
     setPictureBookImagePrompts(
       [
         `${draftTitle}封面：原创幼儿园绘本封面，温暖明亮，适合${pictureBookAgeGroup}幼儿，避免真实幼儿正脸`,
-        `${draftTitle}第一页：孩子在图书角看绘本，干净背景，绘本风，动作清楚`,
+        `${draftTitle}第一页：${pictureBookType}主题，孩子在图书角看绘本，干净背景，绘本风，动作清楚`,
         `${draftTitle}第二页：故事角色进行一个生活小动作，画面温柔，适合幼儿理解`,
         `${draftTitle}第三页：老师陪伴孩子听完故事并完成阅读打卡，温馨不说教`,
       ].join("\n"),
@@ -5944,9 +5946,18 @@ ${worksheets.join("")}
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
           <div
-            className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm"
+            className="rounded-[1.8rem] border border-cyan-100 bg-white/90 p-5 shadow-sm"
             onFocusCapture={() => setMenuMediaActiveTarget(menuDate, menuMealType)}
           >
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-cyan-700">本周食谱录入</p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-900">提前保存日期和餐次</h3>
+              </div>
+              <span className="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-900">
+                左侧填写 · 右侧预览
+              </span>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-sm font-semibold text-slate-700">
                 日期
@@ -6048,8 +6059,8 @@ ${worksheets.join("")}
           <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-cyan-700">今日自动发布</p>
-                <h3 className="mt-1 text-xl font-semibold text-slate-900">儿童端今日闽食播报来源</h3>
+                <p className="text-sm font-semibold text-rose-700">今日临时调整</p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-900">只覆盖所选日期和餐次</h3>
                 <p className="mt-1 text-sm font-semibold text-slate-600">
                   日期：{formatMenuDate(overrideDate || todayMenuDateKey)} · {getWeekdayLabel(overrideDate || todayMenuDateKey)}
                 </p>
@@ -6077,7 +6088,7 @@ ${worksheets.join("")}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-rose-800">教师今日调整</p>
+                  <p className="text-sm font-semibold text-rose-800">填写临时改餐</p>
                   <p className="mt-1 text-xs leading-6 text-rose-700">
                     临时更改只覆盖所选日期和餐次，不影响本周原始食谱。
                   </p>
@@ -6148,27 +6159,6 @@ ${worksheets.join("")}
                   />
                 </label>
               </div>
-              <MenuMediaDraftPanel
-                title="今日食谱观察素材"
-                description="本周食谱和临时改餐共用这一个窗口；素材按当前日期、餐次和菜名保存。"
-                draft={activeMenuMediaDraft}
-                date={menuMediaActiveDate}
-                mealType={menuMediaActiveMealType}
-                dishName={activeMenuMediaValues.dishName}
-                ingredientsText={activeMenuMediaValues.ingredients.join("、")}
-                isAiGenerating={isMenuMediaAiImageLoading}
-                onVideoUpload={(file) => void handleMenuVideoUpload(file)}
-                onManualImageUpload={(file) => void handleMenuManualImageUpload(file)}
-                onGenerateAiImage={() => void generateMenuAiObservationImage()}
-                onRegenerateAiImage={(imageId) => void regenerateMenuAiObservationImage(imageId)}
-                onUpdateAiPrompt={updateMenuAiImagePrompt}
-                onUseImage={useMenuObservationImage}
-                onDeleteImage={deleteMenuObservationImage}
-                onToggleImage={toggleMenuObservationImage}
-                onSetCover={setMenuCoverImage}
-                onConfirm={confirmMenuObservationImages}
-                onClear={clearMenuMediaDraft}
-              />
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={saveDailyMenuOverride}
@@ -6180,6 +6170,27 @@ ${worksheets.join("")}
                 <p className="text-sm font-semibold text-rose-800">{overrideStatus}</p>
               </div>
             </div>
+            <MenuMediaDraftPanel
+              title="今日观察素材"
+              description="图片和视频共用一个入口；AI补图在这里作为备用，教师确认前儿童端不可见。"
+              draft={activeMenuMediaDraft}
+              date={menuMediaActiveDate}
+              mealType={menuMediaActiveMealType}
+              dishName={activeMenuMediaValues.dishName}
+              ingredientsText={activeMenuMediaValues.ingredients.join("、")}
+              isAiGenerating={isMenuMediaAiImageLoading}
+              onVideoUpload={(file) => void handleMenuVideoUpload(file)}
+              onManualImageUpload={(file) => void handleMenuManualImageUpload(file)}
+              onGenerateAiImage={() => void generateMenuAiObservationImage()}
+              onRegenerateAiImage={(imageId) => void regenerateMenuAiObservationImage(imageId)}
+              onUpdateAiPrompt={updateMenuAiImagePrompt}
+              onUseImage={useMenuObservationImage}
+              onDeleteImage={deleteMenuObservationImage}
+              onToggleImage={toggleMenuObservationImage}
+              onSetCover={setMenuCoverImage}
+              onConfirm={confirmMenuObservationImages}
+              onClear={clearMenuMediaDraft}
+            />
             <div className="mt-4 grid gap-3">
               {todayPublishedMenuEntries.length > 0 ? (
                 todayPublishedMenuEntries
@@ -7250,11 +7261,11 @@ ${worksheets.join("")}
         </div>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm lg:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-violet-700">教师发布绘本</p>
-                <h3 className="mt-1 text-xl font-semibold text-slate-900">区域时间自主选听</h3>
+                <h3 className="mt-1 text-xl font-semibold text-slate-900">AI协助生成绘本，教师修改后发布</h3>
               </div>
               <button
                 onClick={() => void fillPictureBookFromResult()}
@@ -7264,71 +7275,112 @@ ${worksheets.join("")}
                 AI生成绘本故事
               </button>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-[auto_auto_1fr]">
-              <select
-                value={pictureBookThemeId}
-                onChange={() => setPictureBookThemeId("habit")}
-                className="rounded-[1.1rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
-              >
-                <option value="habit">幼习宝绘本</option>
-              </select>
-              <select
-                value={pictureBookAgeGroup}
-                onChange={(event) => setPictureBookAgeGroup(event.target.value)}
-                className="rounded-[1.1rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
-              >
-                <option value="小班 3-4 岁">小班3-4岁</option>
-                <option value="中班 4-5 岁">中班4-5岁</option>
-                <option value="大班 5-6 岁">大班5-6岁</option>
-              </select>
-              <input
-                value={pictureBookTitle}
-                onChange={(event) => setPictureBookTitle(event.target.value.slice(0, 36))}
-                placeholder="输入绘本名，如 饭前洗手小星"
-                className="rounded-[1.1rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
-              />
-            </div>
-            <textarea
-              value={pictureBookText}
-              onChange={(event) => setPictureBookText(event.target.value.slice(0, 900))}
-              placeholder="输入绘本大概内容，或让 AI 先整理原创绘本故事，教师再修改。"
-              className="mt-3 min-h-40 w-full rounded-[1.4rem] border border-violet-100 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-violet-300"
-            />
-            <textarea
-              value={pictureBookImagePrompts}
-              onChange={(event) => setPictureBookImagePrompts(event.target.value.slice(0, 720))}
-              placeholder="每行一个图片提示词：画面要原创、幼儿园绘本风、动作清楚、干净背景。"
-              className="mt-3 min-h-28 w-full rounded-[1.4rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-violet-300"
-            />
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <input
-                value={pictureBookQuestion}
-                onChange={(event) => setPictureBookQuestion(event.target.value.slice(0, 80))}
-                placeholder="阅读后问题，如 你想先做哪一小步？"
-                className="rounded-[1.1rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
-              />
-              <input
-                value={pictureBookTask}
-                onChange={(event) => setPictureBookTask(event.target.value.slice(0, 60))}
-                placeholder="阅读后小任务，如 把图书送回原位"
-                className="rounded-[1.1rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
-              />
-            </div>
-            <p className="mt-3 rounded-[1rem] bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-900">
-              {aiConfirmedUseNotice} · 原创绘本草稿需教师编辑、确认后才发布到儿童端和家长端。
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-violet-900 shadow-sm">
-                教师修改
-              </span>
-              <button
-                onClick={publishTeacherPictureBook}
-                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
-                type="button"
-              >
-                确认并发布到儿童端
-              </button>
-              <p className="text-sm font-semibold text-violet-900">{pictureBookStatus}</p>
+            <div className="mt-5 grid gap-4 xl:grid-cols-3">
+              <div className="rounded-[1.5rem] bg-violet-50 p-4">
+                <p className="text-sm font-semibold text-violet-900">左侧：教师输入区</p>
+                <div className="mt-3 grid gap-3">
+                  <select
+                    value={pictureBookThemeId}
+                    onChange={() => setPictureBookThemeId("habit")}
+                    className="rounded-[1.1rem] border border-violet-100 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
+                  >
+                    <option value="habit">幼习宝绘本</option>
+                  </select>
+                  <select
+                    value={pictureBookAgeGroup}
+                    onChange={(event) => setPictureBookAgeGroup(event.target.value)}
+                    className="rounded-[1.1rem] border border-violet-100 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
+                  >
+                    <option value="小班 3-4 岁">小班3-4岁</option>
+                    <option value="中班 4-5 岁">中班4-5岁</option>
+                    <option value="大班 5-6 岁">大班5-6岁</option>
+                  </select>
+                  <select
+                    value={pictureBookType}
+                    onChange={(event) => setPictureBookType(event.target.value)}
+                    className="rounded-[1.1rem] border border-violet-100 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
+                  >
+                    <option value="生活习惯绘本">生活习惯绘本</option>
+                    <option value="情绪表达绘本">情绪表达绘本</option>
+                    <option value="区域阅读绘本">区域阅读绘本</option>
+                    <option value="闽食文化绘本">闽食文化绘本</option>
+                  </select>
+                  <input
+                    value={pictureBookTitle}
+                    onChange={(event) => setPictureBookTitle(event.target.value.slice(0, 36))}
+                    placeholder="输入绘本名，如 饭前洗手小星"
+                    className="rounded-[1.1rem] border border-violet-100 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
+                  />
+                  <textarea
+                    value={pictureBookText}
+                    onChange={(event) => setPictureBookText(event.target.value.slice(0, 900))}
+                    placeholder="输入绘本名或大概内容，再点 AI 生成绘本草稿。"
+                    className="min-h-36 rounded-[1.4rem] border border-violet-100 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-violet-300"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-violet-900">中间：AI生成草稿区</p>
+                <p className="mt-2 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
+                  {aiConfirmedUseNotice}
+                </p>
+                <textarea
+                  value={pictureBookText}
+                  onChange={(event) => setPictureBookText(event.target.value.slice(0, 900))}
+                  placeholder="AI生成后，教师在这里修改每页文字。"
+                  className="mt-3 min-h-44 w-full rounded-[1.4rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-violet-300"
+                />
+                <textarea
+                  value={pictureBookImagePrompts}
+                  onChange={(event) => setPictureBookImagePrompts(event.target.value.slice(0, 720))}
+                  placeholder="每行一个图片提示词：封面、第一页、第二页……"
+                  className="mt-3 min-h-28 w-full rounded-[1.4rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-violet-300"
+                />
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <input
+                    value={pictureBookQuestion}
+                    onChange={(event) => setPictureBookQuestion(event.target.value.slice(0, 80))}
+                    placeholder="阅读后小问题"
+                    className="rounded-[1.1rem] border border-violet-100 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
+                  />
+                  <input
+                    value={pictureBookTask}
+                    onChange={(event) => setPictureBookTask(event.target.value.slice(0, 60))}
+                    placeholder="打卡任务"
+                    className="rounded-[1.1rem] border border-violet-100 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-300"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] bg-violet-50 p-4">
+                <p className="text-sm font-semibold text-violet-900">右侧：发布预览区</p>
+                <div className="mt-3 rounded-[1.3rem] bg-white p-4 shadow-sm">
+                  <div className="flex h-24 w-24 items-center justify-center rounded-[1.2rem] bg-violet-100 text-5xl">📖</div>
+                  <h4 className="mt-3 text-xl font-semibold text-slate-900">
+                    {pictureBookTitle.trim() || "待发布绘本"}
+                  </h4>
+                  <p className="mt-2 text-xs font-semibold text-violet-700">
+                    {pictureBookAgeGroup} · {pictureBookType}
+                  </p>
+                  <p className="mt-3 text-sm leading-7 text-slate-700">
+                    {pictureBookText
+                      .split(/\r?\n/)
+                      .map((line) => line.trim())
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .join(" " ) || "AI生成后，这里会显示绘本预览。"}
+                  </p>
+                </div>
+                <button
+                  onClick={publishTeacherPictureBook}
+                  className="mt-4 w-full rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                  type="button"
+                >
+                  确认并发布到儿童端/家长端
+                </button>
+                <p className="mt-3 text-sm font-semibold leading-6 text-violet-900">{pictureBookStatus}</p>
+              </div>
             </div>
             <div className="mt-4 grid gap-2">
               {teacherPictureBooks.filter((book) => book.themeId === "habit").slice(0, 3).map((book) => (

@@ -1960,7 +1960,7 @@ function getMenuMediaSourceText(source?: MenuMediaSource) {
   }
 
   if (source === "ai_generated") {
-    return "老师确认好的图";
+    return "AI生成，教师审核后使用";
   }
 
   return "食材小图卡";
@@ -2121,11 +2121,16 @@ function SafeFoodImage({
       ? [
           {
             url: image.url,
-            sourceType: "fallback_icon",
-            sourceLabel: "菜品图",
-            fallbackSource: "菜品图",
-            teacherConfirmed: true,
-            aiGenerated: false,
+            sourceType: "sourceType" in image ? image.sourceType : "fallback_icon",
+            sourceLabel: "sourceLabel" in image ? image.sourceLabel : "菜品图",
+            fallbackSource:
+              "fallbackSource" in image
+                ? image.fallbackSource
+                : "sourceLabel" in image
+                  ? image.sourceLabel
+                  : "菜品图",
+            teacherConfirmed: "teacherConfirmed" in image ? image.teacherConfirmed : true,
+            aiGenerated: "aiGenerated" in image ? image.aiGenerated : false,
           } satisfies SafeFoodImageCandidate,
         ]
       : [];
@@ -2143,6 +2148,22 @@ function SafeFoodImage({
   const candidateKey = candidates.map((candidate) => candidate.url).join("|");
 
   return <SafeFoodImageInner key={candidateKey || alt} candidates={candidates} alt={alt} className={className} />;
+}
+
+function getSafeFoodImageBadge(candidate: SafeFoodImageCandidate) {
+  if (candidate.aiGenerated || candidate.sourceType === "ai_generated_teacher_confirmed") {
+    return "AI生成，教师审核后使用";
+  }
+
+  if (candidate.sourceType === "local_food_asset" || candidate.sourceType === "local_ingredient_asset") {
+    return candidate.sourceLabel || "素材图，教师审核后使用";
+  }
+
+  if (candidate.sourceType === "fallback_icon") {
+    return "示例图，教师审核后使用";
+  }
+
+  return "";
 }
 
 function SafeFoodImageInner({
@@ -2170,23 +2191,33 @@ function SafeFoodImageInner({
     );
   }
 
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={currentCandidate.url}
-      alt={alt}
-      className={className}
-      onError={() => {
-        setCandidateIndex((currentIndex) => {
-          if (currentIndex < candidates.length - 1) {
-            return currentIndex + 1;
-          }
+  const badge = getSafeFoodImageBadge(currentCandidate);
+  const imageFitClass = className.includes("object-contain") ? "object-contain" : "object-cover";
 
-          setShowFallbackCard(true);
-          return currentIndex;
-        });
-      }}
-    />
+  return (
+    <span className={`relative block overflow-hidden ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={currentCandidate.url}
+        alt={alt}
+        className={`h-full w-full ${imageFitClass}`}
+        onError={() => {
+          setCandidateIndex((currentIndex) => {
+            if (currentIndex < candidates.length - 1) {
+              return currentIndex + 1;
+            }
+
+            setShowFallbackCard(true);
+            return currentIndex;
+          });
+        }}
+      />
+      {badge ? (
+        <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] rounded-full bg-amber-100/95 px-2 py-1 text-[10px] font-semibold leading-4 text-amber-950 shadow-sm">
+          {badge}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -2247,7 +2278,7 @@ function FoodMiniMaterialCard({
             resolvedImage.aiGenerated ? "bg-amber-100 text-amber-900" : "bg-white/80 text-slate-600"
           }`}
         >
-          {resolvedImage.aiGenerated ? aiConfirmedUseNotice : "老师准备好的图"}
+          {resolvedImage.aiGenerated ? "AI生成，教师审核后使用" : resolvedImage.sourceLabel}
         </span>
       ) : null}
     </span>
@@ -5079,70 +5110,79 @@ function ReadingCheckinGame({
       </div>
 
       <div className="mt-5 rounded-[1.7rem] bg-violet-50 p-5">
-        <div className="rounded-[1.5rem] bg-white/90 p-5 shadow-sm">
-          <p className="text-xs font-semibold text-violet-700">第二步：听绘本</p>
-          <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="grid overflow-hidden rounded-[1.6rem] border border-violet-100 bg-violet-50 shadow-inner md:grid-cols-[0.78fr_1.22fr]">
-              <div className="min-h-64 border-b border-violet-100 bg-white/90 p-5 md:border-b-0 md:border-r">
-                <div className="flex h-28 w-28 items-center justify-center rounded-[1.4rem] bg-violet-100 text-6xl">
-                  {shownBook.coverIcon}
-                </div>
-                <h4 className="mt-4 text-xl font-semibold text-slate-900">
-                  {shownBook.title}
-                </h4>
-                <p className="mt-2 text-xs font-semibold text-violet-700">
-                  第 {pageIndex + 1} 页 / 共 {shownBook.pages.length} 页
-                </p>
-                <p className="mt-2 inline-flex rounded-full bg-violet-50 px-3 py-1.5 text-[11px] font-semibold text-violet-900">
-                  {shownBook.source === "teacher" ? "老师发布绘本" : "AI生成故事，教师确认后使用"}
-                </p>
+        <div className="grid gap-4">
+          <section className="rounded-[1.6rem] bg-white/92 p-5 shadow-sm">
+            <p className="text-xs font-semibold text-violet-700">第二步：听绘本</p>
+            <div className="mt-3 grid gap-4 md:grid-cols-[10rem_1fr]">
+              <div className="flex min-h-40 items-center justify-center rounded-[1.5rem] bg-violet-100 text-7xl shadow-inner">
+                {shownBook.coverIcon}
               </div>
-              <div className="min-h-64 bg-[linear-gradient(90deg,#ffffff_0%,#fff7ed_100%)] p-5">
-                <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-[1.2rem] bg-amber-100 text-4xl">
+              <div className="flex flex-col justify-center">
+                <p className="text-xs font-semibold text-violet-700">绘本封面</p>
+                <h4 className="mt-1 text-2xl font-semibold text-slate-900">{shownBook.title}</h4>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900">
+                    共 {shownBook.pages.length} 页
+                  </span>
+                  <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
+                    {shownBook.source === "teacher" ? "老师发布绘本" : "AI生成故事，教师确认后使用"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[1.8rem] border border-violet-100 bg-[linear-gradient(135deg,#ffffff_0%,#fff7ed_100%)] p-5 shadow-sm">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
+                <div className="flex min-h-56 w-full items-center justify-center rounded-[1.8rem] bg-violet-50 text-7xl shadow-inner">
                   {getReadingIcon(currentPage)}
                 </div>
-                <p className="max-w-2xl text-xl font-semibold leading-9 text-slate-900">
+                <span className="mt-4 rounded-full bg-violet-100 px-4 py-2 text-sm font-semibold text-violet-900">
+                  第 {pageIndex + 1} 页 / 共 {shownBook.pages.length} 页
+                </span>
+                <p className="mt-4 max-w-2xl text-2xl font-semibold leading-10 text-slate-900">
                   {currentPage}
                 </p>
-                <p className="mt-4 text-xs font-semibold text-amber-800">
-                  当前插图先用主题图标占位，后续可接入教师确认插图或绘本页图。
-                </p>
+                <span className="mt-4 rounded-full bg-amber-100 px-3 py-1.5 text-[11px] font-semibold text-amber-900">
+                  当前页插图：AI生成故事，教师确认后使用
+                </span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={playCurrentPage}
+                  className="rounded-full bg-violet-300 px-5 py-3 text-sm font-semibold text-violet-950 transition hover:-translate-y-0.5 hover:bg-violet-200"
+                  type="button"
+                >
+                  听这一页
+                </button>
+                <button
+                  onClick={goPreviousPage}
+                  disabled={pageIndex === 0}
+                  className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+                  type="button"
+                >
+                  上一页
+                </button>
+                <button
+                  onClick={goNextPage}
+                  className="rounded-full bg-emerald-200 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5 hover:bg-emerald-100"
+                  type="button"
+                >
+                  {pageIndex < shownBook.pages.length - 1 ? "下一页" : "我听完啦"}
+                </button>
+                <button
+                  onClick={markFavoriteStory}
+                  className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5"
+                  type="button"
+                >
+                  我喜欢这个
+                </button>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={playCurrentPage}
-                className="rounded-full bg-violet-300 px-5 py-3 text-sm font-semibold text-violet-950 transition hover:-translate-y-0.5 hover:bg-violet-200"
-                type="button"
-              >
-                听这一页
-              </button>
-              <button
-                onClick={goPreviousPage}
-                disabled={pageIndex === 0}
-                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-                type="button"
-              >
-                上一页
-              </button>
-              <button
-                onClick={goNextPage}
-                className="rounded-full bg-emerald-200 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5 hover:bg-emerald-100"
-                type="button"
-              >
-                {pageIndex < shownBook.pages.length - 1 ? "下一页" : "我听完啦"}
-              </button>
-              <button
-                onClick={markFavoriteStory}
-                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5"
-                type="button"
-              >
-                我喜欢这个
-              </button>
-            </div>
-          </div>
+          </section>
 
-          <div className="mt-5 rounded-[1.4rem] bg-emerald-50 p-4">
+          <div className="rounded-[1.4rem] bg-emerald-50 p-4">
             <p className="text-sm font-semibold text-emerald-900">第三步：阅读打卡</p>
             <p className="mt-1 text-xs leading-5 text-emerald-800">
               听完或翻完小绘本，就可以点“今天读完啦”。
@@ -6990,9 +7030,7 @@ function FoodPreferenceGame({
   );
   const menuImageContext = findBestMenuImageContext(materialSource.subject, todayMenuEntries, "observationFoodImage");
   const materialDisplayImageUrl = menuImageContext.coverImageUrl;
-  const materialDisplaySourceLabel = menuImageContext.sourceLabel?.includes("老师确认")
-    ? "老师确认好的观察图"
-    : "老师准备好的观察图";
+  const materialDisplaySourceLabel = menuImageContext.sourceLabel || "老师准备好的观察图";
 
   useEffect(() => {
     const foodRecognitionRef = recognitionRef;
@@ -7254,7 +7292,7 @@ function FoodPreferenceGame({
           <h4 className="mt-1 text-xl font-semibold text-slate-900">{materialSource.subject}</h4>
           <span
             className={`mt-2 inline-flex rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm ${
-              materialDisplaySourceLabel.includes("老师确认")
+              materialDisplaySourceLabel.includes("AI") || materialDisplaySourceLabel.includes("老师确认")
                 ? "bg-amber-100 text-amber-900"
                 : "bg-white text-cyan-900"
             }`}
@@ -7533,6 +7571,7 @@ function FoodKitchenGame({
   mode = "kitchen",
   onComplete,
   onSpeak,
+  onBackToHome,
   todayMenuEntries = [],
 }: {
   contentConfig?: EditableGameContent;
@@ -7542,6 +7581,7 @@ function FoodKitchenGame({
     detail?: Partial<Omit<MiniGameRecord, "completedAt" | "gameKey" | "badgeName" | "themeId" | "pickedItems">>,
   ) => void;
   onSpeak?: SpeakHandler;
+  onBackToHome?: () => void;
   todayMenuEntries?: WeeklyMenuEntry[];
 }) {
   const isBroadcastMode = mode === "broadcast";
@@ -7561,6 +7601,7 @@ function FoodKitchenGame({
   const [workMediaType, setWorkMediaType] = useState<"image" | "video" | "">("");
   const [kitchenSuccess, setKitchenSuccess] = useState(false);
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
+  const [kitchenCookingStarted, setKitchenCookingStarted] = useState(false);
   const completionReportedRef = useRef(false);
   const kitchenRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const selectedRecipe = recipeChoices.find((item) => item.label === selectedRecipeLabel);
@@ -7641,6 +7682,7 @@ function FoodKitchenGame({
     setAiBroadcastText("");
     setKitchenSuccess(false);
     setBroadcastSuccess(false);
+    setKitchenCookingStarted(false);
     handleWorkMediaSelect();
     completionReportedRef.current = false;
     const message = `${recipe.area}开张啦。第一步：${recipe.actions[0]}。`;
@@ -7801,6 +7843,20 @@ function FoodKitchenGame({
 
     setKitchenSuccess(false);
 
+    if (!allIngredientsInPot) {
+      const message = "先把材料放进锅里，再按步骤慢慢做。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    if (!kitchenCookingStarted) {
+      const message = "材料都在锅里啦，先点“开始变成一道菜”。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
     if (action !== nextAction) {
       const message = `先做“${nextAction}”，小厨房要按顺序慢慢来。`;
       setFeedback(message);
@@ -7892,6 +7948,7 @@ function FoodKitchenGame({
     setAiBroadcastText("");
     setKitchenSuccess(false);
     setBroadcastSuccess(false);
+    setKitchenCookingStarted(false);
     handleWorkMediaSelect();
     setFeedback(
       isBroadcastMode
@@ -7956,6 +8013,9 @@ function FoodKitchenGame({
       : `${ingredient}放进锅里啦，再选一个材料。`;
 
     setDroppedKitchenIngredients(nextIngredients);
+    if (!done) {
+      setKitchenCookingStarted(false);
+    }
     setFeedback(message);
     onSpeak?.(message);
   }
@@ -8466,27 +8526,46 @@ function FoodKitchenGame({
                 putKitchenIngredientInPot(ingredient);
               }
             }}
-            className="flex min-h-[15rem] flex-col items-center justify-center rounded-[1.6rem] border-2 border-dashed border-orange-200 bg-[radial-gradient(circle_at_center,#fed7aa_0%,#fff7ed_58%,#ffffff_100%)] p-4 text-center shadow-inner"
+            className="rounded-[1.6rem] bg-orange-50 p-4 text-center shadow-inner"
           >
-            <span className="text-6xl">🍲</span>
-            <p className="mt-2 text-sm font-semibold text-orange-950">小锅在这里</p>
-            <p className="mt-1 text-xs leading-5 text-orange-800">把材料卡放进锅里</p>
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {droppedKitchenIngredients.length > 0 ? (
-                droppedKitchenIngredients.map((ingredient) => (
-                  <span
-                    key={`pot-${ingredient}`}
-                    className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-orange-900 shadow-sm"
-                  >
-                    {ingredient}
+            <div className="relative mx-auto flex aspect-[1.22/1] w-full max-w-[17rem] items-center justify-center">
+              <span className="absolute -left-3 top-1/2 h-12 w-8 -translate-y-1/2 rounded-l-full bg-orange-900/75" />
+              <span className="absolute -right-3 top-1/2 h-12 w-8 -translate-y-1/2 rounded-r-full bg-orange-900/75" />
+              <div className="absolute inset-0 rounded-[50%] border-[12px] border-orange-900/75 bg-[radial-gradient(circle_at_center,#fff7ed_0%,#fed7aa_42%,#ea580c_100%)] shadow-[inset_0_18px_35px_rgba(124,45,18,0.22),0_14px_28px_rgba(124,45,18,0.18)]" />
+              <div className="relative flex h-[72%] w-[78%] flex-wrap items-center justify-center gap-2 rounded-[50%] bg-[radial-gradient(circle_at_center,#ffffff_0%,#ffedd5_55%,#fdba74_100%)] p-4">
+                {droppedKitchenIngredients.length > 0 ? (
+                  droppedKitchenIngredients.map((ingredient) => (
+                    <span
+                      key={`pot-${ingredient}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-orange-900 shadow-sm"
+                    >
+                      <span aria-hidden="true">{getFoodPreferenceIcon(ingredient)}</span>
+                      {ingredient}
+                    </span>
+                  ))
+                ) : (
+                  <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-orange-700">
+                    等材料来
                   </span>
-                ))
-              ) : (
-                <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-orange-700">
-                  等材料来
-                </span>
-              )}
+                )}
+              </div>
             </div>
+            <p className="mt-3 text-sm font-semibold text-orange-950">小锅在这里</p>
+            <p className="mt-1 text-xs leading-5 text-orange-800">把材料卡拖进锅里，点一下也可以。</p>
+            {allIngredientsInPot && !completed ? (
+              <button
+                onClick={() => {
+                  const message = "材料都在锅里啦。开始变成一道菜，按步骤慢慢做。";
+                  setKitchenCookingStarted(true);
+                  setFeedback(message);
+                  onSpeak?.(message);
+                }}
+                className="mt-3 rounded-full bg-orange-300 px-4 py-2 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5"
+                type="button"
+              >
+                开始变成一道菜
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -8591,6 +8670,15 @@ function FoodKitchenGame({
                 >
                   再做一道
                 </button>
+                {onBackToHome ? (
+                  <button
+                    onClick={onBackToHome}
+                    className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm transition hover:-translate-y-0.5"
+                    type="button"
+                  >
+                    🏠 回到闽食目录
+                  </button>
+                ) : null}
                 <SpeechCueButton
                   text={`${selectedRecipe.label}做好啦，小厨师完成一道菜。`}
                   onSpeak={onSpeak}
@@ -10537,6 +10625,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 onSpeak={(text) => {
                   void startSpeechPlayback(text);
                 }}
+                onBackToHome={() => setActiveChildPanel("home")}
                 onComplete={(pickedItems, detail) =>
                   logMiniGameCompletion("foodKitchen", "泉州小厨师章", pickedItems, detail)
                 }
@@ -10552,6 +10641,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 onSpeak={(text) => {
                   void startSpeechPlayback(text);
                 }}
+                onBackToHome={() => setActiveChildPanel("home")}
                 onComplete={(pickedItems, detail) =>
                   logMiniGameCompletion("foodReporter", "小小闽食播报章", pickedItems, detail)
                 }
