@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { resolveSafeFoodImage } from "@/lib/food-image-catalog";
+
 export const maxDuration = 60;
 
 type ImageRequest = {
@@ -26,6 +28,19 @@ function normalizeImageError(message: string) {
   return "图片接口暂时不可用，请稍后再试。";
 }
 
+function buildFallbackImage(prompt: string, message: string) {
+  const image = resolveSafeFoodImage(prompt, { scene: "menuObservationImage" });
+
+  return {
+    imageUrl: image.url,
+    source: image.sourceType,
+    sourceLabel: image.sourceLabel,
+    fallbackUsed: true,
+    teacherConfirmed: true,
+    error: message,
+  };
+}
+
 export async function POST(request: Request) {
   let body: ImageRequest = {};
 
@@ -47,24 +62,34 @@ export async function POST(request: Request) {
   const model =
     process.env.VOLCENGINE_ARK_IMAGE_MODEL ?? "doubao-seedream-5-0-260128";
   const imageSize = process.env.VOLCENGINE_ARK_IMAGE_SIZE ?? "2K";
+  const providerTimeoutMs = Number(process.env.IMAGE_GENERATION_TIMEOUT_MS ?? "12000");
 
-  if (!imageEnabled) {
-    return NextResponse.json(
-      { error: "AI 出图功能当前先关闭，请先体验语音提醒和成长任务主流程。" },
-      { status: 400 },
-    );
-  }
-
-  if (!apiKey || !prompt) {
+  if (!prompt) {
     return NextResponse.json(
       { error: "图片生成功能暂时不可用，请稍后再试。" },
       { status: 400 },
     );
   }
 
+  if (!imageEnabled) {
+    return NextResponse.json(
+      buildFallbackImage(prompt, "AI 出图功能当前先关闭，已先使用老师确认的本地材料图。"),
+    );
+  }
+
+  if (!apiKey) {
+    return NextResponse.json(
+      buildFallbackImage(prompt, "图片生成功能暂时不可用，已先使用老师确认的本地材料图。"),
+    );
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Number.isFinite(providerTimeoutMs) ? providerTimeoutMs : 12000);
+
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/images/generations`, {
       method: "POST",
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -109,7 +134,13 @@ export async function POST(request: Request) {
     throw new Error("图片接口返回内容为空");
   } catch (error) {
     const message = error instanceof Error ? error.message : "图片接口暂时不可用";
+    const normalizedMessage =
+      error instanceof Error && error.name === "AbortError"
+        ? "图片生成有点慢，已先使用老师确认的本地材料图。"
+        : normalizeImageError(message);
 
-    return NextResponse.json({ error: normalizeImageError(message) }, { status: 500 });
+    return NextResponse.json(buildFallbackImage(prompt, normalizedMessage));
+  } finally {
+    clearTimeout(timeout);
   }
 }
