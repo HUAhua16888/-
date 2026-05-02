@@ -32,17 +32,32 @@ const identityRoutes = [
   },
 ];
 
+const supportRoutes = [
+  { label: "政策合规说明", href: "/compliance", icon: "📘", description: "五大领域、保教结合、游戏化和防小学化说明。" },
+  { label: "隐私与安全说明", href: "/privacy", icon: "🛡️", description: "不拍儿童正脸，不录入敏感信息，正式部署需加密存储。" },
+  { label: "参赛材料", href: "/contest", icon: "🏅", description: "案例摘要、教师流程、报告结构和8分钟演示脚本。" },
+  { label: "应用证据", href: "/evidence", icon: "📎", description: "真实使用记录占位区，参赛前由教师补充。" },
+];
+
 export function HomeWorkspace() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-8 md:px-8">
       <section className="w-full rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff8df_50%,#e7fbf8_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-10">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold text-teal-700">教育智能体 · AI 成长互动与家园共育平台</p>
+          <p className="text-sm font-semibold text-teal-700">
+            幼习宝·闽食成长岛教育智能体
+          </p>
           <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-6xl">
-            幼芽成长智伴
+            闽食小当家
           </h1>
+          <p className="mt-3 text-xl font-semibold text-slate-800 md:text-2xl">
+            幼习宝·闽食成长岛教育智能体
+          </p>
           <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-            AI 陪幼儿玩、听幼儿说、整理记录和辅助分析；教师审核、修改、确认后再发布或同步。
+            “闽食小当家”是面向3-6岁幼儿园场景的教育智能体，围绕幼儿挑食、进餐习惯培养、泉州/南安闽南饮食文化启蒙与家园共育，提供儿童端互动、教师端配置、餐盘观察、好习惯闯关、闽食成长岛和成长记录等功能，帮助教师开展生活化、游戏化、可落地的食育活动。
+          </p>
+          <p className="mt-3 inline-flex rounded-full bg-white/86 px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm">
+            AI只做辅助；教师审核、修改、确认后再发布或同步。
           </p>
         </div>
 
@@ -76,6 +91,24 @@ export function HomeWorkspace() {
               <span className="mt-5 inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm">
                 {item.action}
               </span>
+            </Link>
+          ))}
+        </div>
+
+        <div className="mt-7 grid gap-3 md:grid-cols-4">
+          {supportRoutes.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="rounded-[1.3rem] bg-white/78 px-4 py-4 shadow-sm transition hover:-translate-y-0.5"
+            >
+              <p className="text-sm font-semibold text-slate-900">
+                <span className="mr-2" aria-hidden="true">
+                  {item.icon}
+                </span>
+                {item.label}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-slate-600">{item.description}</p>
             </Link>
           ))}
         </div>

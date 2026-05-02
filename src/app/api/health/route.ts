@@ -106,7 +106,7 @@ export async function GET(request: Request) {
   if (!canShowInternal) {
     return NextResponse.json({
       ok: true,
-      app: "幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体",
+      app: "闽食小当家——幼习宝·闽食成长岛教育智能体",
       platform: "幼芽成长智伴",
       version: appVersion,
       now: new Date().toISOString(),
@@ -125,7 +125,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    app: "幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体",
+    app: "闽食小当家——幼习宝·闽食成长岛教育智能体",
     platform: "幼芽成长智伴",
     version: appVersion,
     now: new Date().toISOString(),

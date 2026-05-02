@@ -344,6 +344,10 @@ type MenuMediaDraftPanelProps = {
   onVideoUpload: (file?: File) => void;
   onManualImageUpload: (file?: File) => void;
   onGenerateAiImage: () => void;
+  onRegenerateAiImage: (imageId: string) => void;
+  onUpdateAiPrompt: (imageId: string, prompt: string) => void;
+  onUseImage: (imageId: string) => void;
+  onDeleteImage: (imageId: string) => void;
   onToggleImage: (imageId: string) => void;
   onSetCover: (imageId: string) => void;
   onConfirm: () => void;
@@ -362,6 +366,10 @@ function MenuMediaDraftPanel({
   onVideoUpload,
   onManualImageUpload,
   onGenerateAiImage,
+  onRegenerateAiImage,
+  onUpdateAiPrompt,
+  onUseImage,
+  onDeleteImage,
   onToggleImage,
   onSetCover,
   onConfirm,
@@ -442,6 +450,15 @@ function MenuMediaDraftPanel({
             const selected = draft.selectedIds.includes(image.id);
             const cover = draft.coverId === image.id;
             const isAiImage = image.mediaSource === "ai_generated";
+            const aiPromptValue =
+              image.aiPrompt ||
+              buildMenuMediaPrompt(
+                dishName,
+                ingredientsText
+                  .split(/[、,，]/)
+                  .map((item) => item.trim())
+                  .filter(Boolean),
+              );
 
             return (
               <article
@@ -454,6 +471,11 @@ function MenuMediaDraftPanel({
                 <img src={image.url} alt={image.label} className="h-32 w-full object-cover" />
                 <div className="p-3">
                   <p className="line-clamp-2 text-xs font-semibold text-slate-800">{image.label}</p>
+                  {isAiImage ? (
+                    <p className="mt-1 text-xs font-semibold text-amber-900">
+                      {dishName || "今日食谱"} · {mealType}
+                    </p>
+                  ) : null}
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       onClick={() => onToggleImage(image.id)}
@@ -481,6 +503,43 @@ function MenuMediaDraftPanel({
                   >
                     {isAiImage ? "AI生成，教师确认后使用" : image.mediaSource === "video_frame" ? "今天视频里的图" : "教师确认图片"}
                   </span>
+                  {isAiImage ? (
+                    <div className="mt-3 rounded-[1rem] bg-amber-50 p-3">
+                      <label className="block">
+                        <span className="text-[11px] font-semibold text-amber-900">当前生成描述</span>
+                        <span className="mt-1 block text-xs font-semibold text-slate-800">修改图片描述</span>
+                        <textarea
+                          value={aiPromptValue}
+                          onChange={(event) => onUpdateAiPrompt(image.id, event.target.value.slice(0, 260))}
+                          className="mt-2 min-h-24 w-full rounded-[0.9rem] border border-amber-100 bg-white px-3 py-2 text-xs leading-5 text-slate-800 outline-none focus:border-amber-300"
+                          placeholder="请画一份真实幼儿园午餐，包含炒米粉、鸽子汤，颜色自然，餐盘干净。"
+                        />
+                      </label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => onRegenerateAiImage(image.id)}
+                          className="rounded-full bg-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-950 transition hover:-translate-y-0.5"
+                          type="button"
+                        >
+                          重新生成
+                        </button>
+                        <button
+                          onClick={() => onUseImage(image.id)}
+                          className="rounded-full bg-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-950 transition hover:-translate-y-0.5"
+                          type="button"
+                        >
+                          使用这张
+                        </button>
+                        <button
+                          onClick={() => onDeleteImage(image.id)}
+                          className="rounded-full bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800 transition hover:-translate-y-0.5"
+                          type="button"
+                        >
+                          删除这张
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </article>
             );
@@ -589,6 +648,56 @@ function buildWeeklyMenuNutritionPreview(entry: Pick<WeeklyMenuEntry, "dishName"
 
 const aiDraftReviewNotice = "AI生成建议，需教师修改确认后使用";
 const aiConfirmedUseNotice = "AI生成，教师确认后使用";
+const aiReviewRecordsStorageKey = "tongqu-growth-web-ai-content-review";
+const aiReviewContentTypes = ["闽食介绍", "儿歌", "故事", "家园任务", "成长评语"] as const;
+const aiReviewStatusOptions = ["待审核", "已通过", "需修改"] as const;
+
+type AiReviewContentType = (typeof aiReviewContentTypes)[number];
+type AiReviewStatus = (typeof aiReviewStatusOptions)[number];
+
+type AiReviewRecord = {
+  id: string;
+  contentType: AiReviewContentType;
+  aiContent: string;
+  status: AiReviewStatus;
+  teacherNote: string;
+  updatedAt: string;
+};
+
+function parseAiReviewRecords(raw: string | null): AiReviewRecord[] {
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter((item): item is AiReviewRecord => {
+        if (!item || typeof item !== "object") {
+          return false;
+        }
+
+        const record = item as Partial<AiReviewRecord>;
+
+        return (
+          typeof record.id === "string" &&
+          aiReviewContentTypes.includes(record.contentType as AiReviewContentType) &&
+          typeof record.aiContent === "string" &&
+          aiReviewStatusOptions.includes(record.status as AiReviewStatus) &&
+          typeof record.teacherNote === "string" &&
+          typeof record.updatedAt === "string"
+        );
+      })
+      .slice(0, 30);
+  } catch {
+    return [];
+  }
+}
 
 const teacherDirectoryItems: SectionDirectoryItem[] = [
   {
@@ -604,6 +713,13 @@ const teacherDirectoryItems: SectionDirectoryItem[] = [
     href: "#teacher-ai-generate",
     icon: "🪄",
     tone: "bg-amber-50 text-amber-950",
+  },
+  {
+    label: "AI审核",
+    description: "内容先审再用。",
+    href: "#teacher-ai-review",
+    icon: "✅",
+    tone: "bg-lime-50 text-lime-950",
   },
   {
     label: "重点幼儿",
@@ -652,6 +768,7 @@ const teacherDirectoryItems: SectionDirectoryItem[] = [
 type TeacherPanelKey =
   | "home"
   | "teacher-ai-generate"
+  | "teacher-ai-review"
   | "teacher-child-windows"
   | "teacher-weekly-menu"
   | "teacher-published-content"
@@ -662,6 +779,7 @@ type TeacherPanelKey =
 const teacherPanelLabels: Record<TeacherPanelKey, string> = {
   home: "AI观察数据",
   "teacher-ai-generate": "AI建议修改与确认",
+  "teacher-ai-review": "AI内容审核",
   "teacher-child-windows": "重点幼儿",
   "teacher-weekly-menu": "今日食谱",
   "teacher-published-content": "幼儿想法汇总",
@@ -882,7 +1000,7 @@ function buildTeacherCopyText(
   themeId: ThemeId,
 ) {
   return [
-    "【幼芽成长智伴｜幼习宝教育智能体教师工作台生成】",
+    "【闽食小当家｜幼习宝·闽食成长岛教育智能体教师工作台生成】",
     `主题：${themeId === "habit" ? "好习惯练习" : "闽食探索"}`,
     `任务：${task}`,
     `场景：${scenario.trim()}`,
@@ -1143,6 +1261,13 @@ export function TeacherStudio() {
   const [teacherAuthStatus, setTeacherAuthStatus] =
     useState("班级试用模式：请先确认本机班级试用账号，再进入教师工作台。");
   const [activeTeacherPanel, setActiveTeacherPanel] = useState<TeacherPanelKey>("home");
+  const [aiReviewRecords, setAiReviewRecords] = useState<AiReviewRecord[]>([]);
+  const [aiReviewContentType, setAiReviewContentType] = useState<AiReviewContentType>("闽食介绍");
+  const [aiReviewContent, setAiReviewContent] = useState("");
+  const [aiReviewStatus, setAiReviewStatus] = useState<AiReviewStatus>("待审核");
+  const [aiReviewTeacherNote, setAiReviewTeacherNote] = useState("");
+  const [aiReviewMessage, setAiReviewMessage] =
+    useState("当前为演示版本，正式部署需接入后端账号系统和加密数据库。");
   const [themeId, setThemeId] = useState<ThemeId>("habit");
   const [teacherAgeGroup, setTeacherAgeGroup] = useState<string>(defaultTeacherAgeGroup);
   const [task, setTask] = useState(defaultTeacherTask.label);
@@ -1200,7 +1325,7 @@ export function TeacherStudio() {
   const [habitTemplateFocus, setHabitTemplateFocus] = useState("");
   const [habitTemplateChildPrompt, setHabitTemplateChildPrompt] = useState("");
   const [habitTemplateStatus, setHabitTemplateStatus] =
-    useState("输入当前想加强的习惯，AI 会整理成幼儿可语音或文字回应的教师发布任务。");
+    useState("输入当前想加强的习惯，AI 会整理成幼儿可语音或文字回应的教师发布小任务。");
   const [cloudSyncStatus, setCloudSyncStatus] =
     useState("账号同步已接入本地服务：上传后，教师换设备、家长用绑定码都沿同一班级账号同步。");
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
@@ -2303,6 +2428,7 @@ export function TeacherStudio() {
           parseTeacherPictureBooks(window.localStorage.getItem(teacherPictureBooksStorageKey)),
         );
         setHabitTemplates(parseHabitTemplates(window.localStorage.getItem(habitTemplatesStorageKey)));
+        setAiReviewRecords(parseAiReviewRecords(window.localStorage.getItem(aiReviewRecordsStorageKey)));
         setRosterStatus(
           savedRoster.length > 0
             ? `已读取 ${savedRoster.length} 位幼儿，首页可以按姓名或号数识别身份。`
@@ -2356,6 +2482,14 @@ export function TeacherStudio() {
       }),
     );
   }, [draftHydrated, draftStorageKey, scenario, task, teacherAgeGroup, themeId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !draftHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(aiReviewRecordsStorageKey, JSON.stringify(aiReviewRecords.slice(0, 30)));
+  }, [aiReviewRecords, draftHydrated]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !draftHydrated) {
@@ -2459,7 +2593,7 @@ export function TeacherStudio() {
 
       if (event.key === habitTemplatesStorageKey) {
         setHabitTemplates(parseHabitTemplates(event.newValue));
-        setHabitTemplateStatus("已同步其他教师端创建的教师发布任务。");
+        setHabitTemplateStatus("已同步其他教师端创建的教师发布小任务。");
       }
     }
 
@@ -2474,6 +2608,44 @@ export function TeacherStudio() {
 
   function openTeacherDirectoryItem(item: SectionDirectoryItem) {
     setActiveTeacherPanel(getTeacherPanelFromHref(item.href));
+  }
+
+  function saveAiReviewRecord() {
+    const content = aiReviewContent.trim();
+    const note = aiReviewTeacherNote.trim();
+
+    if (!content) {
+      setAiReviewMessage("请先粘贴或输入一段 AI 生成内容，再由教师审核。");
+      return;
+    }
+
+    const nextRecord: AiReviewRecord = {
+      id: `ai-review-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      contentType: aiReviewContentType,
+      aiContent: content,
+      status: aiReviewStatus,
+      teacherNote: note,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setAiReviewRecords((current) => [nextRecord, ...current].slice(0, 30));
+    setAiReviewContent("");
+    setAiReviewTeacherNote("");
+    setAiReviewStatus("待审核");
+    setAiReviewMessage("已保存到本地审核记录；正式部署需接入后端账号系统和加密数据库。");
+  }
+
+  function reuseAiReviewRecord(record: AiReviewRecord) {
+    setAiReviewContentType(record.contentType);
+    setAiReviewContent(record.aiContent);
+    setAiReviewStatus(record.status);
+    setAiReviewTeacherNote(record.teacherNote);
+    setAiReviewMessage("已取回这条审核内容，可以继续修改后再次保存。");
+  }
+
+  function removeAiReviewRecord(recordId: string) {
+    setAiReviewRecords((current) => current.filter((record) => record.id !== recordId));
+    setAiReviewMessage("已删除这条本地审核记录。");
   }
 
   function bringIntoGenerationArea(options: {
@@ -3231,6 +3403,27 @@ export function TeacherStudio() {
     }
   }
 
+  async function requestMenuAiObservationImage(prompt: string) {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        size: "1024x1024",
+      }),
+    });
+    const data = (await response.json()) as { imageUrl?: string; url?: string; error?: string };
+    const imageUrl = data.imageUrl || data.url;
+
+    if (!response.ok || !imageUrl) {
+      throw new Error(data.error || "AI 补图失败，请上传观察图片。");
+    }
+
+    return imageUrl;
+  }
+
   async function generateMenuAiObservationImage() {
     const date = menuMediaActiveDate;
     const mealType = menuMediaActiveMealType;
@@ -3258,22 +3451,7 @@ export function TeacherStudio() {
     }));
 
     try {
-      const response = await fetch("/api/generate-image", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          size: "1024x1024",
-        }),
-      });
-      const data = (await response.json()) as { imageUrl?: string; url?: string; error?: string };
-      const imageUrl = data.imageUrl || data.url;
-
-      if (!response.ok || !imageUrl) {
-        throw new Error(data.error || "AI 补图失败，请上传观察图片。");
-      }
+      const imageUrl = await requestMenuAiObservationImage(prompt);
 
       const image: MenuObservationImage = {
         id: createMenuMediaId("ai-menu-image"),
@@ -3304,6 +3482,112 @@ export function TeacherStudio() {
     } finally {
       setIsMenuMediaAiImageLoading(false);
     }
+  }
+
+  function updateMenuAiImagePrompt(imageId: string, prompt: string) {
+    updateMenuMediaDraftFor(menuMediaActiveDate, menuMediaActiveMealType, (draft) => ({
+      ...draft,
+      candidates: draft.candidates.map((image) =>
+        image.id === imageId
+          ? {
+              ...image,
+              aiPrompt: prompt,
+              teacherConfirmed: false,
+            }
+          : image,
+      ),
+      confirmedImages: [],
+      confirmedCoverUrl: "",
+      confirmedAt: "",
+      status: "图片描述已修改，可在这张图下方重新生成；确认前儿童端看不到。",
+    }));
+  }
+
+  async function regenerateMenuAiObservationImage(imageId: string) {
+    const date = menuMediaActiveDate;
+    const mealType = menuMediaActiveMealType;
+    const draft = getMenuMediaDraftFor(date, mealType);
+    const { dishName, ingredients } = getMenuMediaValues(date, mealType);
+    const targetImage = draft.candidates.find((image) => image.id === imageId);
+
+    if (!targetImage || targetImage.mediaSource !== "ai_generated") {
+      setMenuMediaStatus("请选择一张 AI 补图后再重新生成。", date, mealType);
+      return;
+    }
+
+    const prompt = targetImage.aiPrompt || buildMenuMediaPrompt(dishName, ingredients);
+
+    if (!prompt.trim()) {
+      setMenuMediaStatus("请先写清图片描述，再重新生成。", date, mealType);
+      return;
+    }
+
+    setIsMenuMediaAiImageLoading(true);
+    updateMenuMediaDraftFor(date, mealType, (current) => ({
+      ...current,
+      status: "正在按修改后的图片描述重新生成；确认前儿童端看不到。",
+    }));
+
+    try {
+      const imageUrl = await requestMenuAiObservationImage(prompt);
+
+      updateMenuMediaDraftFor(date, mealType, (current) => ({
+        ...current,
+        candidates: current.candidates.map((image) =>
+          image.id === imageId
+            ? {
+                ...image,
+                url: imageUrl,
+                label: `AI补图：${dishName || "今日食谱"}`,
+                aiPrompt: prompt,
+                teacherConfirmed: false,
+                createdAt: new Date().toISOString(),
+              }
+            : image,
+        ),
+        selectedIds: Array.from(new Set([imageId, ...current.selectedIds])).slice(0, 6),
+        coverId: imageId,
+        confirmedImages: [],
+        confirmedCoverUrl: "",
+        confirmedAt: "",
+        status: "已按新描述重新生成，请点击“使用这张”并确认观察图片发布。",
+      }));
+    } catch (error) {
+      setMenuMediaStatus(error instanceof Error ? error.message : "AI 补图失败，请上传观察图片。", date, mealType);
+    } finally {
+      setIsMenuMediaAiImageLoading(false);
+    }
+  }
+
+  function useMenuObservationImage(imageId: string) {
+    updateMenuMediaDraftFor(menuMediaActiveDate, menuMediaActiveMealType, (draft) => ({
+      ...draft,
+      selectedIds: [imageId],
+      coverId: imageId,
+      confirmedImages: [],
+      confirmedCoverUrl: "",
+      confirmedAt: "",
+      status: "已选择这张观察图。还需要点击“确认观察图片发布”，儿童端才可见。",
+    }));
+  }
+
+  function deleteMenuObservationImage(imageId: string) {
+    updateMenuMediaDraftFor(menuMediaActiveDate, menuMediaActiveMealType, (draft) => {
+      const candidates = draft.candidates.filter((image) => image.id !== imageId);
+      const selectedIds = draft.selectedIds.filter((id) => id !== imageId);
+      const coverId = draft.coverId === imageId ? selectedIds[0] ?? "" : draft.coverId;
+
+      return {
+        ...draft,
+        candidates,
+        selectedIds,
+        coverId,
+        confirmedImages: [],
+        confirmedCoverUrl: "",
+        confirmedAt: "",
+        status: candidates.length > 0 ? "已删除这张候选图，请重新确认观察图片。" : "还没有观察图片，可以上传视频、上传图片，或让 AI 补一张图。",
+      };
+    });
   }
 
   function toggleMenuObservationImage(imageId: string) {
@@ -3639,7 +3923,7 @@ export function TeacherStudio() {
 
   function removeHabitTemplate(templateId: string) {
     setHabitTemplates((current) => current.filter((item) => item.id !== templateId));
-    setHabitTemplateStatus("已移除这个教师发布任务。");
+    setHabitTemplateStatus("已移除这个教师发布小任务。");
   }
 
   function buildClassCloudPayload() {
@@ -4759,7 +5043,7 @@ ${worksheets.join("")}
 
   function exportTeacherDataSummary(format: "csv" | "json" | "xls") {
     const dateKey = getLocalDateKey();
-    const baseName = `幼芽成长智伴_班级数据汇总_${dateKey}`;
+    const baseName = `闽食小当家_班级数据汇总_${dateKey}`;
 
     if (format === "json") {
       downloadTextFile(
@@ -4895,8 +5179,8 @@ ${worksheets.join("")}
 
     const dateKey = getLocalDateKey();
 
-    downloadTextFile(
-      `幼芽成长智伴_AI生成内容_${dateKey}.doc`,
+      downloadTextFile(
+        `闽食小当家_AI生成内容_${dateKey}.doc`,
       `\uFEFF${buildTeacherAiWordHtml()}`,
       "application/msword;charset=utf-8",
     );
@@ -5218,14 +5502,14 @@ ${worksheets.join("")}
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">
-              幼芽成长智伴 · 教师工作台
+              闽食小当家 · 教师工作台
             </p>
             <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
               AI观察数据
               <span className="block text-2xl text-slate-700 md:text-3xl">再生成跟进并同步家长</span>
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-              先看今日互动、常规、食物观察、家长反馈和重点幼儿，再进入对应工作区。
+              闽食小当家——幼习宝·闽食成长岛教育智能体：先看今日互动、常规、食物观察、家长反馈和重点幼儿，再进入对应工作区。
               {premiumTtsEnabled ? ` ${premiumVoiceLabel} 可用于试播老师引导语和活动口令。` : ""}
             </p>
             <p className="mt-3 inline-flex rounded-full bg-white/82 px-4 py-2 text-sm font-semibold text-teal-900 shadow-sm">
@@ -5876,6 +6160,10 @@ ${worksheets.join("")}
                 onVideoUpload={(file) => void handleMenuVideoUpload(file)}
                 onManualImageUpload={(file) => void handleMenuManualImageUpload(file)}
                 onGenerateAiImage={() => void generateMenuAiObservationImage()}
+                onRegenerateAiImage={(imageId) => void regenerateMenuAiObservationImage(imageId)}
+                onUpdateAiPrompt={updateMenuAiImagePrompt}
+                onUseImage={useMenuObservationImage}
+                onDeleteImage={deleteMenuObservationImage}
                 onToggleImage={toggleMenuObservationImage}
                 onSetCover={setMenuCoverImage}
                 onConfirm={confirmMenuObservationImages}
@@ -6739,6 +7027,159 @@ ${worksheets.join("")}
       </section>
 
       <section
+        id="teacher-ai-review"
+        hidden={activeTeacherPanel !== "teacher-ai-review"}
+        className="order-4 scroll-mt-24 rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fee7_0%,#ffffff_56%,#ecfeff_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-lime-700">AI内容审核</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">AI生成内容，教师审核后使用</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+              儿童端展示内容应以教师预设任务和知识库内容为主；AI生成内容默认进入教师审核，未经教师确认，不直接作为正式教学评价。
+            </p>
+            <p className="mt-3 inline-flex rounded-full bg-white/86 px-4 py-2 text-sm font-semibold text-lime-900 shadow-sm">
+              AI只做辅助，不替代教师观察、判断和保育教育责任。
+            </p>
+          </div>
+          <span className="rounded-full bg-white/88 px-4 py-2 text-sm font-semibold text-lime-900 shadow-sm">
+            已保存 {aiReviewRecords.length} 条
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-semibold text-slate-500">内容类型</span>
+                <select
+                  value={aiReviewContentType}
+                  onChange={(event) => setAiReviewContentType(event.target.value as AiReviewContentType)}
+                  className="mt-2 w-full rounded-[1.1rem] border border-lime-100 bg-lime-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-lime-300"
+                >
+                  {aiReviewContentTypes.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-slate-500">教师审核状态</span>
+                <select
+                  value={aiReviewStatus}
+                  onChange={(event) => setAiReviewStatus(event.target.value as AiReviewStatus)}
+                  className="mt-2 w-full rounded-[1.1rem] border border-lime-100 bg-lime-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-lime-300"
+                >
+                  {aiReviewStatusOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label className="mt-4 block">
+              <span className="text-xs font-semibold text-slate-500">AI生成内容</span>
+              <textarea
+                value={aiReviewContent}
+                onChange={(event) => setAiReviewContent(event.target.value.slice(0, 1200))}
+                placeholder="粘贴 AI 生成的闽食介绍、儿歌、故事、家园任务或成长评语。"
+                className="mt-2 min-h-40 w-full rounded-[1.4rem] border border-lime-100 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-lime-300"
+              />
+            </label>
+
+            <label className="mt-4 block">
+              <span className="text-xs font-semibold text-slate-500">教师修改意见</span>
+              <textarea
+                value={aiReviewTeacherNote}
+                onChange={(event) => setAiReviewTeacherNote(event.target.value.slice(0, 500))}
+                placeholder="写下要改得更儿童化、更安全、更贴合本班情况的地方。"
+                className="mt-2 min-h-28 w-full rounded-[1.4rem] border border-lime-100 bg-lime-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-lime-300"
+              />
+            </label>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                onClick={saveAiReviewRecord}
+                className="rounded-full bg-lime-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
+                type="button"
+              >
+                保存审核记录
+              </button>
+              <button
+                onClick={() => {
+                  setAiReviewContent("");
+                  setAiReviewTeacherNote("");
+                  setAiReviewStatus("待审核");
+                  setAiReviewMessage("已清空当前填写内容。");
+                }}
+                className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
+                type="button"
+              >
+                清空当前内容
+              </button>
+            </div>
+            <p className="mt-4 rounded-[1.2rem] bg-lime-50 px-4 py-3 text-sm leading-7 font-semibold text-lime-900">
+              {aiReviewMessage}
+            </p>
+          </div>
+
+          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+            <p className="text-sm font-semibold text-slate-900">本地审核记录</p>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              当前为演示版本，正式部署需接入后端账号系统和加密数据库；这里用于展示参赛所需的“AI生成-教师审核-再使用”链路。
+            </p>
+            <div className="mt-4 grid gap-3">
+              {aiReviewRecords.length > 0 ? (
+                aiReviewRecords.map((record) => (
+                  <article key={record.id} className="rounded-[1.4rem] bg-lime-50 px-4 py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {record.contentType} · {record.status}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-lime-800">
+                          {new Date(record.updatedAt).toLocaleString("zh-CN")} · {aiConfirmedUseNotice}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => reuseAiReviewRecord(record)}
+                          className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-lime-900 shadow-sm"
+                          type="button"
+                        >
+                          继续修改
+                        </button>
+                        <button
+                          onClick={() => removeAiReviewRecord(record.id)}
+                          className="rounded-full bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800"
+                          type="button"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-700">{record.aiContent}</p>
+                    {record.teacherNote ? (
+                      <p className="mt-2 rounded-[1rem] bg-white/76 px-3 py-2 text-xs leading-6 font-semibold text-slate-600">
+                        教师意见：{record.teacherNote}
+                      </p>
+                    ) : null}
+                  </article>
+                ))
+              ) : (
+                <p className="rounded-[1.2rem] bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-600">
+                  还没有审核记录。可以先把 AI 生成的闽食介绍、故事或家园任务粘贴进左侧，再保存一条演示记录。
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
         id="teacher-published-content"
         hidden={activeTeacherPanel !== "teacher-published-content"}
         className="order-5 scroll-mt-24 rounded-[2.5rem] bg-[linear-gradient(135deg,#f6f0ff_0%,#ffffff_52%,#e7fbf7_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
@@ -6913,7 +7354,7 @@ ${worksheets.join("")}
           </div>
 
           <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
-            <p className="text-sm font-semibold text-emerald-700">教师发布任务</p>
+            <p className="text-sm font-semibold text-emerald-700">教师发布小任务</p>
             <h3 className="mt-1 text-xl font-semibold text-slate-900">幼儿小练习入口</h3>
             <p className="mt-2 text-sm leading-7 text-slate-600">
               用于临时习惯主题，例如“午睡整理”“排队等待”“轻声表达”。儿童端会提供语音或文字回应入口。

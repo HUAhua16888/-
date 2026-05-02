@@ -4,12 +4,14 @@ import { SiteShell } from "@/components/site-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "幼芽成长智伴｜幼习宝教育智能体",
-  description: "幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体，AI 成长互动与家园共育平台。",
+  title: "闽食小当家——幼习宝·闽食成长岛教育智能体",
+  description:
+    "面向3-6岁幼儿园场景的教育智能体，围绕进餐习惯、闽南食育、好习惯闯关和家园共育开展生活化游戏活动。",
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   openGraph: {
-    title: "幼芽成长智伴｜幼习宝教育智能体",
-    description: "幼习宝一日生活习惯养成 + 闽食成长岛食育改善协同教育智能体，AI 成长互动与家园共育平台。",
+    title: "闽食小当家——幼习宝·闽食成长岛教育智能体",
+    description:
+      "面向3-6岁幼儿园场景的教育智能体，围绕进餐习惯、闽南食育、好习惯闯关和家园共育开展生活化游戏活动。",
     type: "website",
     locale: "zh_CN",
   },

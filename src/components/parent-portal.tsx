@@ -195,7 +195,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackPhoto, setFeedbackPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
   const [feedbackPhotoStatus, setFeedbackPhotoStatus] =
-    useState("可选上传一张家庭观察照片，仅保存在这台设备上。");
+    useState("可选放一张家庭观察照片，请避开孩子正脸和敏感信息。");
   const [feedbackStatus, setFeedbackStatus] =
     useState("班级试用模式：家长的疑惑、想法和在家观察会保存在这台设备上。");
   const [selectedHomeTaskTitle, setSelectedHomeTaskTitle] = useState(
@@ -218,7 +218,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [plateActionNote, setPlateActionNote] = useState("");
   const [plateActionPhoto, setPlateActionPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
   const [plateActionPhotoStatus, setPlateActionPhotoStatus] =
-    useState("可选上传一张餐后整理或尝试小步骤照片，仅保存在这台设备上。");
+    useState("可选放一张餐后整理或尝试小步骤照片，请只拍食物、餐盘或作品。");
   const [plateActionStatus, setPlateActionStatus] =
     useState("选择一个今天真实发生的小步骤，提交后老师端会看到家庭光盘行动反馈。");
   const [status, setStatus] = useState("请输入幼儿姓名或号数、家庭绑定码，并勾选同意后查看。");
@@ -697,7 +697,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     });
     setFeedbackText("");
     setFeedbackPhoto(null);
-    setFeedbackPhotoStatus("可选上传一张家庭观察照片，仅保存在这台设备上。");
+    setFeedbackPhotoStatus("可选放一张家庭观察照片，请避开孩子正脸和敏感信息。");
     setFeedbackStatus("已保存到教师工作台反馈列表，老师查看后可以回复和给出家庭建议。");
     void syncParentFeedbackRecord(
       record,
@@ -960,7 +960,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     });
     setPlateActionNote("");
     setPlateActionPhoto(null);
-    setPlateActionPhotoStatus("可选上传一张餐后整理或尝试小步骤照片，仅保存在这台设备上。");
+    setPlateActionPhotoStatus("可选放一张餐后整理或尝试小步骤照片，请只拍食物、餐盘或作品。");
     setFeedbackCategory("home-observation");
     setFeedbackStatus("家庭光盘行动已同步到教师工作台反馈列表。");
     setPlateActionStatus("已提交给老师。这里只记录个人成长小步骤，不做排名。");
@@ -1463,7 +1463,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                     className="mt-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
                     onClick={() => {
                       setPlateActionPhoto(null);
-                      setPlateActionPhotoStatus("可选上传一张餐后整理或尝试小步骤照片，仅保存在这台设备上。");
+                      setPlateActionPhotoStatus("可选放一张餐后整理或尝试小步骤照片，请只拍食物、餐盘或作品。");
                     }}
                     type="button"
                   >
@@ -1596,7 +1596,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                       className="mt-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
                       onClick={() => {
                         setFeedbackPhoto(null);
-                        setFeedbackPhotoStatus("可选上传一张家庭观察照片，仅保存在这台设备上。");
+                        setFeedbackPhotoStatus("可选放一张家庭观察照片，请避开孩子正脸和敏感信息。");
                       }}
                       type="button"
                     >

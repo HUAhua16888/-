@@ -4900,6 +4900,23 @@ function ReadingCheckinGame({
     onSpeak?.(message);
   }
 
+  function goPreviousPage() {
+    if (pageIndex <= 0) {
+      const message = "已经是第一页啦。我们从这里开始听。";
+
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const nextIndex = pageIndex - 1;
+    const nextText = shownBook.pages[nextIndex] ?? "";
+
+    setPageIndex(nextIndex);
+    setFeedback("翻到上一页啦。可以再听一听。");
+    onSpeak?.(`上一页。${nextText}`);
+  }
+
   function goNextPage() {
     if (pageIndex < shownBook.pages.length - 1) {
       const nextIndex = pageIndex + 1;
@@ -5065,9 +5082,9 @@ function ReadingCheckinGame({
         <div className="rounded-[1.5rem] bg-white/90 p-5 shadow-sm">
           <p className="text-xs font-semibold text-violet-700">第二步：听绘本</p>
           <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="grid overflow-hidden rounded-[1.6rem] border border-violet-100 bg-violet-50 shadow-inner md:grid-cols-2">
-              <div className="min-h-56 border-b border-violet-100 bg-white/90 p-5 md:border-b-0 md:border-r">
-                <div className="flex h-24 w-24 items-center justify-center rounded-[1.4rem] bg-violet-100 text-6xl">
+            <div className="grid overflow-hidden rounded-[1.6rem] border border-violet-100 bg-violet-50 shadow-inner md:grid-cols-[0.78fr_1.22fr]">
+              <div className="min-h-64 border-b border-violet-100 bg-white/90 p-5 md:border-b-0 md:border-r">
+                <div className="flex h-28 w-28 items-center justify-center rounded-[1.4rem] bg-violet-100 text-6xl">
                   {shownBook.coverIcon}
                 </div>
                 <h4 className="mt-4 text-xl font-semibold text-slate-900">
@@ -5076,13 +5093,19 @@ function ReadingCheckinGame({
                 <p className="mt-2 text-xs font-semibold text-violet-700">
                   第 {pageIndex + 1} 页 / 共 {shownBook.pages.length} 页
                 </p>
+                <p className="mt-2 inline-flex rounded-full bg-violet-50 px-3 py-1.5 text-[11px] font-semibold text-violet-900">
+                  {shownBook.source === "teacher" ? "老师发布绘本" : "AI生成故事，教师确认后使用"}
+                </p>
               </div>
-              <div className="min-h-56 bg-[linear-gradient(90deg,#ffffff_0%,#fff7ed_100%)] p-5">
+              <div className="min-h-64 bg-[linear-gradient(90deg,#ffffff_0%,#fff7ed_100%)] p-5">
                 <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-[1.2rem] bg-amber-100 text-4xl">
                   {getReadingIcon(currentPage)}
                 </div>
-                <p className="text-lg font-semibold leading-8 text-slate-900">
+                <p className="max-w-2xl text-xl font-semibold leading-9 text-slate-900">
                   {currentPage}
+                </p>
+                <p className="mt-4 text-xs font-semibold text-amber-800">
+                  当前插图先用主题图标占位，后续可接入教师确认插图或绘本页图。
                 </p>
               </div>
             </div>
@@ -5092,7 +5115,15 @@ function ReadingCheckinGame({
                 className="rounded-full bg-violet-300 px-5 py-3 text-sm font-semibold text-violet-950 transition hover:-translate-y-0.5 hover:bg-violet-200"
                 type="button"
               >
-                听一听绘本
+                听这一页
+              </button>
+              <button
+                onClick={goPreviousPage}
+                disabled={pageIndex === 0}
+                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+              >
+                上一页
               </button>
               <button
                 onClick={goNextPage}
@@ -5109,20 +5140,6 @@ function ReadingCheckinGame({
                 我喜欢这个
               </button>
             </div>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {shownBook.pages.map((page, index) => (
-              <div
-                key={`${shownBook.id}-${index}`}
-                className={`rounded-[1.2rem] px-4 py-3 text-sm font-semibold ${
-                  index === pageIndex ? "bg-violet-100 text-violet-950 ring-2 ring-violet-200" : "bg-slate-50 text-slate-600"
-                }`}
-              >
-                第 {index + 1} 页
-                <span className="mt-1 block text-xs leading-5 opacity-75">{page.slice(0, 18)}</span>
-              </div>
-            ))}
           </div>
 
           <div className="mt-5 rounded-[1.4rem] bg-emerald-50 p-4">
@@ -9952,6 +9969,9 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 ) : null}
                 <p className="mt-3 max-w-3xl text-base leading-7 font-semibold text-slate-900">
                   {latestBadgeFeedback || status}
+                </p>
+                <p className="mt-3 max-w-3xl rounded-[1.1rem] bg-amber-50 px-4 py-3 text-sm leading-7 font-semibold text-amber-900">
+                  今天玩 5-10 分钟就好。看一看、说一说，再回到线下画一画、闻一闻、试一小步。照片只拍食物或作品，不拍小朋友正脸。
                 </p>
                 {!selectedChild ? (
                 <div className="mt-4 grid max-w-3xl gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">

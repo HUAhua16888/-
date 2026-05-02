@@ -138,8 +138,8 @@ export function parseHabitTemplates(raw: string | null): HabitCheckinTemplate[] 
         }
 
         const id = cleanText(item.id, 80);
-        const title = cleanText(item.title, 36);
         const habitFocus = cleanText(item.habitFocus, 36);
+        const title = normalizeHabitTemplateTitle(cleanText(item.title, 36), habitFocus);
         const publishedAt = cleanText(item.publishedAt, 40);
 
         if (!id || !title || !habitFocus || !publishedAt) {
@@ -172,6 +172,28 @@ export function buildHabitTemplateStory(habitFocus: string) {
   return `《${focus}小任务》开始啦。幼习宝小星来到区域里，看见小朋友正在练习${focus}。小星没有催促，只说：“我们先做一小步，再把想法告诉老师。”小朋友试了试，发现自己可以慢慢学会。故事讲完啦，请选一张答案卡，再完成一个${focus}小动作。`;
 }
 
+function normalizeHabitTemplateTitle(title: string, habitFocus: string) {
+  const focus = cleanText(habitFocus, 30) || "好习惯";
+  const rawTitle = cleanText(title, 36);
+  const deprecatedTemplatePattern = new RegExp(["待定", "模板"].join(""));
+  const casualSpeechPattern = new RegExp(["好好", "说"].join(""));
+
+  if (deprecatedTemplatePattern.test(rawTitle) || casualSpeechPattern.test(rawTitle)) {
+    return `${focus}小任务`;
+  }
+
+  const cleanTitle = cleanText(title, 36)
+    .replace(/\s+/g, "");
+
+  if (!cleanTitle || cleanTitle === "小任务") {
+    return `${focus}小任务`;
+  }
+
+  return cleanTitle.endsWith("小任务") || cleanTitle === "老师发布的小练习"
+    ? cleanTitle
+    : `${cleanTitle}小任务`;
+}
+
 export function buildHabitTemplateFromFocus(habitFocus: string, childPrompt: string): HabitCheckinTemplate {
   const focus = cleanText(habitFocus, 30) || "好习惯";
   const prompt = cleanText(childPrompt, 100) || `我想对老师说：我今天练习了${focus}。`;
@@ -179,7 +201,7 @@ export function buildHabitTemplateFromFocus(habitFocus: string, childPrompt: str
 
   return {
     id: `habit-template-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title: `${focus}待定模板`,
+    title: `${focus}小任务`,
     habitFocus: focus,
     childPrompt: prompt,
     teacherPrompt: `请根据幼儿关于“${focus}”的语音或文字表达，观察是否愿意说出需要、完成一小步，并给出温和鼓励。`,

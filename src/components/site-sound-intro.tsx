@@ -11,22 +11,22 @@ const premiumIntroEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true
 
 function getIntroText(pathname: string) {
   if (pathname.startsWith("/teachers")) {
-    return "欢迎来到幼芽成长智伴，幼习宝一日生活习惯养成和闽食成长岛食育改善协同教育智能体。这里是教师工作台，老师可以查看 AI 成长记录，生成跟进建议，并同步家庭任务。";
+    return "欢迎来到闽食小当家，幼习宝和闽食成长岛教育智能体。这里是教师工作台，老师可以查看孩子的游戏和食育记录，审核 AI 建议，再同步家庭任务。";
   }
 
   if (pathname.startsWith("/adventure")) {
-    return "欢迎来到幼芽成长智伴。今天跟着幼习宝练洗手、喝水、如厕、整理、排队和文明进餐，也可以到闽食成长岛温和认识食材。";
+    return "欢迎来到闽食小当家。今天可以跟着幼习宝练好习惯，也可以到闽食成长岛看一看、闻一闻，慢慢认识家乡美食。";
   }
 
   if (pathname.startsWith("/parents")) {
-    return "欢迎来到幼芽成长智伴。这里是家庭延续，可以查看老师今天的观察，回家做一个小步骤，再提交家庭观察。";
+    return "欢迎来到闽食小当家。这里是家庭延续，可以查看老师今天确认的建议，回家做一个小步骤，再提交家庭观察。";
   }
 
   if (pathname.startsWith("/children")) {
-    return "欢迎来到幼芽成长智伴。这里是儿童互动，先找到自己的小名牌，再进入幼习宝一日生活习惯或闽食成长岛任务。";
+    return "欢迎来到闽食小当家。先找到自己的小名牌，再去幼习宝或闽食成长岛，玩一个短短的小任务。";
   }
 
-  return "欢迎来到幼芽成长智伴，幼习宝一日生活习惯养成和闽食成长岛食育改善协同教育智能体。请选择儿童互动、教师工作台或家庭延续。";
+  return "欢迎来到闽食小当家，幼习宝和闽食成长岛教育智能体。请选择儿童互动、教师工作台、家庭延续或参赛说明。";
 }
 
 function getAudioContext() {

@@ -24,5 +24,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${siteUrl}/teachers`,
       lastModified: new Date(),
     },
+    {
+      url: `${siteUrl}/compliance`,
+      lastModified: new Date(),
+    },
+    {
+      url: `${siteUrl}/privacy`,
+      lastModified: new Date(),
+    },
+    {
+      url: `${siteUrl}/contest`,
+      lastModified: new Date(),
+    },
+    {
+      url: `${siteUrl}/evidence`,
+      lastModified: new Date(),
+    },
   ];
 }

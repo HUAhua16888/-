@@ -32,21 +32,36 @@ const navItems = [
     icon: "🧑‍🏫",
     shortLabel: "教师",
   },
+  {
+    href: "/contest",
+    label: "参赛说明",
+    icon: "🏅",
+    shortLabel: "参赛",
+  },
 ];
 
 export function SiteShell({ children }: SiteShellProps) {
   const pathname = usePathname();
   const visibleNavItems = (() => {
     if (pathname.startsWith("/teachers")) {
-      return navItems.filter((item) => item.href === "/" || item.href === "/teachers");
+      return navItems.filter((item) => item.href === "/" || item.href === "/teachers" || item.href === "/contest");
     }
 
     if (pathname.startsWith("/parents")) {
-      return navItems.filter((item) => item.href === "/" || item.href === "/parents");
+      return navItems.filter((item) => item.href === "/" || item.href === "/parents" || item.href === "/contest");
     }
 
     if (pathname.startsWith("/children") || pathname.startsWith("/adventure")) {
-      return navItems.filter((item) => item.href === "/" || item.href === "/children");
+      return navItems.filter((item) => item.href === "/" || item.href === "/children" || item.href === "/contest");
+    }
+
+    if (
+      pathname.startsWith("/contest") ||
+      pathname.startsWith("/compliance") ||
+      pathname.startsWith("/privacy") ||
+      pathname.startsWith("/evidence")
+    ) {
+      return navItems.filter((item) => item.href === "/" || item.href === "/contest");
     }
 
     return navItems;
@@ -76,7 +91,11 @@ export function SiteShell({ children }: SiteShellProps) {
                 isActive ? "bg-slate-900 text-white" : "bg-white text-slate-700 shadow-sm"
               }`}
             >
-              {item.href === "/" ? "🏠 回首页" : item.href === "/children" ? "更换小名牌" : item.label}
+              {item.href === "/"
+                ? "🏠 回首页"
+                : item.href === "/children"
+                  ? "更换小名牌"
+                  : item.label}
             </Link>
           );
         })}
