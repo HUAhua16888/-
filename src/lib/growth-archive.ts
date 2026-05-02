@@ -3,6 +3,11 @@ import type { ThemeId } from "@/lib/site-data";
 export const growthArchiveStorageKey = "tongqu-growth-web-growth-archive";
 export const childRosterStorageKey = "tongqu-growth-web-child-roster";
 export const selectedChildStorageKey = "tongqu-growth-web-selected-child";
+export const classIdStorageKey = "tongqu-growth-web-class-id";
+export const teacherIdStorageKey = "tongqu-growth-web-teacher-id";
+export const guardianIdStorageKey = "tongqu-growth-web-guardian-id";
+export const deviceIdStorageKey = "tongqu-growth-web-device-id";
+export const sessionIdStorageKey = "tongqu-growth-web-session-id";
 
 export type ChildProfile = {
   id: string;
@@ -18,12 +23,26 @@ export type ChildRecordFields = {
   childName?: string;
 };
 
+export type ActivitySyncFields = {
+  eventId?: string;
+  classId?: string;
+  guardianId?: string;
+  teacherId?: string;
+  deviceId?: string;
+  sessionId?: string;
+  syncStatus?: "local" | "pending" | "synced";
+  updatedAt?: string;
+};
+
 export type MiniGameKey =
   | "washSteps"
   | "queue"
   | "habitJudge"
   | "readingCheckin"
+  | "childTalk"
+  | "teacherTask"
   | "kindWords"
+  | "todayMenu"
   | "foodObserve"
   | "foodClue"
   | "foodTrain"
@@ -42,7 +61,7 @@ export type BadgeRecord = {
   themeId: ThemeId;
   earnedAt: string;
   source: BadgeSource;
-} & ChildRecordFields;
+} & ChildRecordFields & ActivitySyncFields;
 
 export type MealReviewRecord = {
   reviewedAt: string;
@@ -52,37 +71,93 @@ export type MealReviewRecord = {
   stickers: string[];
   plateState: string;
   imageName: string;
-} & ChildRecordFields;
+} & ChildRecordFields & ActivitySyncFields;
 
 export type FoodPreferenceRecord = {
   recordedAt: string;
+  foodId?: string;
   foodLabel: string;
   reasonLabel: string;
   strategy: string;
   gentleTryTip: string;
   approachStep?: string;
+  acceptedLevel?: string;
+  nutritionPlayed?: boolean;
   themeSource?: string;
   menuDate?: string;
   mealType?: string;
   dishName?: string;
   ingredientName?: string;
   reason?: string;
-} & ChildRecordFields;
+} & ChildRecordFields & ActivitySyncFields;
 
 export type MiniGameRecord = {
   gameKey: MiniGameKey;
   badgeName: string;
   themeId: ThemeId;
   completedAt: string;
+  createdAt?: string;
+  templateType?: string;
+  activityId?: string;
+  action?: string;
   pickedItems: string[];
+  source?: string;
+  activityType?: string;
+  result?: "success" | "retry" | "wrong" | "completed";
+  attempts?: number;
+  retryCount?: number;
+  levelId?: string;
+  habitType?: string;
+  storyId?: string;
+  roleChoice?: string;
+  taskId?: string;
+  assignedByTeacher?: boolean;
+  status?: string;
+  messageType?: "voice" | "text" | "photo" | "video" | "mixed";
+  mediaUrl?: string;
+  teacherRead?: boolean;
+  teacherReply?: string;
+  foodId?: string;
+  approachStep?: string;
+  acceptedLevel?: string;
+  nutritionPlayed?: boolean;
+  menuDate?: string;
+  mealType?: string;
+  clicked?: boolean;
+  dishId?: string;
+  stepOrder?: string[];
+  isCorrect?: boolean;
+  scriptText?: string;
+  voiceText?: string;
+  audioUrl?: string;
+  submittedAt?: string;
   storyTopic?: string;
   answerContent?: string;
   habitTask?: string;
+  bookTitle?: string;
+  listenCount?: number;
+  finished?: boolean;
+  checkInCount?: number;
+  favoriteStory?: string;
   foodLabel?: string;
+  dishName?: string;
+  stepsCompleted?: string[];
+  ingredientsAdded?: string[];
+  imageSource?: string;
+  mediaName?: string;
+  gameInstanceId?: string;
+  gameInstanceTitle?: string;
+  gameInstanceMechanic?: string;
+  gameRuleName?: string;
   uploadedFileName?: string;
   childUtterance?: string;
   aiBroadcastText?: string;
-} & ChildRecordFields;
+  coverImageUrl?: string;
+  mediaSource?: string;
+  teacherConfirmed?: boolean;
+  aiGenerated?: boolean;
+  imageSourceLabel?: string;
+} & ChildRecordFields & ActivitySyncFields;
 
 export type MiniGameProgress = Record<MiniGameKey, number>;
 
@@ -97,6 +172,77 @@ export type GrowthArchive = {
   lastUpdated: string;
 };
 
+function randomToken() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function readStoredId(key: string, fallback: string) {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  const stored = window.localStorage.getItem(key)?.trim();
+
+  if (stored) {
+    return stored;
+  }
+
+  window.localStorage.setItem(key, fallback);
+  return fallback;
+}
+
+function readSessionId() {
+  if (typeof window === "undefined") {
+    return "server-session";
+  }
+
+  const stored = window.sessionStorage.getItem(sessionIdStorageKey)?.trim();
+
+  if (stored) {
+    return stored;
+  }
+
+  const nextId = `session-${randomToken()}`;
+  window.sessionStorage.setItem(sessionIdStorageKey, nextId);
+  return nextId;
+}
+
+export function buildActivitySyncFields(
+  activityType: string,
+  child?: ChildRecordFields,
+  timestamp = new Date().toISOString(),
+): ActivitySyncFields {
+  const deviceId = readStoredId(deviceIdStorageKey, `device-${randomToken()}`);
+  const classId = readStoredId(classIdStorageKey, "default-class");
+  const teacherId =
+    typeof window === "undefined" ? "" : window.localStorage.getItem(teacherIdStorageKey)?.trim() ?? "";
+  const guardianId =
+    typeof window === "undefined" ? "" : window.localStorage.getItem(guardianIdStorageKey)?.trim() ?? "";
+  const eventSeed = [
+    classId,
+    child?.childId ?? child?.childName ?? "unbound-child",
+    activityType,
+    timestamp,
+    deviceId,
+    randomToken(),
+  ].join(":");
+
+  return {
+    eventId: `evt-${eventSeed.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96)}`,
+    classId,
+    teacherId: teacherId || undefined,
+    guardianId: guardianId || undefined,
+    deviceId,
+    sessionId: readSessionId(),
+    syncStatus: "pending",
+    updatedAt: timestamp,
+  };
+}
+
 export function createEmptyGrowthArchive(): GrowthArchive {
   return {
     version: 1,
@@ -109,7 +255,10 @@ export function createEmptyGrowthArchive(): GrowthArchive {
       queue: 0,
       habitJudge: 0,
       readingCheckin: 0,
+      childTalk: 0,
+      teacherTask: 0,
       kindWords: 0,
+      todayMenu: 0,
       foodObserve: 0,
       foodClue: 0,
       foodTrain: 0,
@@ -132,6 +281,67 @@ export function createEmptyGrowthArchive(): GrowthArchive {
 
 function normalizeMiniGameCount(value: unknown) {
   return typeof value === "number" && value > 0 ? 1 : 0;
+}
+
+function getMiniGameRecordTime(record: Pick<MiniGameRecord, "createdAt" | "completedAt" | "updatedAt">) {
+  const value = record.createdAt ?? record.completedAt ?? record.updatedAt ?? "";
+  const time = new Date(value).getTime();
+
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function getMiniGameRecordDedupeKey(
+  record: Pick<
+    MiniGameRecord,
+    | "childId"
+    | "childName"
+    | "gameKey"
+    | "activityType"
+    | "templateType"
+    | "activityId"
+    | "gameInstanceId"
+    | "levelId"
+    | "taskId"
+    | "storyId"
+    | "dishId"
+    | "foodId"
+    | "action"
+    | "pickedItems"
+  >,
+) {
+  return [
+    record.childId ?? record.childName ?? "unbound-child",
+    record.gameKey,
+    record.activityType ?? record.templateType ?? "",
+    record.activityId ??
+      record.gameInstanceId ??
+      record.levelId ??
+      record.taskId ??
+      record.storyId ??
+      record.dishId ??
+      record.foodId ??
+      "",
+    record.action ?? record.pickedItems.filter(Boolean).join("、"),
+  ].join("::");
+}
+
+function isRecentDuplicateMiniGameRecord(left: MiniGameRecord, right: MiniGameRecord) {
+  return (
+    getMiniGameRecordDedupeKey(left) === getMiniGameRecordDedupeKey(right) &&
+    Math.abs(getMiniGameRecordTime(left) - getMiniGameRecordTime(right)) <= 3000
+  );
+}
+
+function dedupeMiniGameRecords(records: MiniGameRecord[]) {
+  const result: MiniGameRecord[] = [];
+
+  for (const record of records) {
+    if (!result.some((item) => isRecentDuplicateMiniGameRecord(item, record))) {
+      result.push(record);
+    }
+  }
+
+  return result;
 }
 
 export function parseGrowthArchive(raw: string | null): GrowthArchive {
@@ -158,7 +368,7 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
                     typeof item.source === "string",
                 ),
             )
-            .slice(0, 40)
+            .slice(0, 240)
         : empty.badgeRecords,
       mealReviews: Array.isArray(parsed.mealReviews)
         ? parsed.mealReviews
@@ -176,7 +386,7 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
                     typeof item.imageName === "string",
                 ),
             )
-            .slice(0, 12)
+            .slice(0, 120)
         : empty.mealReviews,
       foodPreferenceRecords: Array.isArray(parsed.foodPreferenceRecords)
         ? parsed.foodPreferenceRecords
@@ -192,11 +402,11 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
                     typeof item.gentleTryTip === "string",
                 ),
             )
-            .slice(0, 16)
+            .slice(0, 240)
         : empty.foodPreferenceRecords,
       miniGameRecords: Array.isArray(parsed.miniGameRecords)
-        ? parsed.miniGameRecords
-            .filter(
+        ? dedupeMiniGameRecords(
+            parsed.miniGameRecords.filter(
               (item): item is MiniGameRecord =>
                 Boolean(
                   item &&
@@ -207,15 +417,18 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
                     typeof item.completedAt === "string" &&
                     Array.isArray(item.pickedItems),
                 ),
-            )
-            .slice(0, 32)
+            ),
+          ).slice(0, 360)
         : empty.miniGameRecords,
       miniGameProgress: {
         washSteps: normalizeMiniGameCount(parsed.miniGameProgress?.washSteps),
         queue: normalizeMiniGameCount(parsed.miniGameProgress?.queue),
         habitJudge: normalizeMiniGameCount(parsed.miniGameProgress?.habitJudge),
         readingCheckin: normalizeMiniGameCount(parsed.miniGameProgress?.readingCheckin),
+        childTalk: normalizeMiniGameCount(parsed.miniGameProgress?.childTalk),
+        teacherTask: normalizeMiniGameCount(parsed.miniGameProgress?.teacherTask),
         kindWords: normalizeMiniGameCount(parsed.miniGameProgress?.kindWords),
+        todayMenu: normalizeMiniGameCount(parsed.miniGameProgress?.todayMenu),
         foodObserve: normalizeMiniGameCount(parsed.miniGameProgress?.foodObserve),
         foodClue: normalizeMiniGameCount(parsed.miniGameProgress?.foodClue),
         foodTrain: normalizeMiniGameCount(parsed.miniGameProgress?.foodTrain),
@@ -242,6 +455,116 @@ export function parseGrowthArchive(raw: string | null): GrowthArchive {
   }
 }
 
+function getArchiveRecordValue<T>(record: T, field: string) {
+  return (record as unknown as Record<string, unknown>)[field];
+}
+
+function getArchiveRecordTime<T>(record: T, fields: string[]) {
+  for (const field of fields) {
+    const value = getArchiveRecordValue(record, field);
+
+    if (typeof value === "string") {
+      const time = new Date(value).getTime();
+
+      if (!Number.isNaN(time)) {
+        return time;
+      }
+    }
+  }
+
+  return 0;
+}
+
+function getArchiveRecordKey<T extends ActivitySyncFields & ChildRecordFields>(
+  record: T,
+  fallbackFields: string[],
+) {
+  if (record.eventId) {
+    return record.eventId;
+  }
+
+  return fallbackFields
+    .map((field) => {
+      const value = getArchiveRecordValue(record, field);
+
+      return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? String(value)
+        : "";
+    })
+    .join("::");
+}
+
+function mergeArchiveRecordArrays<T extends ActivitySyncFields & ChildRecordFields>(
+  current: T[],
+  incoming: T[],
+  fallbackFields: string[],
+  timestampFields: string[],
+) {
+  const merged = new Map<string, T>();
+
+  for (const record of [...current, ...incoming]) {
+    const key = getArchiveRecordKey(record, fallbackFields);
+    const previous = merged.get(key);
+
+    if (!previous || getArchiveRecordTime(record, timestampFields) >= getArchiveRecordTime(previous, timestampFields)) {
+      merged.set(key, previous ? { ...previous, ...record } : record);
+    }
+  }
+
+  return Array.from(merged.values()).sort(
+    (left, right) => getArchiveRecordTime(right, timestampFields) - getArchiveRecordTime(left, timestampFields),
+  );
+}
+
+function mergeArchiveCounts<T extends string>(current: Record<T, number>, incoming: Record<T, number>) {
+  const result = { ...current };
+
+  for (const key of Object.keys(incoming) as T[]) {
+    result[key] = Math.max(current[key] ?? 0, incoming[key] ?? 0);
+  }
+
+  return result;
+}
+
+export function mergeGrowthArchives(current: GrowthArchive, incoming: GrowthArchive): GrowthArchive {
+  const currentTime = new Date(current.lastUpdated).getTime();
+  const incomingTime = new Date(incoming.lastUpdated).getTime();
+
+  return {
+    version: 1,
+    badgeRecords: mergeArchiveRecordArrays(
+      current.badgeRecords,
+      incoming.badgeRecords,
+      ["name", "childId", "earnedAt"],
+      ["updatedAt", "earnedAt"],
+    ).slice(0, 240),
+    mealReviews: mergeArchiveRecordArrays(
+      current.mealReviews,
+      incoming.mealReviews,
+      ["childId", "reviewedAt", "imageName"],
+      ["updatedAt", "reviewedAt"],
+    ).slice(0, 120),
+    foodPreferenceRecords: mergeArchiveRecordArrays(
+      current.foodPreferenceRecords,
+      incoming.foodPreferenceRecords,
+      ["childId", "foodId", "foodLabel", "recordedAt"],
+      ["updatedAt", "recordedAt"],
+    ).slice(0, 240),
+    miniGameRecords: mergeArchiveRecordArrays(
+      current.miniGameRecords,
+      incoming.miniGameRecords,
+      ["childId", "gameKey", "completedAt"],
+      ["updatedAt", "completedAt", "createdAt"],
+    ).slice(0, 360),
+    miniGameProgress: mergeArchiveCounts(current.miniGameProgress, incoming.miniGameProgress),
+    themeVisits: mergeArchiveCounts(current.themeVisits, incoming.themeVisits),
+    lastUpdated:
+      !Number.isNaN(incomingTime) && (Number.isNaN(currentTime) || incomingTime > currentTime)
+        ? incoming.lastUpdated
+        : current.lastUpdated,
+  };
+}
+
 export function recordThemeVisit(archive: GrowthArchive, themeId: ThemeId): GrowthArchive {
   return {
     ...archive,
@@ -259,6 +582,41 @@ export function recordMiniGameCompletion(
   detail?: Omit<MiniGameRecord, "completedAt" | "gameKey">,
 ): GrowthArchive {
   const alreadyCompleted = archive.miniGameProgress[gameKey] > 0;
+  const completedAt = new Date().toISOString();
+  const syncFields = buildActivitySyncFields(
+    `mini-game:${gameKey}`,
+    detail,
+    completedAt,
+  );
+  const activityId =
+    detail?.activityId ??
+    detail?.gameInstanceId ??
+    detail?.levelId ??
+    detail?.taskId ??
+    detail?.storyId ??
+    detail?.dishId ??
+    detail?.foodId ??
+    gameKey;
+  const action = detail?.action ?? detail?.pickedItems.filter(Boolean).join("、") ?? "";
+  const nextRecord = detail
+    ? {
+        ...syncFields,
+        ...detail,
+        gameKey,
+        activityType: detail.activityType ?? `mini-game:${gameKey}`,
+        templateType: detail.templateType ?? detail.activityType ?? `mini-game:${gameKey}`,
+        activityId,
+        action,
+        result: detail.result ?? "success",
+        status: detail.status ?? "completed",
+        eventId: detail.eventId ?? syncFields.eventId,
+        createdAt: detail.createdAt ?? completedAt,
+        completedAt,
+      }
+    : null;
+  const hasRecentDuplicate =
+    nextRecord &&
+    archive.miniGameRecords.some((record) => isRecentDuplicateMiniGameRecord(record, nextRecord));
 
   return {
     ...archive,
@@ -268,17 +626,10 @@ export function recordMiniGameCompletion(
           ...archive.miniGameProgress,
           [gameKey]: 1,
         },
-    miniGameRecords: detail
-      ? [
-          {
-            ...detail,
-            gameKey,
-            completedAt: new Date().toISOString(),
-          },
-          ...archive.miniGameRecords,
-        ].slice(0, 32)
+    miniGameRecords: nextRecord && !hasRecentDuplicate
+      ? [nextRecord, ...archive.miniGameRecords].slice(0, 360)
       : archive.miniGameRecords,
-    lastUpdated: new Date().toISOString(),
+    lastUpdated: completedAt,
   };
 }
 
@@ -306,20 +657,24 @@ export function recordBadge(
     return archive;
   }
 
+  const earnedAt = new Date().toISOString();
+  const syncFields = buildActivitySyncFields(`badge:${source}`, child, earnedAt);
+
   return {
     ...archive,
     badgeRecords: [
       {
+        ...syncFields,
         name: normalizedBadge,
         themeId,
         source,
         childId: child?.childId,
         childName: child?.childName,
-        earnedAt: new Date().toISOString(),
+        earnedAt,
       },
       ...archive.badgeRecords,
-    ].slice(0, 40),
-    lastUpdated: new Date().toISOString(),
+    ].slice(0, 240),
+    lastUpdated: earnedAt,
   };
 }
 
@@ -327,10 +682,21 @@ export function recordMealReview(
   archive: GrowthArchive,
   mealReview: MealReviewRecord,
 ): GrowthArchive {
+  const reviewedAt = mealReview.reviewedAt || new Date().toISOString();
+  const syncFields = buildActivitySyncFields("meal-review", mealReview, reviewedAt);
+
   return {
     ...archive,
-    mealReviews: [mealReview, ...archive.mealReviews].slice(0, 12),
-    lastUpdated: new Date().toISOString(),
+    mealReviews: [
+      {
+        ...syncFields,
+        ...mealReview,
+        eventId: mealReview.eventId ?? syncFields.eventId,
+        reviewedAt,
+      },
+      ...archive.mealReviews,
+    ].slice(0, 120),
+    lastUpdated: reviewedAt,
   };
 }
 
@@ -345,17 +711,26 @@ export function recordFoodPreference(
     return archive;
   }
 
+  const recordedAt = preference.recordedAt || new Date().toISOString();
+  const syncFields = buildActivitySyncFields("food-preference", preference, recordedAt);
+
   return {
     ...archive,
     foodPreferenceRecords: [
       {
+        ...syncFields,
         ...preference,
+        eventId: preference.eventId ?? syncFields.eventId,
+        foodId: preference.foodId ?? normalizedFood,
         foodLabel: normalizedFood,
         reasonLabel: normalizedReason,
+        acceptedLevel: preference.acceptedLevel ?? preference.approachStep ?? normalizedReason,
+        nutritionPlayed: preference.nutritionPlayed ?? false,
+        recordedAt,
       },
       ...archive.foodPreferenceRecords,
-    ].slice(0, 16),
-    lastUpdated: new Date().toISOString(),
+    ].slice(0, 240),
+    lastUpdated: recordedAt,
   };
 }
 

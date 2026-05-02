@@ -55,3 +55,5 @@ next-env.d.ts
 
 # local class sync snapshots
 /.tongqu-cloud-sync/
+/.tongqu-account-sync/
+/.tongqu-game-engine/

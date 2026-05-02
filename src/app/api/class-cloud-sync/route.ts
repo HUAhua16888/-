@@ -1,116 +1,25 @@
-import { createHash } from "crypto";
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
-
 import { NextResponse } from "next/server";
+
+import {
+  hashPasscode,
+  materializeAccountPayload,
+  normalizeAccount,
+  normalizeAccountPayload,
+  normalizePasscode,
+  pushAccountDatasets,
+  recordAccountPull,
+  readAccountRecord,
+} from "@/lib/account-sync-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
-
-type ClassCloudPayload = {
-  childRoster?: unknown;
-  growthArchive?: unknown;
-  weeklyMenuEntries?: unknown;
-  parentSyncRecords?: unknown;
-  parentFeedbackRecords?: unknown;
-  gameContentConfigs?: unknown;
-  teacherPictureBooks?: unknown;
-  habitTemplates?: unknown;
-  savedResults?: unknown;
-};
-
-type StoredClassSnapshot = {
-  account: string;
-  passcodeHash: string;
-  updatedAt: string;
-  payload: ClassCloudPayload;
-};
-
-type CloudSyncStore = Record<string, StoredClassSnapshot>;
-
-const syncDir = path.join(process.cwd(), ".tongqu-cloud-sync");
-const syncFile = path.join(syncDir, "class-sync.json");
-const allowedPayloadKeys = [
-  "childRoster",
-  "growthArchive",
-  "weeklyMenuEntries",
-  "parentSyncRecords",
-  "parentFeedbackRecords",
-  "gameContentConfigs",
-  "teacherPictureBooks",
-  "habitTemplates",
-  "savedResults",
-] as const;
-const maxPayloadItemLength = 600_000;
-
-function normalizeAccount(value: unknown) {
-  return typeof value === "string" ? value.trim().slice(0, 40) : "";
-}
-
-function normalizePasscode(value: unknown) {
-  return typeof value === "string" ? value.trim().slice(0, 80) : "";
-}
-
-function hashPasscode(passcode: string) {
-  return createHash("sha256").update(`tongqu-growth-web:${passcode}`).digest("hex");
-}
-
-function normalizePayloadItem(value: unknown) {
-  if (typeof value === "string") {
-    return value.length <= maxPayloadItemLength ? value : "";
-  }
-
-  if (value && typeof value === "object") {
-    try {
-      const serialized = JSON.stringify(value);
-      return serialized.length <= maxPayloadItemLength ? serialized : "";
-    } catch {
-      return "";
-    }
-  }
-
-  return "";
-}
-
-function normalizePayload(value: unknown): ClassCloudPayload {
-  const record = value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-  const payload: ClassCloudPayload = {};
-
-  for (const key of allowedPayloadKeys) {
-    const item = normalizePayloadItem(record[key]);
-
-    if (item) {
-      payload[key] = item;
-    }
-  }
-
-  return payload;
-}
-
-async function readStore(): Promise<CloudSyncStore> {
-  try {
-    const raw = await readFile(syncFile, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as CloudSyncStore
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-async function writeStore(store: CloudSyncStore) {
-  await mkdir(syncDir, { recursive: true });
-  await writeFile(syncFile, JSON.stringify(store, null, 2), "utf8");
-}
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as {
     action?: unknown;
     account?: unknown;
+    deviceId?: unknown;
+    deviceName?: unknown;
     passcode?: unknown;
     payload?: unknown;
   } | null;
@@ -120,7 +29,7 @@ export async function POST(request: Request) {
 
   if (action !== "push" && action !== "pull") {
     return NextResponse.json(
-      { ok: false, error: "请选择上传或拉取班级快照。" },
+      { ok: false, error: "请选择上传或拉取班级账号同步数据。" },
       { status: 400 },
     );
   }
@@ -132,49 +41,48 @@ export async function POST(request: Request) {
     );
   }
 
-  const store = await readStore();
-  const key = account.toLowerCase();
   const passcodeHash = hashPasscode(passcode);
-  const current = store[key];
+  const current = await readAccountRecord(account);
+  const syncMeta = {
+    role: "teacher" as const,
+    deviceId: typeof body?.deviceId === "string" ? body.deviceId : undefined,
+    deviceName: typeof body?.deviceName === "string"
+      ? body.deviceName
+      : request.headers.get("user-agent") ?? "browser",
+  };
 
   if (current && current.passcodeHash !== passcodeHash) {
     return NextResponse.json(
-      { ok: false, error: "云同步口令不匹配，请确认本班教师账号口令。" },
+      { ok: false, error: "账号同步口令不匹配，请确认本班教师账号口令。" },
       { status: 403 },
     );
   }
 
   if (action === "pull") {
-    if (!current) {
+    const pulled = current ? await recordAccountPull(account, syncMeta) : undefined;
+
+    if (!pulled) {
       return NextResponse.json(
-        { ok: false, error: "还没有云同步快照，请先在原设备上传一次。" },
+        { ok: false, error: "还没有班级账号同步数据，请先在原设备上传一次。" },
         { status: 404 },
       );
     }
 
     return NextResponse.json({
       ok: true,
-      account: current.account,
-      updatedAt: current.updatedAt,
-      payload: current.payload,
+      account: pulled.account,
+      updatedAt: pulled.updatedAt,
+      payload: materializeAccountPayload(pulled),
     });
   }
 
-  const payload = normalizePayload(body?.payload);
-  const updatedAt = new Date().toISOString();
-
-  store[key] = {
-    account,
-    passcodeHash,
-    updatedAt,
-    payload,
-  };
-  await writeStore(store);
+  const payload = normalizeAccountPayload(body?.payload);
+  const result = await pushAccountDatasets(account, passcodeHash, payload, syncMeta);
 
   return NextResponse.json({
     ok: true,
     account,
-    updatedAt,
-    payloadKeys: Object.keys(payload),
+    updatedAt: result.updatedAt,
+    payloadKeys: result.payloadKeys,
   });
 }

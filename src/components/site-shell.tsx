@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { SiteSoundIntro } from "@/components/site-sound-intro";
-
 type SiteShellProps = {
   children: React.ReactNode;
 };
@@ -57,7 +55,6 @@ export function SiteShell({ children }: SiteShellProps) {
   return (
     <div className="min-h-full">
       <div className="pb-24 md:pb-10">{children}</div>
-      <SiteSoundIntro />
 
       <nav
         aria-label="桌面身份切换"
@@ -79,7 +76,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 isActive ? "bg-slate-900 text-white" : "bg-white text-slate-700 shadow-sm"
               }`}
             >
-              {item.href === "/" ? "回首页" : item.href === "/children" ? "更换小名牌" : item.label}
+              {item.href === "/" ? "🏠 回首页" : item.href === "/children" ? "更换小名牌" : item.label}
             </Link>
           );
         })}

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 440" role="img" aria-label="siguotang">
+  <rect width="640" height="440" rx="34" fill="#ecfeff"/>
+  <ellipse cx="320" cy="326" rx="246" ry="73" fill="#bfdbfe"/>
+  <path d="M146 169h348l-42 122c-15 45-57 75-104 75h-56c-47 0-89-30-104-75L146 169Z" fill="#ffffff" opacity=".96"/>
+  <ellipse cx="320" cy="171" rx="174" ry="54" fill="#e0f2fe"/>
+  <ellipse cx="320" cy="164" rx="153" ry="42" fill="#bae6fd"/>
+  <g filter="url(#shadow)">
+    <rect x="204" y="133" width="54" height="42" rx="12" fill="#fca5a5"/>
+    <rect x="276" y="126" width="56" height="44" rx="12" fill="#fde68a"/>
+    <rect x="356" y="134" width="54" height="43" rx="12" fill="#bbf7d0"/>
+    <circle cx="249" cy="204" r="25" fill="#fb7185"/>
+    <circle cx="313" cy="207" r="24" fill="#facc15"/>
+    <circle cx="381" cy="200" r="24" fill="#38bdf8"/>
+    <rect x="290" y="239" width="68" height="34" rx="16" fill="#c4b5fd"/>
+    <rect x="375" y="244" width="64" height="32" rx="16" fill="#86efac"/>
+    <rect x="206" y="246" width="64" height="32" rx="16" fill="#fdba74"/>
+  </g>
+  <path d="M181 176c80 40 199 40 278 0" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity=".75"/>
+  <g fill="#0ea5e9" opacity=".12">
+    <circle cx="111" cy="104" r="40"/><circle cx="531" cy="96" r="52"/>
+  </g>
+  <defs>
+    <filter id="shadow" x="180" y="110" width="280" height="190" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="9" stdDeviation="8" flood-color="#0369a1" flood-opacity=".12"/>
+    </filter>
+  </defs>
+</svg>

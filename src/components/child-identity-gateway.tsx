@@ -4,13 +4,18 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { findChildIdentitySuggestions, formatChildLabel } from "@/lib/child-identity";
+import { getAccountSyncDeviceInfo } from "@/lib/account-sync-client";
+import { gameContentConfigStorageKey } from "@/lib/game-content-config";
 import {
   childRosterStorageKey,
+  growthArchiveStorageKey,
   parseChildRoster,
   selectedChildStorageKey,
   type ChildProfile,
 } from "@/lib/growth-archive";
 import { themes, type ThemeId } from "@/lib/site-data";
+import { habitTemplatesStorageKey, teacherPictureBooksStorageKey } from "@/lib/teacher-published-content";
+import { dailyMenuOverrideStorageKey, weeklyMenuStorageKey } from "@/lib/weekly-menu";
 
 type BrowserSpeechRecognition = {
   lang: string;
@@ -40,6 +45,9 @@ export function ChildIdentityGateway({
   const [identityInput, setIdentityInput] = useState("");
   const [status, setStatus] = useState("先找到自己的小名牌，再去玩今天的成长任务。");
   const [isListening, setIsListening] = useState(false);
+  const [syncAccount, setSyncAccount] = useState("");
+  const [syncPasscode, setSyncPasscode] = useState("");
+  const [isSyncingAccount, setIsSyncingAccount] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const selectedChild = useMemo(
     () => childRoster.find((child) => child.id === selectedChildId) ?? null,
@@ -154,6 +162,86 @@ export function ChildIdentityGateway({
     applyIdentityTranscript(value);
   }
 
+  function applyAccountSyncPayload(payload: Record<string, unknown>) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const stringKeys: Array<[keyof typeof payload, string]> = [
+      ["growthArchive", growthArchiveStorageKey],
+      ["weeklyMenuEntries", weeklyMenuStorageKey],
+      ["dailyMenuOverrides", dailyMenuOverrideStorageKey],
+      ["teacherPictureBooks", teacherPictureBooksStorageKey],
+      ["habitTemplates", habitTemplatesStorageKey],
+      ["gameContentConfigs", gameContentConfigStorageKey],
+    ];
+
+    for (const [payloadKey, storageKey] of stringKeys) {
+      const value = payload[payloadKey];
+
+      if (typeof value === "string" && value.trim()) {
+        window.localStorage.setItem(storageKey, value);
+      }
+    }
+
+    if (typeof payload.childRoster === "string") {
+      const nextRoster = parseChildRoster(payload.childRoster);
+
+      window.localStorage.setItem(childRosterStorageKey, payload.childRoster);
+      setChildRoster(nextRoster);
+      setSelectedChildId((current) =>
+        current && nextRoster.some((child) => child.id === current) ? current : "",
+      );
+      setVoiceSuggestions([]);
+    }
+  }
+
+  async function pullChildAccountSync() {
+    const account = syncAccount.trim();
+    const passcode = syncPasscode.trim();
+
+    if (!account || !passcode) {
+      setStatus("请输入班级账号和口令，再带回小名牌和小脚印。");
+      return;
+    }
+
+    setIsSyncingAccount(true);
+    setStatus("正在带回班级小名牌，小脚印会跟着同一个名字走。");
+
+    try {
+      const response = await fetch("/api/account-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "pull",
+          account,
+          passcode,
+          role: "child",
+          ...getAccountSyncDeviceInfo(),
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        updatedAt?: string;
+        payload?: Record<string, unknown>;
+      };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "账号同步暂时不可用。");
+      }
+
+      applyAccountSyncPayload(data.payload ?? {});
+      setStatus(`小名牌同步好啦：${data.updatedAt ?? "刚刚"}。换设备也能接着玩。`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "账号同步失败，可以稍后再试。");
+    } finally {
+      setIsSyncingAccount(false);
+    }
+  }
+
   function toggleVoiceInput() {
     if (typeof window === "undefined") {
       return;
@@ -207,15 +295,18 @@ export function ChildIdentityGateway({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-7 px-4 py-8 md:px-8">
-      <section className="flex min-h-screen flex-col gap-6">
-        <div className="rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff7dc_48%,#e5fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
+    <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
+      <section className="flex min-h-screen min-w-0 flex-col gap-6">
+        <div
+          id="child-nameplate"
+          className="scroll-mt-24 rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff7dc_48%,#e5fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8"
+        >
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
-              <p className="text-sm font-semibold text-teal-700">游戏打卡前</p>
+              <p className="text-sm font-semibold text-teal-700">开始玩之前</p>
               <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-6xl">
                 找到我的小名牌
-                <span className="block text-2xl text-slate-700 md:text-3xl">再去玩成长任务</span>
+                <span className="block text-2xl text-slate-700 md:text-3xl">再去玩今天的小任务</span>
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
                 点一下自己的名字，或者说出名字和号数。拿到小名牌后，今天玩的游戏会记在自己的成长小本本里。
@@ -234,7 +325,7 @@ export function ChildIdentityGateway({
                 <button
                   onClick={toggleVoiceInput}
                   className={`rounded-[1.4rem] px-6 py-4 text-base font-semibold shadow-lg transition hover:-translate-y-0.5 md:text-lg ${
-                    isListening ? "bg-rose-100 text-rose-800" : "bg-slate-900 text-white"
+                    isListening ? "bg-rose-100 text-rose-800" : "bg-sky-100 text-sky-900"
                   }`}
                   type="button"
                 >
@@ -307,8 +398,43 @@ export function ChildIdentityGateway({
                 </div>
               ) : null}
 
+              <details className="mt-5 rounded-[1.4rem] bg-white/86 px-4 py-3 shadow-sm">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                  换设备同步小名牌
+                </summary>
+                <p className="mt-2 text-xs leading-6 text-slate-500">
+                  输入老师给的班级账号和口令，可带回小名牌、小脚印、食谱和老师放好的内容。
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                  <input
+                    value={syncAccount}
+                    onChange={(event) => setSyncAccount(event.target.value.slice(0, 40))}
+                    placeholder="班级账号"
+                    className="rounded-[1rem] border border-teal-100 bg-teal-50 px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-teal-400"
+                  />
+                  <input
+                    value={syncPasscode}
+                    onChange={(event) => setSyncPasscode(event.target.value.slice(0, 80))}
+                    placeholder="同步口令"
+                    type="password"
+                    className="rounded-[1rem] border border-teal-100 bg-teal-50 px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-teal-400"
+                  />
+                  <button
+                    onClick={() => void pullChildAccountSync()}
+                    disabled={isSyncingAccount}
+                    className="rounded-full bg-orange-300 px-4 py-2 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                    type="button"
+                  >
+                    {isSyncingAccount ? "同步中" : "同步"}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs font-semibold text-teal-700">
+                  同一个小名牌不绑死一台设备，换浏览器也能继续看到自己的任务和贴纸。
+                </p>
+              </details>
+
               <div className="mt-5 rounded-[1.4rem] border border-dashed border-teal-200 bg-teal-50/70 px-4 py-3">
-                <p className="text-xs font-semibold text-teal-800">小记录提示</p>
+                <p className="text-xs font-semibold text-teal-800">小脚印提示</p>
                 <p className="mt-1 text-xs leading-6 text-slate-600">
                   选好小名牌后，游戏打卡的小脚印会记到自己的名字下面。
                 </p>
@@ -318,7 +444,10 @@ export function ChildIdentityGateway({
         </div>
 
         <div>
-          <section className="rounded-[2rem] bg-white/90 p-6 shadow-[0_20px_60px_rgba(35,88,95,0.1)] md:p-8">
+          <section
+            id="child-themes"
+            className="scroll-mt-24 rounded-[2rem] bg-white/90 p-6 shadow-[0_20px_60px_rgba(35,88,95,0.1)] md:p-8"
+          >
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-cyan-700">今天想去哪玩</p>
@@ -341,10 +470,9 @@ export function ChildIdentityGateway({
                   <Link
                     key={theme.id}
                     href={buildAdventureHref(theme.id)}
-                    onClick={(event) => {
+                    onClick={() => {
                       if (!selectedChild) {
-                        event.preventDefault();
-                        setStatus("先拿到自己的小名牌，再进入主题游戏。");
+                        setStatus("可以先试玩主题游戏；拿到小名牌后，小脚印会留在自己的名字下面。");
                         return;
                       }
 
@@ -362,7 +490,7 @@ export function ChildIdentityGateway({
                         <h3 className="mt-4 text-2xl font-semibold text-slate-900">{theme.label}</h3>
                         <p className="mt-2 text-sm leading-7 text-slate-600">{theme.headline}</p>
                       </div>
-                      <span className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+                      <span className="rounded-full bg-orange-300 px-4 py-2 text-sm font-semibold text-orange-950">
                         进入{theme.label}
                       </span>
                     </div>
@@ -381,7 +509,6 @@ export function ChildIdentityGateway({
               })}
             </div>
           </section>
-
         </div>
       </section>
     </main>

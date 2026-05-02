@@ -8,8 +8,8 @@ const identityRoutes = [
     href: "/children",
     icon: "🧒",
     eyebrow: "给幼儿",
-    description: "找小名牌，跟着 AI 正向口令完成一日常规和闽食探味任务。",
-    action: "进入儿童互动",
+    description: "找小名牌，进入习惯岛和闽食岛，按关卡 HUD 玩完整互动任务。",
+    action: "进入互动游戏",
     tone: "border-cyan-100 bg-cyan-50 text-cyan-950",
   },
   {
@@ -17,7 +17,7 @@ const identityRoutes = [
     href: "/teachers",
     icon: "🧑‍🏫",
     eyebrow: "给老师",
-    description: "查看 AI 记录与重点线索，生成跟进建议并同步家庭任务。",
+    description: "查看 AI 分析、发布任务，并用班级账号同步花名册、游戏记录和家园反馈。",
     action: "进入教师工作台",
     tone: "border-emerald-100 bg-emerald-50 text-emerald-950",
   },
@@ -26,7 +26,7 @@ const identityRoutes = [
     href: "/parents",
     icon: "👪",
     eyebrow: "给家长",
-    description: "查看老师今天的观察，回家做一个小步骤，再反馈一句家庭观察。",
+    description: "用家庭绑定码查看孩子内容，完成居家任务后同步回老师端。",
     action: "进入家庭延续",
     tone: "border-amber-100 bg-amber-50 text-amber-950",
   },
@@ -42,7 +42,7 @@ export function HomeWorkspace() {
             幼芽成长智伴
           </h1>
           <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-            用 AI 正向提醒、成长记录和家园同步，陪幼儿练一日生活习惯，也温和认识每日食谱里的闽食与食材。
+            AI 陪幼儿玩、听幼儿说、整理记录和辅助分析；教师审核、修改、确认后再发布或同步。
           </p>
         </div>
 
@@ -50,6 +50,13 @@ export function HomeWorkspace() {
           {identityRoutes.map((item) => (
             <Link
               key={item.label}
+              id={
+                item.href === "/children"
+                  ? "home-children"
+                  : item.href === "/teachers"
+                    ? "home-teachers"
+                    : "home-parents"
+              }
               href={item.href}
               className={`rounded-[1.5rem] border p-5 shadow-sm transition hover:-translate-y-0.5 ${item.tone}`}
             >

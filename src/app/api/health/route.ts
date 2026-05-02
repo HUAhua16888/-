@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       "AI 故事和老师内容生成",
       deepseekConfigured,
       "使用配置的聊天模型生成内容。",
-      "使用本地主题模板兜底。",
+      "使用本地主题内容作为备用支持。",
       "配置 OPENAI_API_KEY、OPENAI_BASE_URL 和 OPENAI_MODEL。",
     ),
     imageGeneration: {

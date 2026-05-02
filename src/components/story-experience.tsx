@@ -1,9 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
+import { GameEngineStage } from "@/components/game-engine-stage";
+import { SectionDirectory, type SectionDirectoryItem } from "@/components/section-directory";
+import { getAccountSyncDeviceInfo } from "@/lib/account-sync-client";
 import { findChildIdentitySuggestions, formatChildLabel } from "@/lib/child-identity";
+import {
+  getFoodDishShortIntro as getCatalogFoodDishShortIntro,
+  getFoodIngredientNames,
+  resolveSafeFoodImage,
+  type FoodImageScene,
+  type FoodImageResolution,
+  type SafeFoodImageCandidate,
+  type SafeFoodImageResolution,
+} from "@/lib/food-image-catalog";
 import { buildFoodNutritionIntro, buildIngredientNutritionIntro } from "@/lib/food-nutrition";
 import {
   defaultGameContentConfigs,
@@ -12,6 +24,7 @@ import {
   parseGameContentConfigs,
   type EditableGameContent,
 } from "@/lib/game-content-config";
+import { recordGameEngineAttempt } from "@/lib/game-engine-client";
 import {
   parseVideoLibrary,
   videoLibraryStorageKey,
@@ -39,7 +52,7 @@ import {
   type MiniGameKey,
   type MiniGameRecord,
 } from "@/lib/growth-archive";
-import { getFoodPreferenceFollowUp, getMiniGameFollowUp } from "@/lib/parent-sync";
+import { getFoodPreferenceFollowUp } from "@/lib/parent-sync";
 import {
   habitTemplatesStorageKey,
   parseHabitTemplates,
@@ -52,16 +65,23 @@ import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
   buildTodayMenuSpeech,
+  dailyMenuOverrideStorageKey,
+  formatMenuDate,
+  getEffectiveMenuForDate,
   getLocalDateKey,
-  getPublishedMenuForDate,
+  getWeekdayLabel,
+  parseDailyMenuOverrides,
   parseWeeklyMenuEntries,
   weeklyMenuStorageKey,
+  type MenuMediaSource,
+  type MenuObservationImage,
   type WeeklyMenuEntry,
 } from "@/lib/weekly-menu";
 import {
   foodBadgeCards,
   foodGuessRounds,
   foodKitchenRecipes,
+  foodReporterFoods,
   foodPreferenceApproachSteps,
   foodPreferenceReasons,
   foodTrainStations,
@@ -86,25 +106,11 @@ type ChatMessage = {
 type StoryApiResponse = {
   reply?: string;
   choices?: string[];
-  badge?: string;
-  templateBadge?: string;
-  badgeKind?: string;
-  source?: string;
-  mode?: string;
-  awardBadge?: boolean;
+  source?: "ai" | "template";
   fallbackUsed?: boolean;
-  error?: string;
 };
 
 type FoodKitchenRecipe = (typeof foodKitchenRecipes)[number];
-
-type StoryInteractionMode = "pictureBook" | "adventure";
-
-type PictureBookCheckinOption = {
-  label: string;
-  source: string;
-  feedback: string;
-};
 
 type HabitStoryMission = {
   topic: string;
@@ -116,54 +122,1048 @@ type HabitStoryMission = {
   feedback: string;
 };
 
-const defaultPictureBookCheckinOptions: PictureBookCheckinOption[] = [
+const habitChildDirectoryItems: SectionDirectoryItem[] = [
   {
-    label: "我听到了一个角色",
-    source: "听故事里的角色或伙伴",
-    feedback: "你听得很认真，故事小耳朵亮起来啦。",
+    label: "今日状态",
+    description: "看任务、勋章和播报。",
+    href: "#child-status",
+    icon: "🏷️",
+    tone: "bg-teal-50 text-teal-950",
   },
   {
-    label: "我看到了一个画面",
-    source: "看故事里出现的画面",
-    feedback: "愿意说出一个画面，就是阅读小书虫的一步。",
+    label: "好习惯闯关",
+    description: "6关点图卡。",
+    href: "#habit-challenge",
+    icon: "🏅",
+    tone: "bg-cyan-50 text-cyan-950",
   },
   {
-    label: "我喜欢这个地方",
-    source: "说一处喜欢的情节",
-    feedback: "能说出喜欢的地方，说明你正在认真听故事。",
+    label: "习惯故事小剧场",
+    description: "找绘本、听绘本、读完打卡。",
+    href: "#habit-story",
+    icon: "📖",
+    tone: "bg-violet-50 text-violet-950",
   },
   {
-    label: "我想把书放回去",
-    source: "把阅读习惯带到图书归位",
-    feedback: "听完故事把图书送回家，阅读任务完成啦。",
+    label: "对老师说",
+    description: "说想法。",
+    href: "#habit-talk",
+    icon: "🗣️",
+    tone: "bg-emerald-50 text-emerald-950",
+  },
+  {
+    label: "老师给我的任务",
+    description: "练本周重点。",
+    href: "#habit-template",
+    icon: "⭐",
+    tone: "bg-orange-50 text-orange-950",
   },
 ];
 
-function buildPictureBookCheckinOptions(choices: string[]): PictureBookCheckinOption[] {
-  const safeChoices = choices
-    .map((choice) => choice.trim())
-    .filter(Boolean)
-    .slice(0, 3);
-  const [roleChoice, pictureChoice, favoriteChoice] = safeChoices;
+const foodChildDirectoryItems: SectionDirectoryItem[] = [
+  {
+    label: "今日食谱",
+    description: "听今天吃什么。",
+    href: "#food-menu",
+    icon: "🍱",
+    tone: "bg-cyan-50 text-cyan-950",
+  },
+  {
+    label: "闽食小列车",
+    description: "听站名找美食。",
+    href: "#food-train",
+    icon: "🚂",
+    tone: "bg-teal-50 text-teal-950",
+  },
+  {
+    label: "泉州美食摊位寻宝",
+    description: "找摊位和食材。",
+    href: "#food-stall",
+    icon: "🏮",
+    tone: "bg-amber-50 text-amber-950",
+  },
+  {
+    label: "美食观察与靠近一点点",
+    description: "先认识再靠近。",
+    href: "#food-observation-card",
+    icon: "🔍",
+    tone: "bg-emerald-50 text-emerald-950",
+  },
+  {
+    label: "泉州小厨房",
+    description: "菜名变步骤。",
+    href: "#food-kitchen",
+    icon: "👩‍🍳",
+    tone: "bg-orange-50 text-orange-950",
+  },
+  {
+    label: "小小闽食播报员",
+    description: "一句话播报。",
+    href: "#food-broadcast",
+    icon: "📣",
+    tone: "bg-rose-50 text-rose-950",
+  },
+];
 
-  return [
+const aiConfirmedUseNotice = "老师确认好的图和词";
+
+type ChildPanelKey =
+  | "home"
+  | "child-status"
+  | "child-play"
+  | "habit-challenge"
+  | "habit-meal-manners"
+  | "habit-traffic-light"
+  | "habit-story"
+  | "habit-talk"
+  | "habit-template"
+  | "food-menu"
+  | "food-train"
+  | "food-guess"
+  | "food-stall"
+  | "food-observation-card"
+  | "food-kitchen"
+  | "food-broadcast";
+
+const childPanelLabels: Record<ChildPanelKey, string> = {
+  home: "儿童首页",
+  "child-status": "今日状态",
+  "child-play": "想玩什么",
+  "habit-challenge": "好习惯闯关",
+  "habit-meal-manners": "文明进餐操",
+  "habit-traffic-light": "好习惯红绿牌",
+  "habit-story": "习惯故事小剧场",
+  "habit-talk": "对老师说",
+  "habit-template": "老师给我的任务",
+  "food-menu": "今日食谱",
+  "food-train": "闽食小列车",
+  "food-guess": "美食猜猜乐",
+  "food-stall": "泉州美食摊位寻宝",
+  "food-observation-card": "美食观察与靠近一点点",
+  "food-kitchen": "泉州小厨房",
+  "food-broadcast": "小小闽食播报员",
+};
+
+const childDirectoryVoiceGuides: Partial<Record<ChildPanelKey, string>> = {
+  "child-status": "看看今天的小任务和小贴纸吧。",
+  "habit-challenge": "我们一起闯好习惯小关卡。",
+  "habit-story": "来找一本小故事，听完还能打卡。",
+  "habit-talk": "你可以跟老师分享快乐和不开心的事，也可以说一个小秘密。",
+  "habit-template": "老师给你准备了一个小任务，我们慢慢来。",
+  "food-menu": "看看今天有什么好吃的。",
+  "food-train": "坐上闽食小列车，听一听站名。",
+  "food-stall": "去泉州美食摊位找一找。",
+  "food-observation-card": "慢慢靠近一点点，先看一看今天的食物。",
+  "food-kitchen": "一起做一道小小泉州菜。",
+  "food-broadcast": "拿起小话筒，说说今天的美食。",
+};
+
+function getChildPanelFromHref(href: string): ChildPanelKey {
+  const panel = href.replace(/^#/, "") as ChildPanelKey;
+
+  return panel in childPanelLabels ? panel : "home";
+}
+
+const habitTaskAnchorMap: Record<string, string> = {
+  洗手小任务: "habit-challenge",
+  喝水小任务: "habit-challenge",
+  如厕小任务: "habit-challenge",
+  排队小队长: "habit-challenge",
+  整理小能手: "habit-challenge",
+  文明进餐操: "habit-challenge",
+};
+
+const habitGameStepMap: Record<string, string[]> = {
+  洗手小任务: ["掌心搓一搓", "手背搓一搓", "指缝夹一夹", "手指弓一弓", "拇指转一转", "指尖立一立", "手腕洗一洗"],
+  喝水小任务: ["找到水杯架", "取自己的杯子", "接半杯水", "坐好慢慢喝", "放回杯架"],
+  如厕小任务: ["轻轻进卫生间", "按下冲水按钮", "整理好衣物", "小手冲一冲"],
+  排队小队长: ["找到队伍", "一个跟一个", "小脚慢慢走", "等一等不挤"],
+  整理小能手: ["图书回书架", "玩具进玩具框", "桌面物品收进盒", "椅子靠桌边"],
+  文明进餐操: ["扶好碗", "坐稳", "小口慢慢吃", "不挑食", "餐后整理"],
+};
+const habitChallengeTitles = new Set([
+  "洗手小任务",
+  "喝水小任务",
+  "排队小队长",
+  "如厕小任务",
+  "整理小能手",
+  "文明进餐操",
+]);
+
+function getHabitTaskAnchor(title: string) {
+  return habitTaskAnchorMap[title] ?? undefined;
+}
+
+function getHabitGameSteps(title: string) {
+  return habitGameStepMap[title] ?? ["听口令", "选答案", "做一步"];
+}
+
+type HabitStepVisual = {
+  icon: string;
+  name: string;
+  hint: string;
+  visual: string;
+};
+
+function getHabitStepVisuals(title: string, steps: string[]): HabitStepVisual[] {
+  if (title.includes("洗手")) {
+    return [
+      { icon: "🤲", name: "掌心", hint: "掌心对掌心搓一搓。", visual: "七步洗手 1" },
+      { icon: "🖐️", name: "手背", hint: "手心搓手背。", visual: "七步洗手 2" },
+      { icon: "👐", name: "指缝", hint: "十指交叉洗指缝。", visual: "七步洗手 3" },
+      { icon: "✊", name: "手指", hint: "手指弯弯弓一弓。", visual: "七步洗手 4" },
+      { icon: "👍", name: "拇指", hint: "拇指转一转。", visual: "七步洗手 5" },
+      { icon: "☝️", name: "指尖", hint: "指尖立起来搓一搓。", visual: "七步洗手 6" },
+      { icon: "💧", name: "手腕", hint: "手腕也洗一洗。", visual: "七步洗手 7" },
+    ];
+  }
+
+  if (title.includes("喝水")) {
+    return [
+      { icon: "🧺", name: "水杯架", hint: "先找到自己的水杯架。", visual: "水杯架" },
+      { icon: "🥤", name: "取杯子", hint: "轻轻拿自己的小杯子。", visual: "取杯子" },
+      { icon: "🚰", name: "接水", hint: "接半杯温水就好。", visual: "接水" },
+      { icon: "🪑", name: "坐好喝", hint: "坐稳，小口慢慢喝。", visual: "坐好喝" },
+      { icon: "🧺", name: "放回杯架", hint: "喝完送杯子回家。", visual: "放回杯架" },
+    ];
+  }
+
+  if (title.includes("如厕")) {
+    return [
+      { icon: "🚻", name: "卫生间", hint: "轻轻走进卫生间。", visual: "卫生间" },
+      { icon: "🚽", name: "冲水按钮", hint: "按一下冲水按钮。", visual: "冲水按钮/水箱" },
+      { icon: "👕", name: "整理衣物", hint: "把衣服裤子整理好。", visual: "整理衣物" },
+      { icon: "🫧", name: "小手冲洗", hint: "出来以后洗小手。", visual: "小手冲洗" },
+    ];
+  }
+
+  if (title.includes("排队")) {
+    return [
+      { icon: "🧒", name: "找到队伍", hint: "看看小朋友排在哪里。", visual: "幼儿排队小人" },
+      { icon: "🧒🧒", name: "一个跟一个", hint: "跟在前面朋友后面。", visual: "一个跟一个" },
+      { icon: "👣", name: "小脚慢慢走", hint: "小脚不着急，慢慢走。", visual: "小脚步" },
+      { icon: "✋", name: "等一等", hint: "不挤一挤，等一等。", visual: "等待小手" },
+    ];
+  }
+
+  return steps.map((step) => ({
+    icon: "⭐",
+    name: step,
+    hint: "点一下，试试看。",
+    visual: step,
+  }));
+}
+
+function MiniLoopChips({ steps, activeIndex = 0 }: { steps: string[]; activeIndex?: number }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {steps.map((step, index) => (
+        <span
+          key={`${step}-${index}`}
+          className={`rounded-full px-3 py-2 text-xs font-semibold shadow-sm ${
+            index === activeIndex ? "bg-amber-300 text-amber-950" : "bg-white/82 text-slate-700"
+          }`}
+        >
+          {index < activeIndex ? "✓ " : ""}
+          {index + 1}. {step}
+        </span>
+      ))}
+    </div>
+  );
+}
+function HabitTaskPlayfield({
+  activeStep = 0,
+  completed,
+  onStepClick,
+  steps,
+  title,
+}: {
+  activeStep?: number;
+  completed: boolean;
+  onStepClick?: (step: string, index: number) => void;
+  steps: string[];
+  title: string;
+}) {
+  const safeActiveStep = Math.min(Math.max(activeStep, 0), Math.max(0, steps.length - 1));
+  const completedCount = completed ? steps.length : Math.max(0, activeStep);
+  const progress = completed ? 100 : Math.min(92, Math.max(24, ((completedCount + 1) / Math.max(1, steps.length)) * 100));
+  const usesFullStepCards =
+    title.includes("洗手") ||
+    title.includes("喝水") ||
+    title.includes("如厕") ||
+    title.includes("排队") ||
+    title.includes("整理") ||
+    title.includes("文明进餐");
+  const stepNodes = usesFullStepCards ? steps : steps.slice(0, 4);
+  const stepVisuals = getHabitStepVisuals(title, stepNodes);
+  const isStepDone = (index: number) => completed || index < completedCount;
+  const isStepActive = (index: number) => !completed && index === safeActiveStep;
+  const isStepLocked = (index: number) => !completed && index > safeActiveStep;
+  const triggerStep = (step: string, index: number) => {
+    if (!isStepLocked(index)) {
+      onStepClick?.(step, index);
+    }
+  };
+
+  if (
+    title.includes("洗手") ||
+    title.includes("喝水") ||
+    title.includes("如厕") ||
+    title.includes("排队")
+  ) {
+    return (
+      <div className="rounded-[1.6rem] bg-cyan-50 p-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {stepNodes.map((step, index) => {
+            const visual = stepVisuals[index] ?? {
+              icon: "⭐",
+              name: step,
+              hint: "点一下，试试看。",
+              visual: step,
+            };
+
+            return (
+            <button
+              key={`${title}-${step}-${index}`}
+              aria-label={`${title} 第 ${index + 1} 步：${step}`}
+              disabled={isStepLocked(index) || completed}
+              onClick={() => triggerStep(step, index)}
+              className={`min-h-36 rounded-[1.2rem] bg-white/88 p-3 text-left text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 ${
+                isStepDone(index)
+                  ? "ring-2 ring-emerald-300"
+                  : isStepActive(index)
+                    ? "ring-2 ring-cyan-300"
+                    : ""
+              }`}
+              title={step}
+              type="button"
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.2rem] text-4xl ${
+                    isStepDone(index) ? "bg-emerald-100" : "bg-cyan-100"
+                  }`}
+                >
+                  {isStepDone(index) ? "✅" : visual.icon}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-cyan-900">{visual.name}</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-600">{visual.visual}</p>
+                </div>
+              </div>
+              <span className="mt-3 block rounded-[1rem] bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-900">
+                {isStepDone(index) ? "✓ 做到啦" : visual.hint}
+              </span>
+              <span className="mt-2 block text-xs font-semibold text-slate-500">
+                👉 点这里：{step}
+              </span>
+            </button>
+            );
+          })}
+        </div>
+        <div className="mt-3">
+          <MiniLoopChips steps={steps} activeIndex={completed ? steps.length : completedCount} />
+        </div>
+      </div>
+    );
+  }
+
+  if (title.includes("喝水")) {
+    return (
+      <div className="rounded-[1.6rem] bg-sky-50 p-4">
+        <div className="grid gap-4 md:grid-cols-[140px_1fr]">
+          <div className="relative mx-auto h-40 w-28 rounded-b-[2rem] rounded-t-lg border-4 border-sky-300 bg-white/80">
+            <div
+              className="absolute bottom-0 left-0 right-0 rounded-b-[1.55rem] bg-sky-300 transition-all duration-700"
+              style={{ height: `${completed ? 78 : 42}%` }}
+            />
+            <div className="absolute -right-8 top-10 h-16 w-8 rounded-r-full border-4 border-sky-300 border-l-0" />
+            <span className="absolute inset-x-0 top-12 text-center text-sm font-semibold text-sky-950">
+              小口喝
+            </span>
+          </div>
+          <div className="flex flex-col justify-center gap-3">
+            <div className="h-3 overflow-hidden rounded-full bg-white">
+              <div
+                className="h-full rounded-full bg-sky-500 transition-all duration-700"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {stepNodes.map((step, index) => (
+                <button
+                  key={step}
+                  onClick={() => triggerStep(step, index)}
+                  disabled={isStepLocked(index) || completed}
+                  className={`rounded-[1rem] px-3 py-2 text-left text-xs font-semibold shadow-sm transition ${
+                    isStepDone(index)
+                      ? "bg-sky-500 text-white"
+                      : isStepActive(index)
+                        ? "bg-white text-sky-950 ring-2 ring-sky-300"
+                        : "bg-white/70 text-slate-500"
+                  }`}
+                  type="button"
+                >
+                  {isStepDone(index) ? "✓ " : ""}
+                  {index + 1}. {step}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (title.includes("如厕")) {
+    return (
+      <div className="rounded-[1.6rem] bg-violet-50 p-4">
+        <div className="relative h-36 rounded-[1.3rem] bg-white/85 p-4">
+          <div className="absolute left-6 top-16 h-2 w-[78%] rounded-full bg-violet-100" />
+          {stepNodes.map((label, index) => (
+            <button
+              key={label}
+              onClick={() => triggerStep(label, index)}
+              disabled={isStepLocked(index) || completed}
+              className={`absolute flex h-16 w-16 flex-col items-center justify-center rounded-[1.2rem] text-center text-[11px] font-semibold shadow-sm transition ${
+                isStepDone(index)
+                  ? "bg-violet-300 text-violet-950"
+                  : isStepActive(index)
+                    ? "bg-white text-violet-950 ring-2 ring-violet-300"
+                    : "bg-white text-slate-500"
+              }`}
+              style={{
+                left: `${5 + index * 24}%`,
+                top: index % 2 === 0 ? "18px" : "58px",
+              }}
+              type="button"
+            >
+              <span className="text-xl">{index === 3 ? "🫧" : "👣"}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (title.includes("排队")) {
+    return (
+      <div className="rounded-[1.6rem] bg-emerald-50 p-4">
+        <div className="relative h-36 rounded-[1.3rem] bg-white/85">
+          <div className="absolute left-8 right-8 top-16 border-t-4 border-dashed border-emerald-200" />
+          {stepNodes.map((label, index) => (
+            <button
+              key={label}
+              onClick={() => triggerStep(label, index)}
+              disabled={isStepLocked(index) || completed}
+              className={`absolute flex h-16 w-16 flex-col items-center justify-center rounded-full text-center text-[11px] font-semibold shadow-sm transition ${
+                isStepDone(index)
+                  ? "bg-emerald-300 text-emerald-950"
+                  : isStepActive(index)
+                    ? "bg-white text-emerald-950 ring-2 ring-emerald-300"
+                    : "bg-white text-slate-500"
+              }`}
+              style={{
+                left: `${8 + index * 22}%`,
+                top: `${28 + (index % 2) * 22}px`,
+              }}
+              type="button"
+            >
+              <span className="text-xl">🧒</span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const visualItems = title.includes("文明进餐")
+    ? [
+        {
+          icon: "🥣",
+          name: "扶好碗",
+          hint: "小手扶好小碗。",
+          visual: "小碗稳稳",
+        },
+        {
+          icon: "🪑",
+          name: "坐稳",
+          hint: "小脚放好，身体坐稳。",
+          visual: "椅子坐稳",
+        },
+        {
+          icon: "🥄",
+          name: "小口慢慢吃",
+          hint: "小勺一口，慢慢嚼。",
+          visual: "小勺慢慢",
+        },
+        {
+          icon: "🥬",
+          name: "不挑食",
+          hint: "先看一看，也可以尝一点。",
+          visual: "蔬菜朋友",
+        },
+        {
+          icon: "🧺",
+          name: "餐后整理",
+          hint: "餐具和桌面一起回家。",
+          visual: "收拾餐桌",
+        },
+      ]
+    : [
+        {
+          icon: "📚",
+          name: "图书",
+          hint: "把小书送回图书架。",
+          visual: "图书架",
+        },
+        {
+          icon: "🧸",
+          name: "玩具",
+          hint: "玩具回到玩具框。",
+          visual: "玩具框",
+        },
+        {
+          icon: "🧺",
+          name: "桌面物品",
+          hint: "桌面小物收进盒。",
+          visual: "桌面收纳",
+        },
+        {
+          icon: "🪑",
+          name: "椅子",
+          hint: "小椅子靠回桌边。",
+          visual: "椅子归位",
+        },
+      ];
+
+  return (
+    <div className="rounded-[1.6rem] bg-orange-50 p-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {visualItems.map((item, index) => {
+          const step = stepNodes[index] ?? item.name;
+
+          return (
+          <button
+            key={`${title}-${item.name}`}
+            onClick={() => triggerStep(step, index)}
+            disabled={isStepLocked(index) || completed}
+            className={`min-h-36 rounded-[1.2rem] bg-white/88 p-3 text-left shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 ${
+              isStepDone(index)
+                ? "ring-2 ring-emerald-300"
+                : isStepActive(index)
+                  ? "ring-2 ring-orange-300"
+                  : ""
+            }`}
+            type="button"
+          >
+            <div className="flex items-center gap-3">
+              <span className={`flex h-16 w-16 items-center justify-center rounded-[1.2rem] text-4xl ${
+                isStepDone(index) ? "bg-emerald-100" : "bg-orange-100"
+              }`}>
+                {isStepDone(index) ? "✅" : item.icon}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-orange-800">{item.name}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-600">{item.visual}</p>
+              </div>
+            </div>
+            <span className="mt-3 block rounded-[1rem] bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-900">
+              {isStepDone(index) ? "✓ 做到啦" : item.hint}
+            </span>
+            <span className="mt-2 block text-xs font-semibold text-slate-500">
+              👉 点这里：{step}
+            </span>
+          </button>
+          );
+        })}
+      </div>
+      <div className="mt-3">
+        <MiniLoopChips steps={steps} activeIndex={completed ? steps.length : completedCount} />
+      </div>
+    </div>
+  );
+}
+
+function MealMannersRhythmStage({
+  actions,
+  completedActions,
+  currentIndex,
+  onPickAction,
+}: {
+  actions: typeof mealMannerActions;
+  completedActions: string[];
+  currentIndex: number;
+  onPickAction?: () => void;
+}) {
+  return (
+    <div className="rounded-[1.6rem] bg-amber-100/70 p-4">
+      <div className="relative h-24 rounded-[1.2rem] bg-white/85">
+        <div className="absolute left-4 right-4 top-1/2 h-2 -translate-y-1/2 rounded-full bg-amber-200" />
+        {actions.map((action, index) => {
+          const done = completedActions.includes(action.label);
+          const active = index === currentIndex && !done;
+
+          return (
+            <button
+              key={action.label}
+              aria-label={`进餐动作：${action.label}`}
+              disabled={done}
+              onClick={() => {
+                if (active) {
+                  onPickAction?.();
+                }
+              }}
+              className={`absolute top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full text-2xl shadow-sm transition ${
+                done ? "bg-emerald-200" : active ? "bg-amber-300" : "bg-white"
+              } ${active ? "cursor-pointer ring-4 ring-amber-100" : "cursor-default"}`}
+              style={{
+                left: `calc(${(index / Math.max(1, actions.length - 1)) * 100}% - 28px)`,
+                transform: active ? "translateY(-58%) scale(1.12)" : "translateY(-50%) scale(1)",
+              }}
+              type="button"
+            >
+              {action.icon}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TrafficLightDecisionStage({
+  answers,
+  completed,
+  currentIndex,
+  onAnswer,
+}: {
+  answers: string[];
+  completed: boolean;
+  currentIndex: number;
+  onAnswer?: (cardColor: "green" | "red") => void;
+}) {
+  const last = answers.at(-1) ?? "";
+  const activeGreen = last.includes("绿牌");
+  const activeRed = last.includes("红牌");
+
+  return (
+    <div className="grid gap-4 rounded-[1.6rem] bg-slate-900 p-4 text-white md:grid-cols-[120px_1fr]">
+      <div className="mx-auto flex w-24 flex-col gap-3 rounded-[1.4rem] bg-slate-950 p-4 shadow-inner">
+        <button
+          aria-label="举红牌"
+          disabled={completed}
+          onClick={() => onAnswer?.("red")}
+          className={`h-14 rounded-full transition ${activeRed ? "bg-rose-400 shadow-[0_0_22px_rgba(251,113,133,0.8)]" : "bg-rose-950 hover:bg-rose-700"}`}
+          type="button"
+        />
+        <span className="h-14 rounded-full bg-amber-950" />
+        <button
+          aria-label="举绿牌"
+          disabled={completed}
+          onClick={() => onAnswer?.("green")}
+          className={`h-14 rounded-full transition ${activeGreen ? "bg-emerald-400 shadow-[0_0_22px_rgba(52,211,153,0.8)]" : "bg-emerald-950 hover:bg-emerald-700"}`}
+          type="button"
+        />
+      </div>
+      <div className="flex flex-col justify-center">
+        <p className="text-sm font-semibold text-white/70">选牌啦</p>
+        <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/15">
+          <div
+            className="h-full rounded-full bg-emerald-300 transition-all duration-500"
+            style={{ width: `${completed ? 100 : (currentIndex / habitTrafficLightCards.length) * 100}%` }}
+          />
+        </div>
+        <p className="mt-3 text-sm font-semibold">
+          {completed ? "都选好啦" : `看看第 ${currentIndex + 1} 张小卡片`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FoodTrainTrack({
+  arrivedStations,
+  completed,
+  onPickStation,
+  route,
+  stationIndex,
+}: {
+  arrivedStations: string[];
+  completed: boolean;
+  onPickStation?: (label: string) => void;
+  route: typeof foodTrainStations;
+  stationIndex: number;
+}) {
+  const progress = completed ? 100 : (stationIndex / Math.max(1, route.length - 1)) * 100;
+
+  return (
+    <div className="rounded-[1.6rem] bg-teal-100/80 p-4">
+      <div className="relative h-32 rounded-[1.3rem] bg-white/90">
+        <div className="absolute left-8 right-8 top-16 h-2 rounded-full bg-teal-200" />
+        <div
+          className="absolute top-8 text-4xl transition-all duration-700"
+          style={{ left: `calc(${progress}% - 8px)` }}
+        >
+          🚂
+        </div>
+        {route.map((station, index) => {
+          const done = arrivedStations.includes(station.label);
+          const current = index === stationIndex && !completed;
+
+          return (
+            <button
+              key={`${station.station}-${station.label}`}
+              aria-label={`到站：${station.station}`}
+              disabled={done || completed}
+              onClick={() => onPickStation?.(station.label)}
+              className={`absolute top-[72px] -translate-x-1/2 text-center transition ${
+                current ? "scale-110" : ""
+              } disabled:cursor-not-allowed`}
+              style={{ left: `${(index / Math.max(1, route.length - 1)) * 100}%` }}
+              type="button"
+            >
+              <span
+                className={`mx-auto block h-5 w-5 rounded-full ${
+                  done ? "bg-emerald-400" : current ? "bg-amber-300 ring-4 ring-amber-100" : "bg-teal-300"
+                }`}
+              />
+              <span className="mt-1 block w-20 text-[11px] font-semibold text-teal-950">{station.station}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FoodGuessChestStage({
+  answers,
+  completed,
+  currentRound,
+  onOpenChest,
+  onPickOption,
+  options = [],
+  revealedHintCount = 1,
+  roundIndex,
+  total,
+}: {
+  answers: string[];
+  completed: boolean;
+  currentRound?: { hints: string[]; icon: string; treasure: string };
+  onOpenChest?: () => void;
+  onPickOption?: (label: string) => void;
+  options?: string[];
+  revealedHintCount?: number;
+  roundIndex: number;
+  total: number;
+}) {
+  const opened = answers.length > roundIndex || completed;
+  const visibleHints = (currentRound?.hints ?? []).slice(0, Math.max(1, revealedHintCount));
+
+  return (
+    <div className="grid gap-4 rounded-[1.6rem] bg-cyan-100/80 p-4 md:grid-cols-[150px_1fr]">
+      <button
+        aria-label="打开美食宝箱"
+        disabled={completed}
+        onClick={onOpenChest}
+        className="relative mx-auto flex h-32 w-36 items-end justify-center transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-75"
+        type="button"
+      >
+        <div className="absolute bottom-0 h-20 w-32 rounded-b-[1.4rem] bg-amber-700 shadow-lg" />
+        <div
+          className="absolute bottom-16 h-12 w-32 rounded-t-[1.4rem] bg-amber-500 transition-transform duration-500"
+          style={{ transform: opened || revealedHintCount > 1 ? "rotate(-10deg) translateY(-12px)" : "rotate(0deg)" }}
+        />
+        <span className="relative z-10 mb-8 text-4xl">{opened ? currentRound?.icon ?? "⭐" : "?"}</span>
+      </button>
+      <div className="flex flex-col justify-center">
+        <p className="text-sm font-semibold text-cyan-900">
+          {completed ? "宝箱全部打开" : `第 ${roundIndex + 1}/${total} 个宝箱`}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {visibleHints.map((hint, index) => (
+            <span
+              key={`${hint}-${index}`}
+              className="rounded-[1rem] bg-white px-3 py-2 text-xs font-semibold text-cyan-950 shadow-sm"
+            >
+              线索 {index + 1}：{hint}
+            </span>
+          ))}
+          {!completed && visibleHints.length < (currentRound?.hints.length ?? 0) ? (
+            <button
+              onClick={onOpenChest}
+              className="rounded-[1rem] bg-cyan-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-cyan-800"
+              type="button"
+            >
+              再翻一条线索
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {options.slice(0, 4).map((option) => (
+            <button
+              key={option}
+              onClick={() => onPickOption?.(option)}
+              disabled={completed}
+              className="rounded-[1rem] bg-white px-3 py-2 text-left text-xs font-semibold text-cyan-950 shadow-sm transition hover:-translate-y-0.5 hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FoodTreasureMapStage({
+  completed,
+  currentIndex,
+  ingredientsComplete,
+  matched,
+  onPickFood,
+  questFoods,
+  selectedApproachStep,
+  selectedFood,
+}: {
+  completed?: boolean;
+  currentIndex: number;
+  ingredientsComplete: boolean;
+  matched: string[];
+  onPickFood?: (label: string) => void;
+  questFoods: Array<{ icon: string; label: string; stall: string }>;
+  selectedApproachStep: string;
+  selectedFood: string;
+}) {
+  return (
+    <div className="rounded-[1.6rem] bg-teal-100/80 p-4">
+      <div className="relative min-h-44 overflow-hidden rounded-[1.3rem] bg-[linear-gradient(135deg,#ecfeff_0%,#fef3c7_100%)] p-4">
+        <div className="absolute inset-x-8 top-20 border-t-4 border-dashed border-teal-300" />
+        {questFoods.map((food, index) => {
+          const done = matched.includes(food.label);
+          const current = index === currentIndex;
+          const locked = !current && !done;
+
+          return (
+            <button
+              key={`${food.label}-${index}`}
+              aria-label={`摊位：${food.stall}`}
+              disabled={completed || done || locked}
+              onClick={() => onPickFood?.(food.label)}
+              className={`absolute flex h-20 w-20 flex-col items-center justify-center rounded-[1.3rem] text-center text-xs font-semibold shadow-sm transition ${
+                done ? "bg-emerald-500 text-white" : current ? "bg-white text-teal-950 ring-2 ring-teal-300" : "bg-white/70 text-slate-500"
+              } ${current && !completed ? "hover:-translate-y-1 hover:bg-teal-50" : ""}`}
+              style={{
+                left: `${6 + index * 22}%`,
+                top: index % 2 === 0 ? "22px" : "86px",
+              }}
+              type="button"
+            >
+              <span className="text-2xl">{done || current ? food.icon : "☆"}</span>
+              <span className="mt-1">{food.stall}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {[
+          ["找到摊位", selectedFood],
+          ["食材卡", ingredientsComplete ? "已集齐" : ""],
+          ["靠近小步", selectedApproachStep],
+        ].map(([label, value]) => (
+          <div key={label} className={`rounded-[1rem] px-3 py-2 text-xs font-semibold ${value ? "bg-teal-700 text-white" : "bg-white text-slate-600"}`}>
+            {label}：{value || "等待"}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FoodApproachLadderStage({
+  foodImageUrl,
+  onPickStep,
+  selectedApproachStep,
+  selectedFood,
+}: {
+  foodImageUrl?: string;
+  onPickStep?: (step: string) => void;
+  selectedApproachStep: string;
+  selectedFood: string;
+}) {
+  const currentIndex = Math.max(0, foodPreferenceApproachSteps.indexOf(selectedApproachStep));
+  const stepVisuals = [
     {
-      label: roleChoice ? `我听到了：${roleChoice}` : defaultPictureBookCheckinOptions[0].label,
-      source: "来自刚才 AI 绘本的角色或事件",
-      feedback: "你能听到故事里的角色，故事小耳朵亮起来啦。",
+      icon: selectedFood ? getFoodPreferenceIcon(selectedFood) : "👀",
+      imageUrl: foodImageUrl,
+      hint: selectedFood ? `看${selectedFood}` : "看一看",
     },
-    {
-      label: pictureChoice ? `我看到了：${pictureChoice}` : defaultPictureBookCheckinOptions[1].label,
-      source: "来自刚才 AI 绘本的画面线索",
-      feedback: "你会把画面说出来，阅读小书虫在认真观察。",
-    },
-    {
-      label: favoriteChoice ? `我喜欢：${favoriteChoice}` : defaultPictureBookCheckinOptions[2].label,
-      source: "来自刚才 AI 绘本的喜欢点",
-      feedback: "能说出喜欢的地方，说明你真的听进故事了。",
-    },
-    defaultPictureBookCheckinOptions[3],
+    { icon: "👃", hint: "闻香味" },
+    { icon: "🤲", hint: "小手碰" },
+    { icon: "🥄", hint: "小勺尝" },
+    { icon: "💬", hint: "今天先看" },
   ];
+
+  return (
+    <div className="rounded-[1.6rem] bg-emerald-100/80 p-4">
+      <div className="grid gap-3 sm:grid-cols-5">
+        {foodPreferenceApproachSteps.slice(0, 5).map((step, index) => {
+          const active = selectedApproachStep === step;
+          const reached = Boolean(selectedApproachStep) && index <= currentIndex;
+          const visual = stepVisuals[index];
+
+          return (
+            <button
+              key={step}
+              onClick={() => onPickStep?.(step)}
+              className={`min-h-24 rounded-[1.2rem] px-3 py-3 text-center text-xs font-semibold shadow-sm transition ${
+                active ? "bg-emerald-700 text-white" : reached ? "bg-emerald-200 text-emerald-950" : "bg-white text-slate-600"
+              } hover:-translate-y-1 hover:bg-emerald-50`}
+              style={{ transform: active ? "translateY(-6px)" : "translateY(0)" }}
+              type="button"
+            >
+              {visual?.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={visual.imageUrl}
+                  alt={`${selectedFood || "食物"}图片`}
+                  className="mx-auto h-12 w-12 rounded-[0.9rem] object-cover"
+                />
+              ) : (
+                <span className="block text-2xl">{visual?.icon ?? "☆"}</span>
+              )}
+              <span className="mt-2 block">{step}</span>
+              <span className="mt-1 block text-[11px] opacity-75">👉 {visual?.hint ?? "选一选"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-3 rounded-[1rem] bg-white/80 px-3 py-2 text-xs font-semibold text-emerald-900">
+        {selectedFood ? `当前食物：${selectedFood}` : "先选一种正在认识的食物"} · {selectedApproachStep || "再选一个靠近小步"}
+      </p>
+    </div>
+  );
+}
+
+function TeacherMessageQuestStage({
+  activeTemplate,
+  childReply,
+  onPlayStory,
+  selectedCard,
+}: {
+  activeTemplate: HabitCheckinTemplate;
+  childReply: string;
+  onPlayStory?: () => void;
+  selectedCard: string;
+}) {
+  return (
+    <div className="grid gap-4 rounded-[1.6rem] bg-emerald-100/80 p-4 md:grid-cols-[150px_1fr]">
+      <button
+        aria-label={`播放老师的小故事：${activeTemplate.title}`}
+        onClick={onPlayStory}
+        className="relative mx-auto h-32 w-32 rounded-[1.5rem] bg-white shadow-sm transition hover:-translate-y-1"
+        type="button"
+      >
+        <div className="absolute inset-x-4 top-8 h-16 rounded-b-[1rem] bg-emerald-200" />
+        <div
+          className="absolute left-7 top-2 h-16 w-20 rounded-[0.8rem] bg-white shadow transition-transform duration-500"
+          style={{ transform: selectedCard ? "translateY(38px)" : childReply ? "translateY(18px)" : "translateY(0)" }}
+        />
+        <span className="absolute inset-x-0 bottom-4 text-center text-2xl">✉️</span>
+      </button>
+      <div className="flex flex-col justify-center">
+        <p className="text-sm font-semibold text-emerald-900">给老师的小信件</p>
+        <p className="mt-2 text-sm leading-6 text-slate-700">{activeTemplate.title} · {activeTemplate.habitFocus}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[
+            ["说一句", childReply],
+            ["说小发现", selectedCard],
+            ["小任务", activeTemplate.habitTask],
+          ].map(([label, value]) => (
+            <span key={label} className={`rounded-full px-3 py-2 text-xs font-semibold ${value ? "bg-emerald-700 text-white" : "bg-white text-slate-600"}`}>
+              {label}：{value || "等待"}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MenuPlateStage({
+  entries,
+  onPickEntry,
+  selectedMenuFood,
+}: {
+  entries: WeeklyMenuEntry[];
+  onPickEntry?: (entry: WeeklyMenuEntry) => void;
+  selectedMenuFood: string;
+}) {
+  const visibleEntries = entries.slice(0, 4);
+  const featuredEntry = visibleEntries.find((entry) => entry.dishName === selectedMenuFood) ?? visibleEntries[0];
+  const featuredCoverImage = getMenuCoverImage(featuredEntry);
+  const featuredSourceLabel = getMenuMediaSourceText(
+    featuredEntry?.mediaSource ?? getConfirmedMenuObservationImages(featuredEntry)[0]?.mediaSource,
+  );
+
+  return (
+    <div className="rounded-[1.6rem] bg-cyan-100/80 p-4">
+      <div className="grid gap-4 md:grid-cols-[150px_1fr]">
+        <button
+          onClick={() => {
+            if (featuredEntry) {
+              onPickEntry?.(featuredEntry);
+            }
+          }}
+          className="relative mx-auto flex h-36 w-36 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-2 ring-white transition hover:-translate-y-0.5 hover:ring-cyan-300"
+          type="button"
+        >
+          {featuredCoverImage ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={featuredCoverImage}
+                alt={`${featuredEntry?.dishName ?? "今日食谱"}观察主图`}
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute inset-x-3 bottom-3 rounded-full bg-white/92 px-2 py-1 text-[11px] font-semibold text-cyan-900">
+                {featuredSourceLabel}
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="h-24 w-24 rounded-full border-8 border-cyan-100 bg-amber-50" />
+              <span className="absolute text-4xl">🍽️</span>
+            </>
+          )}
+        </button>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {visibleEntries.map((entry, index) => {
+            const selected = selectedMenuFood === entry.dishName;
+
+            return (
+              <button
+                key={entry.id}
+                onClick={() => onPickEntry?.(entry)}
+                className={`rounded-[1.1rem] px-3 py-3 text-sm font-semibold shadow-sm transition ${
+                  selected ? "bg-cyan-700 text-white" : "bg-white text-cyan-950"
+                } hover:-translate-y-1 hover:bg-cyan-50`}
+                type="button"
+              >
+                <span className="text-xl">{["🥣", "🍚", "🥬", "🍲"][index] ?? "🍽️"}</span>
+                <span className="ml-2">{entry.mealType}</span>
+                <span className="mt-1 block text-xs opacity-75">{entry.dishName}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const habitStoryMissions: HabitStoryMission[] = [
@@ -225,7 +1225,7 @@ const habitStoryMissions: HabitStoryMission[] = [
     question: "文明进餐时可以做哪一步？",
     answerCards: ["小手扶好碗", "边吃边玩", "把食物乱撒"],
     habitTask: "扶好碗慢慢吃",
-    feedback: "你听到文明进餐的小动作，完成一步也值得记录。",
+    feedback: "你听到文明进餐的小动作，完成一步就有小贴纸。",
   },
   {
     topic: "如厕",
@@ -235,7 +1235,7 @@ const habitStoryMissions: HabitStoryMission[] = [
     question: "想上厕所时可以先做什么？",
     answerCards: ["告诉老师", "憋着不说", "推开朋友"],
     habitTask: "如厕前告诉老师",
-    feedback: "你听到可以轻轻告诉老师，如厕小提醒完成一步啦。",
+    feedback: "你听到可以轻轻告诉老师，如厕小任务完成一步啦。",
   },
   {
     topic: "情绪表达",
@@ -390,12 +1390,26 @@ function buildKitchenStepVisual(action: string, recipe: FoodKitchenRecipe) {
 
 function getKitchenRecipeIngredients(recipe: FoodKitchenRecipe) {
   const label = recipe.label;
+  const mappedIngredients = getFoodIngredientNames(label);
+
+  if (mappedIngredients.length >= 2) {
+    return mappedIngredients.slice(0, 5);
+  }
 
   if (/海蛎煎/.test(label)) return ["海蛎", "鸡蛋", "地瓜粉"];
   if (/面线糊/.test(label)) return ["面线", "清汤", "小葱"];
   if (/润饼/.test(label)) return ["青菜", "薄饼皮", "花生"];
   if (/石花膏/.test(label)) return ["石花膏", "水果", "蜂蜜水"];
-  if (/肉粽/.test(label)) return ["糯米", "香菇", "肉"];
+  if (/烧肉粽|闽南肉粽|肉粽/.test(label)) return ["糯米", "粽叶", "香菇", "肉丁"];
+  if (/姜母鸭/.test(label)) return ["鸭肉", "老姜", "芝麻油"];
+  if (/土笋冻/.test(label)) return ["土笋冻原料", "清汤冻", "蒜蓉酱"];
+  if (/炸醋肉/.test(label)) return ["猪肉", "地瓜粉", "香醋"];
+  if (/芋头饼/.test(label)) return ["芋头", "糯米粉", "芝麻"];
+  if (/牛肉羹/.test(label)) return ["牛肉", "清汤", "香菜"];
+  if (/洪濑鸡爪/.test(label)) return ["鸡爪", "卤汁", "香料"];
+  if (/崇武鱼卷/.test(label)) return ["鱼肉", "地瓜粉", "葱花"];
+  if (/四果汤/.test(label)) return ["水果丁", "石花膏", "蜂蜜水"];
+  if (/咸饭/.test(label)) return ["米饭", "香菇", "青菜"];
 
   return [label];
 }
@@ -409,6 +1423,16 @@ function buildKitchenBroadcastText(recipe: FoodKitchenRecipe, childThought: stri
     润饼菜: "卷卷的、颜色很多，里面有薄饼皮和蔬菜",
     石花膏: "透明凉凉、会轻轻晃，是泉州常见的小甜品",
     闽南肉粽: "粽叶香香、米粒亮亮，里面可能有香菇和家常配料",
+    烧肉粽: "粽叶香香、米粒亮亮，也叫闽南肉粽",
+    姜母鸭: "热热香香，能看到老姜片和鸭肉",
+    土笋冻: "透明凉凉，像小果冻一样亮晶晶",
+    炸醋肉: "金黄金黄、外皮香香，味道带一点闽南香",
+    芋头饼: "圆圆香香，里面有软软的芋头",
+    牛肉羹: "热热软软，小勺舀起来滑滑的",
+    洪濑鸡爪: "颜色深深、卤香明显，形状很特别",
+    崇武鱼卷: "白白圆圆，带着海边鱼肉味",
+    四果汤: "清凉甜甜，颜色很多，有好多小配料",
+    咸饭: "米粒香香，里面有香菇和家常小菜",
   };
   const description = textureMap[recipe.label] ?? "有自己的颜色、形状和家乡味道";
   const stepText = recipe.actions.slice(0, 3).join("、");
@@ -478,11 +1502,11 @@ const habitTaskAnswerOptions: Record<
     feedback: "坐好慢慢喝，喝水小勇士真稳。",
     nextStep: "可以把小水杯放回自己的位置。",
   },
-  如厕小提醒: {
+  如厕小任务: {
     question: "想上厕所时可以先做什么？",
     options: ["告诉老师", "一直忍着", "推开别人跑"],
     correct: "告诉老师",
-    feedback: "会轻轻告诉老师，如厕小提醒完成啦。",
+    feedback: "会轻轻告诉老师，如厕小任务完成啦。",
     nextStep: "如厕后记得整理衣物，再把小手洗干净。",
   },
   排队小队长: {
@@ -504,7 +1528,7 @@ const habitTaskAnswerOptions: Record<
     options: ["小脚放稳", "身体乱晃", "趴在桌上"],
     correct: "小脚放稳",
     feedback: "小脚放稳，眼睛看老师，坐姿小星亮起来啦。",
-    nextStep: "可以再玩一个任务，或者看看成长记录。",
+    nextStep: "可以再玩一个任务，或者看看小贴纸。",
   },
   礼貌小种子: {
     question: "别人帮了你，可以说什么？",
@@ -536,7 +1560,7 @@ const habitTaskAnswerOptions: Record<
   },
   实验小侦探: {
     question: "做小实验时，可以先做什么？",
-    options: ["认真观察", "抢材料", "不听规则"],
+    options: ["认真观察", "抢材料", "先不听"],
     correct: "认真观察",
     feedback: "先观察再动手，实验小侦探上线啦。",
     nextStep: "可以说一句：我发现了什么。",
@@ -585,15 +1609,96 @@ type BrowserSpeechRecognition = {
 
 type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 type SpeakHandler = (text: string) => void;
+type ChildVoiceRecognitionRef = { current: BrowserSpeechRecognition | null };
+
+function startChildVoiceInput({
+  recognitionRef,
+  isListening,
+  setListening,
+  onResult,
+  onSpeak,
+  onStart,
+  onUnsupported = "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+  onError = "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+}: {
+  recognitionRef: ChildVoiceRecognitionRef;
+  isListening: boolean;
+  setListening: (next: boolean) => void;
+  onResult: (text: string) => void;
+  onSpeak?: SpeakHandler;
+  onStart: string;
+  onUnsupported?: string;
+  onError?: string;
+}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (isListening && recognitionRef.current) {
+    recognitionRef.current.stop();
+    setListening(false);
+    return;
+  }
+
+  const voiceWindow = window as Window & {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  };
+  const SpeechRecognitionApi = voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
+
+  if (!SpeechRecognitionApi) {
+    onSpeak?.(onUnsupported);
+    return;
+  }
+
+  try {
+    recognitionRef.current?.stop();
+  } catch {
+    // Start a fresh child voice turn without surfacing browser internals.
+  }
+
+  const recognition = new SpeechRecognitionApi();
+  recognition.lang = "zh-CN";
+  recognition.interimResults = false;
+  recognition.continuous = false;
+  recognition.onresult = (event) => {
+    const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
+
+    if (transcript) {
+      onResult(transcript);
+    } else {
+      onSpeak?.(onError);
+    }
+  };
+  recognition.onerror = () => {
+    onSpeak?.(onError);
+    setListening(false);
+  };
+  recognition.onend = () => setListening(false);
+  recognitionRef.current = recognition;
+  try {
+    recognition.start();
+    setListening(true);
+    onSpeak?.(onStart);
+  } catch {
+    setListening(false);
+    onSpeak?.(onError);
+  }
+}
 
 const storyStateStorageKey = "tongqu-growth-web-story-state";
+const teacherAccountStorageKey = "tongqu-growth-web-teacher-account";
+const teacherPasscodeStorageKey = "tongqu-growth-web-teacher-passcode";
 const storyInputMaxLength = 120;
 const miniGameThemeMap: Record<MiniGameKey, ThemeId> = {
   washSteps: "habit",
   queue: "habit",
   habitJudge: "habit",
   readingCheckin: "habit",
+  childTalk: "habit",
+  teacherTask: "habit",
   kindWords: "food",
+  todayMenu: "food",
   foodObserve: "food",
   foodClue: "food",
   foodTrain: "food",
@@ -606,7 +1711,33 @@ const miniGameThemeMap: Record<MiniGameKey, ThemeId> = {
   mealManners: "habit",
   habitTrafficLight: "habit",
 };
-const minnanTasteSteps = "逛泉州美食摊、找食材卡、听小故事、说出一个发现";
+const minnanTasteSteps = "闽食小列车、泉州美食摊位寻宝、美食观察与靠近一点点、小小闽食播报员";
+
+function getMiniGameSourceLabel(gameKey: MiniGameKey) {
+  const sourceLabels: Record<MiniGameKey, string> = {
+    washSteps: "child-habit-wash-steps",
+    queue: "child-habit-queue",
+    habitJudge: "child-habit-task",
+    readingCheckin: "child-reading-checkin",
+    childTalk: "child-to-teacher",
+    teacherTask: "teacher-assigned-task",
+    kindWords: "child-expression",
+    todayMenu: "child-today-menu",
+    foodObserve: "child-food-observe",
+    foodClue: "child-food-clue",
+    foodTrain: "child-food-broadcast",
+    foodGuess: "child-food-guess",
+    foodPreference: "child-food-preference",
+    foodReporter: "child-food-reporter",
+    foodKitchen: "child-food-kitchen",
+    peerEncourage: "child-peer-encourage",
+    mealTray: "child-meal-tray",
+    mealManners: "child-meal-manners",
+    habitTrafficLight: "child-habit-traffic-light",
+  };
+
+  return sourceLabels[gameKey];
+}
 
 function shuffleItems<T>(items: readonly T[]) {
   const nextItems = [...items];
@@ -675,20 +1806,18 @@ function createMenuFoodPreferenceChoices(todayMenuEntries: WeeklyMenuEntry[] = [
     ...entry.focusIngredients,
     ...entry.ingredients,
   ]);
-  const uniqueMenuLabels = Array.from(
-    new Set(menuLabels.map((item) => item.trim()).filter(Boolean)),
-  );
+  const uniqueMenuLabels = uniqueTextItems(menuLabels);
 
-  return uniqueMenuLabels.map(buildFoodPreferenceOption);
+  return dedupeFoodPreferenceOptions(uniqueMenuLabels.map(buildFoodPreferenceOption));
 }
 
 function createFoodPreferenceRound(todayMenuEntries: WeeklyMenuEntry[] = [], randomize = true) {
   const menuChoices = createMenuFoodPreferenceChoices(todayMenuEntries);
   const menuLabelSet = new Set(menuChoices.map((item) => item.label));
   const fallbackChoices = createFoodPreferenceChoices(randomize).filter((item) => !menuLabelSet.has(item.label));
-  const foods = menuChoices.length > 0
+  const foods = dedupeFoodPreferenceOptions(menuChoices.length > 0
     ? [...menuChoices, ...fallbackChoices].slice(0, 18)
-    : fallbackChoices;
+    : fallbackChoices);
 
   return {
     foods,
@@ -738,12 +1867,391 @@ function buildFoodPreferenceOption(label: string) {
   };
 }
 
-function buildFoodRoleIntro(food: ReturnType<typeof buildFoodPreferenceOption>) {
-  const ingredientText =
-    food.ingredients.length > 0 ? `我的身体里有${food.ingredients.join("、")}。` : "";
-  const nutritionIntro = buildFoodNutritionIntro(food.label, food.ingredients);
+function uniqueTextItems(items: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
 
-  return `我是${food.label}。${ingredientText}${food.ingredientIntro}${nutritionIntro}你今天还在认识我也没关系，先看见名字、食材和一个营养小发现就很好。`;
+  for (const item of items) {
+    const text = item.trim();
+
+    if (!text || seen.has(text)) {
+      continue;
+    }
+
+    seen.add(text);
+    result.push(text);
+  }
+
+  return result;
+}
+
+function dedupeFoodPreferenceOptions<T extends ReturnType<typeof buildFoodPreferenceOption>>(items: T[]) {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const item of items) {
+    const key = item.label.trim();
+
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(item);
+  }
+
+  return result;
+}
+
+function getFoodOptionKey(food: ReturnType<typeof buildFoodPreferenceOption>, index = 0) {
+  const label = food.label.trim() || "food";
+  const stall = food.stall?.trim() || "card";
+
+  return `${label}-${stall}-${index}`;
+}
+
+function getFoodCardNutritionText(label: string, ingredients: string[] = []) {
+  const intro = buildFoodNutritionIntro(label, ingredients);
+
+  return /营养小发现/.test(intro) ? intro : `${label}营养小发现：${intro}`;
+}
+
+function getMenuEntrySourceLabel(entry: WeeklyMenuEntry) {
+  return "sourceLabel" in entry && typeof entry.sourceLabel === "string"
+    ? entry.sourceLabel
+    : "每周食谱自动发布";
+}
+
+function getChildMenuEntrySourceLabel(entry: WeeklyMenuEntry) {
+  const label = getMenuEntrySourceLabel(entry);
+
+  if (label === "临时改餐") {
+    return "今天换餐";
+  }
+
+  if (label === "每周食谱自动发布") {
+    return "本周食谱";
+  }
+
+  return label;
+}
+
+function getConfirmedMenuObservationImages(entry?: WeeklyMenuEntry): MenuObservationImage[] {
+  return (entry?.observationImages ?? [])
+    .filter((image) => image.teacherConfirmed && Boolean(image.url))
+    .slice(0, 6);
+}
+
+function getMenuCoverImage(entry?: WeeklyMenuEntry) {
+  if (entry?.teacherConfirmed && entry.coverImageUrl) {
+    return entry.coverImageUrl;
+  }
+
+  return getConfirmedMenuObservationImages(entry)[0]?.url || "";
+}
+
+function getMenuMediaSourceText(source?: MenuMediaSource) {
+  if (source === "video_frame") {
+    return "今天视频里的图";
+  }
+
+  if (source === "teacher_uploaded") {
+    return "老师确认图片";
+  }
+
+  if (source === "ai_generated") {
+    return "老师确认好的图";
+  }
+
+  return "食材小图卡";
+}
+
+function findMenuImageContext(foodLabel: string, entries: WeeklyMenuEntry[]) {
+  const cleanFoodLabel = foodLabel.trim();
+  const matchedEntry = cleanFoodLabel
+    ? entries.find((entry) => {
+        const candidates = [entry.dishName, ...entry.focusIngredients, ...entry.ingredients]
+          .map((item) => item.trim())
+          .filter(Boolean);
+
+        return candidates.some((item) => item === cleanFoodLabel || item.includes(cleanFoodLabel) || cleanFoodLabel.includes(item));
+      })
+    : entries.find((entry) => getMenuCoverImage(entry));
+  const images = getConfirmedMenuObservationImages(matchedEntry);
+  const coverImageUrl = getMenuCoverImage(matchedEntry);
+
+  return {
+    entry: matchedEntry,
+    images,
+    coverImageUrl,
+    mediaSource: matchedEntry?.mediaSource ?? images[0]?.mediaSource,
+    sourceLabel: matchedEntry ? getMenuMediaSourceText(matchedEntry.mediaSource ?? images[0]?.mediaSource) : "",
+  };
+}
+
+function findBestMenuImageContext(
+  foodLabel: string,
+  entries: WeeklyMenuEntry[],
+  scene: FoodImageScene = "observationFoodImage",
+) {
+  const context = findMenuImageContext(foodLabel, entries);
+  const priority: MenuMediaSource[] = ["teacher_uploaded", "video_frame", "ai_generated"];
+  const bestImage = priority
+    .map((source) => context.images.find((image) => image.mediaSource === source))
+    .find(Boolean);
+  const safeFoodImage = resolveSafeFoodImage(foodLabel || context.entry?.dishName || "", {
+    scene,
+    menuEntries: context.entry ? [context.entry] : [],
+    ingredients: context.entry ? uniqueTextItems([...context.entry.focusIngredients, ...context.entry.ingredients]) : [],
+  });
+  const bestSource = bestImage?.mediaSource ?? context.mediaSource ?? safeFoodImage.mediaSource;
+  const hasConfirmedImage = Boolean(bestImage?.url ?? context.coverImageUrl);
+
+  return {
+    ...context,
+    coverImageUrl: bestImage?.url ?? context.coverImageUrl ?? safeFoodImage.url,
+    mediaSource: bestSource,
+    sourceLabel: hasConfirmedImage
+      ? getMenuMediaSourceText(bestSource)
+      : safeFoodImage.url
+        ? safeFoodImage.sourceLabel
+        : "",
+    imageSource: safeFoodImage.sourceType,
+    teacherConfirmed: safeFoodImage.teacherConfirmed,
+    aiGenerated: safeFoodImage.aiGenerated,
+    imageCandidates: safeFoodImage.candidates,
+    fallbackSource: safeFoodImage.fallbackSource,
+  };
+}
+
+function resolveFoodMaterialSource(
+  selectedFood: string,
+  customFoodName: string,
+  selectedFoodInfo: ReturnType<typeof buildFoodPreferenceOption> | null,
+  todayMenuEntries: WeeklyMenuEntry[] = [],
+) {
+  const cleanSelectedFood = selectedFood.trim();
+  const cleanCustomFood = customFoodName.trim();
+  const matchedMenu = cleanSelectedFood
+    ? todayMenuEntries.find(
+        (entry) =>
+          entry.dishName === cleanSelectedFood ||
+          entry.focusIngredients.includes(cleanSelectedFood) ||
+          entry.ingredients.includes(cleanSelectedFood),
+      )
+    : todayMenuEntries[0];
+  const matchedMenuIngredients = matchedMenu
+    ? Array.from(new Set([...matchedMenu.focusIngredients, ...matchedMenu.ingredients])).slice(0, 5)
+    : [];
+  const isMenuIngredient =
+    Boolean(cleanSelectedFood && matchedMenu) && matchedMenu?.dishName !== cleanSelectedFood;
+  const subject =
+    cleanCustomFood ||
+    cleanSelectedFood ||
+    matchedMenu?.dishName ||
+    matchedMenu?.focusIngredients[0] ||
+    selectedFoodInfo?.label ||
+    "今日食材";
+  const ingredients = matchedMenu
+    ? Array.from(new Set([subject, ...matchedMenuIngredients])).slice(0, 5)
+    : selectedFoodInfo?.ingredients ?? (cleanSelectedFood ? [cleanSelectedFood] : []);
+  const focusIngredient = cleanSelectedFood || matchedMenu?.focusIngredients[0] || ingredients[0] || subject;
+
+  return {
+    subject,
+    focusIngredient,
+    ingredients,
+    sourceLabel: matchedMenu
+      ? isMenuIngredient
+        ? "今日食谱重点食材"
+        : "今日食谱菜品"
+      : cleanCustomFood
+        ? "幼儿输入的观察对象"
+        : cleanSelectedFood
+          ? "当前选择的食物卡"
+          : "食材图文材料卡",
+  };
+}
+
+function getFoodMaterialPalette(label: string) {
+  const palettes = [
+    { background: "#ecfeff", accent: "#0891b2", border: "#bae6fd" },
+    { background: "#f0fdf4", accent: "#16a34a", border: "#bbf7d0" },
+    { background: "#fff7ed", accent: "#ea580c", border: "#fed7aa" },
+    { background: "#fefce8", accent: "#ca8a04", border: "#fde68a" },
+    { background: "#fdf2f8", accent: "#db2777", border: "#fbcfe8" },
+  ];
+  const index = Math.abs(Array.from(label).reduce((sum, char) => sum + char.charCodeAt(0), 0)) % palettes.length;
+
+  return palettes[index];
+}
+
+function getFoodDishShortIntro(label: string, ingredients: string[] = []) {
+  return getCatalogFoodDishShortIntro(label, ingredients);
+}
+
+function matchFoodPreferenceReasonFromSpeech(text: string) {
+  const cleanText = text.replace(/\s+/g, "");
+  const matchers = [
+    { label: "味道重", pattern: /味道.{0,4}重|味道重|太咸|太辣|很辣|味道浓|太浓|重口/ },
+    { label: "气味冲", pattern: /气味|味儿|味道冲|闻起来|太臭|太香|冲鼻/ },
+    { label: "口感怪", pattern: /口感|怪怪|奇怪|黏|粘|沙沙|刺刺|颗粒/ },
+    { label: "颜色不熟悉", pattern: /颜色|黑黑|绿绿|黄黄|不熟悉|没见过/ },
+    { label: "太硬", pattern: /太硬|硬硬|咬不动|不好咬/ },
+    { label: "太滑", pattern: /太滑|滑滑|软软|滑溜|溜/ },
+    { label: "今天没胃口", pattern: /没胃口|不饿|吃不下|今天不想吃/ },
+    { label: "以前没吃过", pattern: /没吃过|第一次|不知道|不认识|陌生/ },
+  ];
+
+  return matchers.find((item) => item.pattern.test(cleanText))?.label ?? "以前没吃过";
+}
+
+function SafeFoodImage({
+  image,
+  alt,
+  className,
+}: {
+  image: SafeFoodImageResolution | FoodImageResolution | { url?: string; candidates?: SafeFoodImageCandidate[] };
+  alt: string;
+  className: string;
+}) {
+  const candidates = useMemo(() => {
+    const explicitCandidates = "candidates" in image && Array.isArray(image.candidates) ? image.candidates : [];
+    const directUrl = image.url
+      ? [
+          {
+            url: image.url,
+            sourceType: "fallback_icon",
+            sourceLabel: "菜品图",
+            fallbackSource: "菜品图",
+            teacherConfirmed: true,
+            aiGenerated: false,
+          } satisfies SafeFoodImageCandidate,
+        ]
+      : [];
+    const seen = new Set<string>();
+
+    return [...explicitCandidates, ...directUrl].filter((candidate) => {
+      if (!candidate.url || seen.has(candidate.url)) {
+        return false;
+      }
+
+      seen.add(candidate.url);
+      return true;
+    });
+  }, [image]);
+  const candidateKey = candidates.map((candidate) => candidate.url).join("|");
+
+  return <SafeFoodImageInner key={candidateKey || alt} candidates={candidates} alt={alt} className={className} />;
+}
+
+function SafeFoodImageInner({
+  candidates,
+  alt,
+  className,
+}: {
+  candidates: SafeFoodImageCandidate[];
+  alt: string;
+  className: string;
+}) {
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [showFallbackCard, setShowFallbackCard] = useState(false);
+  const currentCandidate = candidates[candidateIndex];
+
+  if (showFallbackCard || !currentCandidate) {
+    return (
+      <span
+        aria-label={alt}
+        className={`flex items-center justify-center bg-orange-50 text-center text-sm font-semibold text-orange-900 ${className}`}
+        role="img"
+      >
+        {alt.replace(/菜品图|观察图|播报作品图|成品图|做好啦|播报完成/g, "") || "今日食物"}
+      </span>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={currentCandidate.url}
+      alt={alt}
+      className={className}
+      onError={() => {
+        setCandidateIndex((currentIndex) => {
+          if (currentIndex < candidates.length - 1) {
+            return currentIndex + 1;
+          }
+
+          setShowFallbackCard(true);
+          return currentIndex;
+        });
+      }}
+    />
+  );
+}
+
+function FoodMiniMaterialCard({
+  label,
+  ingredients = [],
+  compact = false,
+  imageResolution,
+}: {
+  label: string;
+  ingredients?: string[];
+  compact?: boolean;
+  imageResolution?: FoodImageResolution;
+}) {
+  const palette = getFoodMaterialPalette(label);
+  const icon = getFoodPreferenceIcon(label);
+  const resolvedImage =
+    imageResolution ??
+    resolveSafeFoodImage(label, {
+      scene: "observationFoodImage",
+      ingredients,
+      allowPlaceholder: true,
+    });
+  const displayName = resolvedImage.label || label;
+  const shapeHint = getFoodDishShortIntro(label, ingredients);
+
+  return (
+    <span
+      className={`block rounded-[1.2rem] border px-3 py-3 text-left shadow-sm ${
+        compact ? "min-h-[116px]" : "min-h-[150px]"
+      }`}
+      style={{ backgroundColor: palette.background, borderColor: palette.border }}
+    >
+      <span className="block overflow-hidden rounded-[1rem] bg-white p-1.5 shadow-sm">
+        <SafeFoodImage
+          image={resolvedImage}
+          alt={`${displayName}菜品图`}
+          className={compact ? "h-24 w-full rounded-[0.8rem] object-cover" : "h-32 w-full rounded-[0.9rem] object-cover"}
+        />
+      </span>
+      <span className="mt-2 flex items-center gap-2">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.8rem] bg-white text-xl shadow-sm"
+          style={{ color: palette.accent }}
+        >
+          {icon === "🥢" ? displayName.slice(0, 1) : icon}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-slate-900">{displayName}</span>
+          <span className="mt-1 block text-[11px] leading-4 text-slate-600">
+            {shapeHint}
+          </span>
+        </span>
+      </span>
+      {!compact && resolvedImage.sourceLabel ? (
+        <span
+          className={`mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
+            resolvedImage.aiGenerated ? "bg-amber-100 text-amber-900" : "bg-white/80 text-slate-600"
+          }`}
+        >
+          {resolvedImage.aiGenerated ? aiConfirmedUseNotice : "老师准备好的图"}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 function createFoodPreferenceChoices(randomize = true) {
@@ -816,8 +2324,40 @@ function getFoodPreferenceShapeHint(label: string) {
   return `${label}的颜色、形状和气味可以先观察。`;
 }
 
+function getKitchenDishDisplayKey(label: string) {
+  if (/闽南肉粽|烧肉粽|肉粽/.test(label)) return "烧肉粽";
+  if (/泉州海蛎煎|石井海蛎煎|海蛎煎/.test(label)) return "泉州海蛎煎";
+  if (/润饼菜|润饼/.test(label)) return "润饼菜";
+  if (/崇武鱼卷|鱼卷/.test(label)) return "崇武鱼卷";
+
+  return label;
+}
+
 function createFoodKitchenRound(randomize = true) {
-  const recipes = [...foodKitchenRecipes];
+  const recipeMap = new Map<string, FoodKitchenRecipe>();
+
+  foodKitchenRecipes.forEach((recipe) => {
+    const key = getKitchenDishDisplayKey(recipe.label);
+    const existing = recipeMap.get(key);
+
+    if (!existing || recipe.label === key) {
+      recipeMap.set(key, recipe);
+    }
+  });
+
+  const recipes = Array.from(recipeMap.values());
+
+  return randomize ? shuffleItems(recipes) : recipes;
+}
+
+function createFoodReporterRound(randomize = true): FoodKitchenRecipe[] {
+  const recipes = foodReporterFoods.map((food) => ({
+    label: food.label,
+    icon: food.icon,
+    area: "小小闽食播报台",
+    actions: ["选作品", "说一句原话", "整理播报词", "听一听", "提交分享"],
+    chant: food.reporterLine,
+  }));
 
   return randomize ? shuffleItems(recipes) : recipes;
 }
@@ -840,8 +2380,11 @@ const aiObservationGameKeys = new Set<MiniGameKey>([
   "washSteps",
   "queue",
   "readingCheckin",
+  "childTalk",
+  "teacherTask",
   "mealManners",
   "habitTrafficLight",
+  "todayMenu",
   "foodTrain",
   "foodObserve",
   "foodGuess",
@@ -849,6 +2392,334 @@ const aiObservationGameKeys = new Set<MiniGameKey>([
   "foodReporter",
   "foodKitchen",
 ]);
+
+function getGameInstanceMetadata(
+  gameKey: MiniGameKey,
+  detail: Partial<
+    Omit<MiniGameRecord, "completedAt" | "gameKey" | "badgeName" | "themeId" | "pickedItems">
+  > = {},
+) {
+  if (detail.gameInstanceId || detail.gameInstanceTitle || detail.gameInstanceMechanic) {
+    return {
+      gameInstanceId: detail.gameInstanceId,
+      gameInstanceMechanic: detail.gameInstanceMechanic,
+      gameInstanceTitle: detail.gameInstanceTitle,
+      gameRuleName: detail.gameRuleName,
+    };
+  }
+
+  const defaults: Partial<Record<MiniGameKey, {
+    gameInstanceId: string;
+    gameInstanceMechanic: string;
+    gameInstanceTitle: string;
+    gameRuleName: string;
+  }>> = {
+    foodGuess: {
+      gameInstanceId: "foodGuessChest",
+      gameInstanceMechanic: "treasureClue",
+      gameInstanceTitle: "美食猜猜乐",
+      gameRuleName: "宝箱线索猜食材",
+    },
+    todayMenu: {
+      gameInstanceId: "todayMenuPlate",
+      gameInstanceMechanic: "todayMenu",
+      gameInstanceTitle: "今日食谱认识",
+      gameRuleName: "菜品营养点听",
+    },
+    foodKitchen: {
+      gameInstanceId: "foodKitchenCounter",
+      gameInstanceMechanic: "recipeSteps",
+      gameInstanceTitle: "泉州小厨房",
+      gameRuleName: "料理步骤台",
+    },
+    foodObserve: {
+      gameInstanceId: "foodTreasureMap",
+      gameInstanceMechanic: "stallMap",
+      gameInstanceTitle: "泉州美食摊位寻宝",
+      gameRuleName: "摊位地图找食材",
+    },
+    foodPreference: {
+      gameInstanceId: "foodApproachLadder",
+      gameInstanceMechanic: "approachLadder",
+      gameInstanceTitle: "美食观察与靠近一点点",
+      gameRuleName: "靠近阶梯",
+    },
+    foodReporter: {
+      gameInstanceId: "foodReporterStage",
+      gameInstanceMechanic: "broadcastStage",
+      gameInstanceTitle: "小小闽食播报员",
+      gameRuleName: "作品播报台",
+    },
+    foodTrain: {
+      gameInstanceId: "foodTrainTrack",
+      gameInstanceMechanic: "trainRoute",
+      gameInstanceTitle: "闽食小列车",
+      gameRuleName: "列车站点推进",
+    },
+    habitTrafficLight: {
+      gameInstanceId: "habitTrafficLightStage",
+      gameInstanceMechanic: "trafficDecision",
+      gameInstanceTitle: "好习惯红绿牌",
+      gameRuleName: "红绿牌判断",
+    },
+    mealManners: {
+      gameInstanceId: "mealMannersRhythm",
+      gameInstanceMechanic: "rhythmActions",
+      gameInstanceTitle: "文明进餐操",
+      gameRuleName: "节拍动作轨道",
+    },
+    readingCheckin: {
+      gameInstanceId: "habitStoryTheater",
+      gameInstanceMechanic: "storyCurtain",
+      gameInstanceTitle: "习惯故事小剧场",
+      gameRuleName: "幕布三幕推进",
+    },
+    childTalk: {
+      gameInstanceId: "childWarmMailbox",
+      gameInstanceMechanic: "warmMailbox",
+      gameInstanceTitle: "温馨小信箱",
+      gameRuleName: "幼儿表达送达",
+    },
+    teacherTask: {
+      gameInstanceId: "teacherAssignedTask",
+      gameInstanceMechanic: "teacherTaskSteps",
+      gameInstanceTitle: "老师给我的任务",
+      gameRuleName: "教师小任务完成",
+    },
+  };
+
+  return defaults[gameKey] ?? {
+    gameInstanceId: gameKey,
+    gameInstanceMechanic: "taskCards",
+    gameInstanceTitle: getMiniGameSourceLabel(gameKey),
+    gameRuleName: "图卡任务",
+  };
+}
+
+function getHabitTaskGameInstance(title: string) {
+  if (title.includes("洗手")) {
+    return {
+      gameInstanceId: "washBubbleSteps",
+      gameInstanceMechanic: "cleanBubble",
+      gameInstanceTitle: "洗手小任务",
+      gameRuleName: "泡泡洗手顺序",
+    };
+  }
+
+  if (title.includes("喝水")) {
+    return {
+      gameInstanceId: "drinkWaterCup",
+      gameInstanceMechanic: "waterBalance",
+      gameInstanceTitle: "喝水小任务",
+      gameRuleName: "水杯平衡赛",
+    };
+  }
+
+  if (title.includes("如厕")) {
+    return {
+      gameInstanceId: "toiletRoute",
+      gameInstanceMechanic: "toiletRoutine",
+      gameInstanceTitle: "如厕小任务",
+      gameRuleName: "如厕路线图",
+    };
+  }
+
+  if (title.includes("排队")) {
+    return {
+      gameInstanceId: "queueLine",
+      gameInstanceMechanic: "queueDistance",
+      gameInstanceTitle: "排队小队长",
+      gameRuleName: "安全队列",
+    };
+  }
+
+  if (title.includes("整理")) {
+    return {
+      gameInstanceId: "tidyHomes",
+      gameInstanceMechanic: "tidyReturn",
+      gameInstanceTitle: "整理小能手",
+      gameRuleName: "物品回家",
+    };
+  }
+
+  return {
+    gameInstanceId: "habitTaskCards",
+    gameInstanceMechanic: "taskCards",
+    gameInstanceTitle: title,
+    gameRuleName: "图卡任务",
+  };
+}
+
+function getRewardVisualForRecord(record: MiniGameRecord) {
+  const mechanic = record.gameInstanceMechanic ?? getGameInstanceMetadata(record.gameKey).gameInstanceMechanic;
+  const title = record.gameInstanceTitle ?? getGameInstanceMetadata(record.gameKey).gameInstanceTitle;
+  const visualMap: Record<string, { icon: string; tone: string; verb: string }> = {
+    approachLadder: { icon: "🪜", tone: "bg-emerald-50 text-emerald-950", verb: "靠近一步" },
+    broadcastStage: { icon: "🎙️", tone: "bg-rose-50 text-rose-950", verb: "播报完成" },
+    cleanBubble: { icon: "🫧", tone: "bg-cyan-50 text-cyan-950", verb: "泡泡收集" },
+    queueDistance: { icon: "🚶", tone: "bg-emerald-50 text-emerald-950", verb: "队列稳定" },
+    recipeSteps: { icon: "🍳", tone: "bg-orange-50 text-orange-950", verb: "步骤完成" },
+    rhythmActions: { icon: "🥣", tone: "bg-amber-50 text-amber-950", verb: "节拍完成" },
+    stallMap: { icon: "🏮", tone: "bg-teal-50 text-teal-950", verb: "摊位发现" },
+    storyCurtain: { icon: "🎭", tone: "bg-violet-50 text-violet-950", verb: "剧场通关" },
+    taskCards: { icon: "⭐", tone: "bg-slate-50 text-slate-950", verb: "任务完成" },
+    todayMenu: { icon: "🍱", tone: "bg-cyan-50 text-cyan-950", verb: "食谱认识" },
+    tidyReturn: { icon: "🧺", tone: "bg-orange-50 text-orange-950", verb: "物品回家" },
+    toiletRoutine: { icon: "👣", tone: "bg-violet-50 text-violet-950", verb: "路线完成" },
+    trafficDecision: { icon: "🚦", tone: "bg-rose-50 text-rose-950", verb: "判断正确" },
+    trainRoute: { icon: "🚂", tone: "bg-teal-50 text-teal-950", verb: "到站成功" },
+    treasureClue: { icon: "🎁", tone: "bg-cyan-50 text-cyan-950", verb: "宝箱打开" },
+    waterBalance: { icon: "🥤", tone: "bg-sky-50 text-sky-950", verb: "小口喝水" },
+  };
+  const visual = visualMap[mechanic ?? ""] ?? visualMap.taskCards;
+
+  return {
+    ...visual,
+    rule: record.gameRuleName ?? getGameInstanceMetadata(record.gameKey).gameRuleName ?? visual.verb,
+    title,
+  };
+}
+
+function GameRewardTrail({
+  records,
+}: {
+  records: MiniGameRecord[];
+}) {
+  if (records.length === 0) {
+    return (
+      <div className="rounded-[1.4rem] bg-white/78 px-4 py-4 text-sm font-semibold text-slate-500 shadow-sm">
+        今天还没有游戏贴纸。先从一个入口开始，完成后这里会出现对应的游戏奖励。
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {records.slice(0, 4).map((record) => {
+        const visual = getRewardVisualForRecord(record);
+
+        return (
+          <div
+            key={`${record.gameKey}-${record.completedAt}-${record.badgeName}`}
+            className={`min-h-32 rounded-[1.35rem] px-4 py-4 shadow-sm ${visual.tone}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] bg-white text-2xl shadow-sm">
+                {visual.icon}
+              </span>
+              <span className="rounded-full bg-white/80 px-2 py-1 text-[11px] font-semibold shadow-sm">
+                {visual.verb}
+              </span>
+            </div>
+            <p className="mt-3 text-sm font-semibold">{visual.title}</p>
+            <p className="mt-1 text-xs leading-5 opacity-75">{visual.rule}</p>
+            <p className="mt-2 line-clamp-1 text-[11px] opacity-70">
+              {record.pickedItems.slice(0, 3).join("、") || record.badgeName}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+type GameCompletionState = {
+  title: string;
+  badgeName: string;
+  detail: string;
+  themeId: ThemeId;
+  panelKey: ChildPanelKey;
+  gameKey?: MiniGameKey;
+  imageUrl?: string;
+  imageAlt?: string;
+  imageSourceLabel?: string;
+  imageAiGenerated?: boolean;
+};
+
+function GameCompletionPanel({
+  completion,
+  onReplay,
+  onBackToDirectory,
+  onSpeak,
+}: {
+  completion: GameCompletionState;
+  onReplay: () => void;
+  onBackToDirectory: () => void;
+  onSpeak?: SpeakHandler;
+}) {
+  const tone =
+    completion.themeId === "food"
+      ? "from-cyan-50 via-white to-orange-50 text-cyan-950"
+      : "from-amber-50 via-white to-emerald-50 text-emerald-950";
+
+  return (
+    <div className={`rounded-[2rem] bg-gradient-to-br ${tone} p-5 shadow-[0_18px_50px_rgba(35,88,95,0.12)]`}>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.3rem] bg-white text-4xl shadow-sm">
+            🏅
+          </span>
+          <div>
+            <p className="text-sm font-semibold opacity-75">完成啦</p>
+            <h3 className="mt-1 text-2xl font-semibold text-slate-950">{completion.title}</h3>
+          </div>
+        </div>
+        <span className="rounded-full bg-white px-4 py-2 text-sm font-semibold shadow-sm">
+          {completion.badgeName}
+        </span>
+      </div>
+      <p className="mt-4 rounded-[1.2rem] bg-white/82 px-4 py-3 text-sm font-semibold leading-7 text-slate-800">
+        {completion.detail || "这次游戏完成啦，老师看得到你的努力。"}
+      </p>
+      {completion.imageUrl ? (
+        <div className="mt-4 overflow-hidden rounded-[1.4rem] bg-white/86 p-3 shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={completion.imageUrl}
+            alt={completion.imageAlt ?? "完成图片"}
+            className="h-48 w-full rounded-[1.1rem] object-cover"
+          />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-slate-900">这道菜做好啦</p>
+            {completion.imageSourceLabel ? (
+              <span
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  completion.imageAiGenerated
+                    ? "bg-amber-100 text-amber-900"
+                    : "bg-cyan-100 text-cyan-900"
+                }`}
+              >
+                {completion.imageSourceLabel}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button
+          onClick={onReplay}
+          className="rounded-full bg-orange-400 px-5 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5 hover:bg-orange-300"
+          type="button"
+        >
+          再玩一次
+        </button>
+        <button
+          onClick={onBackToDirectory}
+          className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5"
+          type="button"
+        >
+          🏠 回到我的小首页
+        </button>
+        <SpeechCueButton
+          text={`${completion.title}完成啦，获得${completion.badgeName}。小贴纸来啦。`}
+          onSpeak={onSpeak}
+          label="听完成"
+          tone={completion.themeId === "food" ? "cyan" : "emerald"}
+        />
+      </div>
+    </div>
+  );
+}
 
 function getAiObservationStage(gameKey: MiniGameKey, pickedItems: string[]) {
   const pickedText = pickedItems.join("、");
@@ -862,7 +2733,7 @@ function getAiObservationStage(gameKey: MiniGameKey, pickedItems: string[]) {
   }
 
   if (gameKey === "readingCheckin") {
-    return "习惯故事从愿意听，进入能选择答案并完成一个生活小任务的阶段";
+    return "习惯故事从愿意听，进入能翻页并完成阅读打卡的阶段";
   }
 
   if (gameKey === "mealManners") {
@@ -871,6 +2742,10 @@ function getAiObservationStage(gameKey: MiniGameKey, pickedItems: string[]) {
 
   if (gameKey === "habitTrafficLight") {
     return "好习惯判断从愿意选择，进入能说出替代做法的阶段";
+  }
+
+  if (gameKey === "todayMenu") {
+    return "今日食谱从看菜名，进入愿意听营养并选择观察对象的阶段";
   }
 
   if (gameKey === "foodPreference") {
@@ -910,31 +2785,32 @@ function buildAiMiniGameCompletionCopy(
     return null;
   }
 
-  const miniGameRecord: MiniGameRecord = {
-    gameKey,
-    badgeName,
-    themeId: miniGameThemeMap[gameKey],
-    completedAt: new Date().toISOString(),
-    pickedItems,
-  };
-  const followUp = getMiniGameFollowUp(miniGameRecord);
-  const title = contentConfig?.title.trim() || followUp.displayName;
+  const title = contentConfig?.title.trim() || getMiniGameSourceLabel(gameKey);
   const pickedText = formatInteractionRecord(pickedItems);
-  const stage = getAiObservationStage(gameKey, pickedItems);
   const reminder = contentConfig?.reminderText.trim();
+  const fallback = `${title}完成啦，小贴纸来啦。老师看得到这次小脚印。`;
+  const statusByGame: Partial<Record<MiniGameKey, string>> = {
+    washSteps: "小手洗干净啦。打湿、搓泡泡、冲干净、擦小手都做到啦。",
+    queue: "好习惯闯关完成啦。你会选一个舒服又安全的小动作。",
+    readingCheckin: "今天听了一个故事，也说出了一个小发现。",
+    childTalk: "你把心里的话送给老师了。老师会认真看见你。",
+    teacherTask: "老师给的小任务完成啦。你慢慢试了一小步。",
+    mealManners: "吃饭小动作完成啦。扶好碗、慢慢嚼，做得很稳。",
+    habitTrafficLight: "红绿牌举对啦。你知道哪个做法更合适。",
+    todayMenu: "你认识了一种食物。先看一看、听一听，真不错。",
+    foodTrain: "闽食小列车到站啦。你认识了新的泉州味道。",
+    foodObserve: "你认识了一种食物，也找到了它的小线索。",
+    foodGuess: "美食猜猜乐完成啦。你找到了食材小线索。",
+    foodPreference: "你愿意靠近一点点。今天先做到这一小步就很好。",
+    foodReporter: "小播报员说得真清楚。声音小舞台亮起来啦。",
+    foodKitchen: "小厨师完成一道菜。你会按步骤慢慢来。",
+  };
 
   return {
-    feedback: `AI成长观察：${title}已记录 · ${pickedText}`,
-    status: [
-      `AI成长观察：孩子完成了“${followUp.displayName}”`,
-      `选择/动作记录：${pickedText}`,
-      `观察线索：${followUp.observation}`,
-      `阶段提示：${stage}`,
-      `下一步温和跟进：${followUp.homeTask}`,
-      reminder ? `老师提醒：${reminder}` : "",
-    ]
+    feedback: `${title}完成啦 · ${badgeName}`,
+    status: [reminder || statusByGame[gameKey] || fallback, `刚刚做了：${pickedText}`]
       .filter(Boolean)
-      .join("。"),
+      .join(" "),
   };
 }
 
@@ -974,15 +2850,15 @@ function buildMiniGameCompletionCopy(
 
   if (gameKey === "habitJudge") {
     return {
-      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "历史安全判断记录"}`,
-      status: configuredReminder || "历史安全判断完成啦：你能分清哪些做法正确，哪些做法需要换成更安全的方式。",
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "安全小判断"}`,
+      status: configuredReminder || "安全小判断完成啦：你能分清好做法和需要换一换的做法。",
     };
   }
 
   if (gameKey === "readingCheckin") {
     return {
       feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "习惯故事小剧场"}`,
-      status: configuredReminder || "习惯故事小剧场完成啦：你认真听故事，也把故事里的好习惯做到一步。",
+      status: configuredReminder || "习惯故事小剧场完成啦：你认真听故事，也完成了阅读打卡。",
     };
   }
 
@@ -1041,8 +2917,8 @@ function buildMiniGameCompletionCopy(
     return {
       feedback: `刚刚点亮：${badgeName} · ${configuredTitle || pickedText}`,
       status: configuredReminder
-        ? `${configuredReminder} 本次记录：${pickedText}。`
-        : `美食认识观察卡完成：${pickedText}。教师工作台会保留这条观察记录。`,
+        ? `${configuredReminder} 这次选了：${pickedText}。`
+        : `你愿意靠近一点点：${pickedText}。老师看得到你的勇敢小步。`,
     };
   }
 
@@ -1070,8 +2946,8 @@ function buildMiniGameCompletionCopy(
 
   if (gameKey === "peerEncourage") {
     return {
-      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "历史同伴鼓励记录"}`,
-      status: configuredReminder || "历史同伴鼓励记录已保留，现在可以继续玩闽食小小播报员。",
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "同伴鼓励小贴纸"}`,
+      status: configuredReminder || "同伴鼓励小贴纸收好啦，现在可以继续玩闽食小小播报员。",
     };
   }
 
@@ -1079,10 +2955,10 @@ function buildMiniGameCompletionCopy(
     const pickedText = formatFoodList(pickedItems);
 
     return {
-      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "历史午餐小餐盘记录"}`,
+      feedback: `刚刚点亮：${badgeName} · ${configuredTitle || "午餐小餐盘"}`,
       status: configuredReminder
-        ? `${configuredReminder} 历史记录：${pickedText}。`
-        : `历史午餐小餐盘记录已保留：${pickedText}。现在可以继续玩泉州小厨房。`,
+        ? `${configuredReminder} 这次看到了：${pickedText}。`
+        : `午餐小餐盘收好啦：${pickedText}。现在可以继续玩泉州小厨房。`,
     };
   }
 
@@ -1097,70 +2973,70 @@ function buildRepeatedMiniGameStatus(gameKey: MiniGameKey, contentConfig?: Edita
   const configuredReminder = contentConfig?.reminderText.trim();
 
   if (gameKey === "washSteps") {
-    return `${configuredTitle || "小手清洁任务"}已经记录过啦，可以继续听提示、按图卡练习洗手顺序。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "小手清洁任务"}已经玩过一次啦，可以继续听提示、按图卡练习洗手顺序。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "queue") {
-    return `${configuredTitle || "一日好习惯路线"}已经记录过啦，可以继续练习喝水、整理、排队和如厕选择。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "一日好习惯路线"}已经玩过一次啦，可以继续练习喝水、整理、排队和如厕选择。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "habitJudge") {
-    return `${configuredTitle || "历史安全判断记录"}已经记录过啦，可以继续用好习惯红绿牌练习分辨正确习惯和安全做法。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "好习惯红绿牌"}已经玩过一次啦，可以继续举红绿牌。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "readingCheckin") {
-    return `${configuredTitle || "习惯故事小剧场"}已经记录过啦，可以继续听故事、选答案卡，再完成一个生活小任务。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "习惯故事小剧场"}已经玩过一次啦，可以继续找绘本、听绘本，再完成阅读打卡。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "mealManners") {
-    return `${configuredTitle || "文明进餐操"}已经记录过啦，可以继续跟口令练习扶碗、坐稳、轻声用餐和餐后整理。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "文明进餐操"}已经玩过一次啦，可以继续跟口令练习。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "habitTrafficLight") {
-    return `${configuredTitle || "好习惯红绿牌"}已经记录过啦，可以继续听行为、举红绿牌、说正确做法。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "好习惯红绿牌"}已经玩过一次啦，可以继续听行为、举红绿牌、说正确做法。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "kindWords") {
-    return "闽食探索已经记录过啦，可以继续练习认名字、找食材、说发现。";
+    return "闽食探索已经玩过一次啦，可以继续练习认名字、找食材、说发现。";
   }
 
   if (gameKey === "foodObserve") {
-    return `${configuredTitle || "泉州美食摊位寻宝"}已经记录过啦，可以继续听线索、找摊位、认食材和听小故事。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "泉州美食摊位寻宝"}已经玩过一次啦，可以继续听线索、找摊位、认食材和听小故事。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "foodClue") {
-    return "闽食摊位寻宝已经记录过啦，可以继续认一认这些泉州闽南食物。";
+    return "闽食摊位寻宝已经玩过一次啦，可以继续认一认这些泉州闽南食物。";
   }
 
   if (gameKey === "foodTrain") {
-    return `${configuredTitle || "闽食小列车"}已经记录过啦，可以继续听站名、认美食、练习小小播报。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "闽食小列车"}已经玩过一次啦，可以继续听站名、认美食、练习小小播报。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "foodGuess") {
-    return `${configuredTitle || "美食猜猜乐"}已经记录过啦，可以继续根据线索找食材。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "美食猜猜乐"}已经玩过一次啦，可以继续根据线索找食材。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "peerEncourage") {
-    return `${configuredTitle || "历史同伴鼓励记录"}已经记录过啦，可以继续玩闽食小小播报员，练习介绍一种泉州美食。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "小小播报员"}已经玩过一次啦，可以继续练习介绍一种泉州美食。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "foodPreference") {
-    return `${configuredTitle || "美食认识观察卡"}已经记录过啦，可以继续换一种食物说说今天的感受。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "美食观察与靠近一点点"}已经玩过一次啦，可以继续换一种食物说说今天的感受。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "foodReporter") {
-    return `${configuredTitle || "闽食小小播报员"}已经记录过啦，可以继续换一种泉州美食，练习名字、食材和发现。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "闽食小小播报员"}已经玩过一次啦，可以继续换一种泉州美食，练习名字、食材和发现。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "foodKitchen") {
-    return `${configuredTitle || "泉州小厨房"}已经记录过啦，可以继续换一道泉州美食，按步骤做区域游戏。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "泉州小厨房"}已经玩过一次啦，可以继续换一道泉州美食，按步骤做区域游戏。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
   if (gameKey === "mealTray") {
-    return `${configuredTitle || "历史午餐小餐盘记录"}已经记录过啦，可以继续玩泉州小厨房，按步骤认识家乡美食。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
+    return `${configuredTitle || "午餐小餐盘"}已经玩过一次啦，可以继续玩泉州小厨房。${configuredReminder ? `老师提醒：${configuredReminder}` : ""}`;
   }
 
-  return "这个成长任务已经记录过啦，可以继续练习，但不会重复增加成长次数。";
+  return "这个小任务已经玩过一次啦，可以继续练习。";
 }
 
 function SpeechCueButton({
@@ -1174,8 +3050,10 @@ function SpeechCueButton({
   label?: string;
   tone?: "slate" | "teal" | "cyan" | "rose" | "orange" | "amber" | "emerald" | "violet";
 }) {
+  const [voiceState, setVoiceState] = useState<"idle" | "playing" | "replay">("idle");
+  const resetTimerRef = useRef<number | null>(null);
   const toneClassMap = {
-    slate: "bg-slate-900 text-white hover:bg-slate-800",
+    slate: "bg-sky-100 text-sky-900 hover:bg-sky-200",
     teal: "bg-teal-700 text-white hover:bg-teal-800",
     cyan: "bg-cyan-700 text-white hover:bg-cyan-800",
     rose: "bg-rose-600 text-white hover:bg-rose-700",
@@ -1189,23 +3067,169 @@ function SpeechCueButton({
     return null;
   }
 
+  const buttonLabel =
+    voiceState === "playing" ? "正在听" : voiceState === "replay" ? "再听一次" : label;
+
   return (
     <button
       className={`rounded-full px-3 py-2 text-xs font-semibold transition hover:-translate-y-0.5 ${toneClassMap[tone]}`}
-      onClick={() => onSpeak(text)}
+      onClick={() => {
+        if (resetTimerRef.current) {
+          window.clearTimeout(resetTimerRef.current);
+        }
+        setVoiceState("playing");
+        onSpeak(text);
+        resetTimerRef.current = window.setTimeout(() => setVoiceState("replay"), 1600);
+      }}
       type="button"
     >
-      🔊 {label}
+      🔊 {buttonLabel}
     </button>
   );
 }
 
 function getStoryOptionVisual(text: string, themeId: ThemeId) {
+  if (/今日食谱/.test(text)) {
+    return {
+      icon: "🍱",
+      title: text,
+      description: "先听今天的菜品和重点食材。",
+    };
+  }
+
+  if (/小列车/.test(text)) {
+    return {
+      icon: "🚂",
+      title: text,
+      description: "听站名口令，点正确的泉州美食站。",
+    };
+  }
+
+  if (/摊位寻宝/.test(text)) {
+    return {
+      icon: "🏮",
+      title: text,
+      description: "听线索找摊位，再收集食材卡。",
+    };
+  }
+
+  if (/观察|靠近|认识/.test(text)) {
+    return {
+      icon: "🔍",
+      title: text,
+      description: "先认名字，再选靠近小步。",
+    };
+  }
+
+  if (/小厨房|厨房/.test(text)) {
+    return {
+      icon: "👩‍🍳",
+      title: text,
+      description: "说菜名，按步骤图卡做一小步。",
+    };
+  }
+
+  if (/播报员|闽食播报/.test(text)) {
+    return {
+      icon: "📣",
+      title: text,
+      description: "把认识到的美食整理成一句播报。",
+    };
+  }
+
+  if (/习惯故事小剧场/.test(text)) {
+    return {
+      icon: "📖",
+      title: text,
+      description: "找一本小故事，听一听绘本，今天读完啦。",
+    };
+  }
+
+  if (/对老师说|小秘密|想法/.test(text)) {
+    return {
+      icon: "🗣️",
+      title: text,
+      description: "用语音或文字把想法告诉老师。",
+    };
+  }
+
+  if (/老师给|老师发布|小任务|本周重点/.test(text)) {
+    return {
+      icon: "⭐",
+      title: text,
+      description: "完成老师放好的一个小练习。",
+    };
+  }
+
   if (/海蛎|海蛎煎/.test(text)) {
     return {
       icon: "🦪",
       title: text,
       description: "泉州海蛎煎，先看金黄边，再听海味故事。",
+    };
+  }
+
+  if (/姜母鸭|鸭/.test(text)) {
+    return {
+      icon: "🦆",
+      title: text,
+      description: "姜母鸭香香暖暖，可以先看姜片和鸭肉。",
+    };
+  }
+
+  if (/烧肉粽|闽南肉粽|肉粽|粽/.test(text)) {
+    return {
+      icon: "🍙",
+      title: text,
+      description: "粽叶抱着米粒和馅料，先闻一闻粽叶香。",
+    };
+  }
+
+  if (/炸醋肉|醋肉/.test(text)) {
+    return {
+      icon: "🥢",
+      title: text,
+      description: "炸醋肉金黄金黄，先看外皮再听小发现。",
+    };
+  }
+
+  if (/芋头饼|芋头|芋/.test(text)) {
+    return {
+      icon: "🟣",
+      title: text,
+      description: "芋头饼圆圆香香，可以找一找紫紫的芋头。",
+    };
+  }
+
+  if (/牛肉羹|牛肉/.test(text)) {
+    return {
+      icon: "🥣",
+      title: text,
+      description: "牛肉羹软软热热，先看汤和小勺。",
+    };
+  }
+
+  if (/洪濑鸡爪|鸡爪/.test(text)) {
+    return {
+      icon: "🍗",
+      title: text,
+      description: "洪濑鸡爪颜色深深，先看形状和小骨头。",
+    };
+  }
+
+  if (/四果汤|四果|水果汤/.test(text)) {
+    return {
+      icon: "🍨",
+      title: text,
+      description: "四果汤清凉甜甜，里面有好多小配料。",
+    };
+  }
+
+  if (/咸饭|米饭|饭/.test(text)) {
+    return {
+      icon: "🍚",
+      title: text,
+      description: "咸饭米粒香香，先找里面的菜和香菇。",
     };
   }
 
@@ -1249,35 +3273,13 @@ function getStoryOptionVisual(text: string, themeId: ThemeId) {
     };
   }
 
-  if (/洗手|手/.test(text)) {
-    return {
-      icon: "💧",
-      title: text,
-      description: "跟着泡泡和清水，把小手洗干净。",
-    };
-  }
+  if (/好习惯闯关|洗手|喝水|排队|如厕|整理|手/.test(text)) {
+    const taskName = text.includes("：") ? text.split("：").pop() || "好习惯小任务" : "好习惯小任务";
 
-  if (/排队|队/.test(text)) {
     return {
-      icon: "🚩",
+      icon: "🏅",
       title: text,
-      description: "跟着小队长，一个一个排整齐。",
-    };
-  }
-
-  if (/喝水|水杯/.test(text)) {
-    return {
-      icon: "🥤",
-      title: text,
-      description: "听身体提醒，一口一口慢慢喝水。",
-    };
-  }
-
-  if (/玩具|整理|送回家/.test(text)) {
-    return {
-      icon: "🧺",
-      title: text,
-      description: "把玩具、图书和文具送回自己的位置。",
+      description: `${taskName}，点一张图卡试一试。`,
     };
   }
 
@@ -1304,75 +3306,74 @@ function getStoryOptionVisual(text: string, themeId: ThemeId) {
   };
 }
 
-function getMissionOptionVisual(text: string, themeId: ThemeId) {
-  if (/探味|寻宝|摊位/.test(text)) {
-    return {
-      icon: "🧭",
-      description: "听线索、找摊位、认食材。",
-    };
+function getStoryOptionTarget(text: string, themeId: ThemeId) {
+  if (themeId === "habit") {
+    if (/故事|绘本/.test(text)) return "#habit-story";
+    if (/老师|想法|秘密|对老师说/.test(text)) return "#habit-talk";
+    if (/进餐|吃饭|餐桌|小口|碗|筷|擦嘴|红绿牌|绿牌|红牌|判断/.test(text)) return "#habit-challenge";
+    if (/好习惯|闯关|洗手|喝水|水杯|排队|等一等|如厕|厕所|整理|玩具|图书/.test(text)) return "#habit-challenge";
+    if (/老师发布|本周重点|老师给我的任务|老师给/.test(text)) return "#habit-template";
+
+    return "#habit-challenge";
   }
 
-  if (/还在认识|偏好|饮食|美食认识/.test(text)) {
-    return {
-      icon: "📝",
-      description: "记录孩子今天还在认识的食物。",
-    };
-  }
+  if (/今日食谱|食谱/.test(text)) return "#food-menu";
+  if (/小列车|列车/.test(text)) return "#food-train";
+  if (/猜|猜猜|宝箱|线索/.test(text)) return "#food-stall";
+  if (/摊位|寻宝/.test(text)) return "#food-stall";
+  if (/观察|靠近|认识|食材|尝|闻|看一看/.test(text)) return "#food-observation-card";
+  if (/小厨房|厨房|做菜|菜名/.test(text)) return "#food-kitchen";
+  if (/播报员|闽食播报/.test(text)) return "#food-broadcast";
 
-  if (/同伴|鼓励|陪/.test(text)) {
-    return {
-      icon: "🤝",
-      description: "陪小伙伴一起认识新美食。",
-    };
-  }
-
-  if (/餐盘|午餐/.test(text)) {
-    return {
-      icon: "🍱",
-      description: "认识食物名称和营养。",
-    };
-  }
-
-  if (/洗手/.test(text)) {
-    return {
-      icon: "💧",
-      description: "看泡泡图卡，听提示，按顺序完成小手清洁。",
-    };
-  }
-
-  if (/阅读|故事|图书/.test(text)) {
-    return {
-      icon: "📚",
-      description: "听故事、说角色、讲画面，并把图书归位。",
-    };
-  }
-
-  if (/红绿牌/.test(text)) {
-    return {
-      icon: "🟢",
-      description: "听一个行为，判断好习惯或需要调整的做法。",
-    };
-  }
-
-  if (/判断|对不对|正确/.test(text)) {
-    return {
-      icon: "✅",
-      description: "练习分辨好习惯和需要调整的安全做法。",
-    };
-  }
-
-  if (/排队|路线|习惯/.test(text)) {
-    return {
-      icon: "🚩",
-      description: "遇到喝水、整理、排队和如厕情境，选出合适做法。",
-    };
-  }
-
-  return {
-    icon: themeId === "food" ? "🍽️" : "✨",
-    description: themeId === "food" ? "继续闽食探索。" : "继续习惯练习。",
-  };
+  return "#food-observation-card";
 }
+
+function recommendStoryOptionsFromInput(text: string, themeId: ThemeId) {
+  const cleanText = text.trim();
+  const habitDefaultChoices = ["好习惯闯关：洗手小任务", "习惯故事小剧场"];
+  const foodDefaultChoices = ["今日食谱", "美食观察与靠近一点点"];
+  const foodDishPattern = /姜母鸭|烧肉粽|闽南肉粽|肉粽|土笋冻|炸醋肉|芋头饼|牛肉羹|洪濑鸡爪|崇武鱼卷|四果汤|咸饭|海蛎煎|面线糊|润饼菜|石花膏/;
+
+  if (!cleanText) {
+    return themeId === "food" ? foodDefaultChoices : habitDefaultChoices;
+  }
+
+  if (themeId === "habit") {
+    const ranked = [
+      /洗手|泡泡|小手/.test(cleanText) ? "好习惯闯关：洗手小任务" : "",
+      /喝水|水杯|口渴/.test(cleanText) ? "好习惯闯关：喝水小任务" : "",
+      /排队|等一等|挤/.test(cleanText) ? "好习惯闯关：排队等一等" : "",
+      /如厕|厕所|尿尿/.test(cleanText) ? "好习惯闯关：如厕小任务" : "",
+      /整理|玩具|图书|收拾|椅子/.test(cleanText) ? "好习惯闯关：整理小能手" : "",
+      /进餐|吃饭|餐桌|小口|碗|筷|擦嘴|红绿牌|绿牌|红牌|判断/.test(cleanText) ? "好习惯闯关：文明进餐" : "",
+      /好习惯|闯关/.test(cleanText) ? "好习惯闯关：洗手小任务" : "",
+      /故事|绘本/.test(cleanText) ? "习惯故事小剧场" : "",
+      /老师|想说|秘密|心情/.test(cleanText) ? "对老师说" : "",
+      /本周|重点|小任务|老师发布|老师给/.test(cleanText) ? "老师给我的任务" : "",
+    ].filter(Boolean);
+
+    return ranked.length > 0
+      ? Array.from(new Set(ranked)).slice(0, 2)
+      : habitDefaultChoices.slice(0, 2);
+  }
+
+  const ranked = [
+    /食谱|今天吃/.test(cleanText) ? "今日食谱" : "",
+    /列车|火车|车/.test(cleanText) ? "闽食小列车" : "",
+    /猜|猜猜|宝箱|线索/.test(cleanText) ? "泉州美食摊位寻宝" : "",
+    /摊位|寻宝|找/.test(cleanText) ? "泉州美食摊位寻宝" : "",
+    /厨房|做菜|菜名|我想做|想做|我要做|做姜母鸭|做/.test(cleanText) ? "泉州小厨房" : "",
+    /播报|介绍|分享/.test(cleanText) ? "小小闽食播报员" : "",
+    /观察|认识|材料|食材|靠近|尝|闻|看一看/.test(cleanText) ? "美食观察与靠近一点点" : "",
+    foodDishPattern.test(cleanText) ? "美食观察与靠近一点点" : "",
+    foodDishPattern.test(cleanText) ? "泉州小厨房" : "",
+  ].filter(Boolean);
+
+  return ranked.length > 0
+    ? Array.from(new Set(ranked)).slice(0, 2)
+    : foodDefaultChoices.slice(0, 2);
+}
+
 const supportedMealPhotoTypes = new Set([
   "image/jpeg",
   "image/png",
@@ -1388,6 +3389,12 @@ const blockedPlaybackPatterns = [
   "user didn't interact",
   "user gesture",
   "interact with the document",
+];
+const benignPlaybackStopPatterns = [
+  "signal is aborted",
+  "aborted without reason",
+  "aborterror",
+  "the operation was aborted",
 ];
 
 function canAwardMealReviewBadge(review: MealPhotoReviewResponse) {
@@ -1418,10 +3425,10 @@ function buildMealPhotoStatus(review: MealPhotoReviewResponse) {
   const sizeText = review.sizeKb ? ` 当前文件约 ${review.sizeKb}KB。` : "";
 
   if (isAiMealPhotoReview(review)) {
-    return `${review.message ?? "照片已记录，餐盘小发现生成啦。"}${sizeText}`;
+    return `${review.message ?? "照片收好啦，餐盘小发现来啦。"}${sizeText}`;
   }
 
-  return `照片已记录，这次先做拍照练习，请老师或家长一起看一看。${sizeText}`;
+  return `照片收好啦，这次先做拍照练习，请老师或家长一起看一看。${sizeText}`;
 }
 
 function buildMealPhotoEncouragement(review: MealPhotoReviewResponse) {
@@ -1436,7 +3443,7 @@ function buildMealPhotoEncouragement(review: MealPhotoReviewResponse) {
   }
 
   if (review.plateState) {
-    return `可以对孩子说：“你把餐盘观察得很认真，${review.plateState}也被记录下来啦。”`;
+    return `可以对孩子说：“你把餐盘观察得很认真，${review.plateState}也被看见啦。”`;
   }
 
   return "可以对孩子说：“谢谢你愿意一起看一看、说一说，尝试本身就很勇敢。”";
@@ -1448,8 +3455,21 @@ function isBlockedPlaybackMessage(message: string) {
   return blockedPlaybackPatterns.some((pattern) => lower.includes(pattern));
 }
 
+function isBenignPlaybackStopMessage(message: string) {
+  const lower = message.toLowerCase();
+
+  return benignPlaybackStopPatterns.some((pattern) => lower.includes(pattern));
+}
+
 function normalizeSpeechPlaybackError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
+
+  if (isBenignPlaybackStopMessage(message)) {
+    return {
+      blocked: false,
+      message: "语音停好啦，我们换一个继续。",
+    };
+  }
 
   if (isBlockedPlaybackMessage(message)) {
     return {
@@ -1465,23 +3485,7 @@ function normalizeSpeechPlaybackError(error: unknown) {
 }
 
 function normalizeRestoredStoryStatus(status: string) {
-  return isBlockedPlaybackMessage(status) ? "准备出发啦。" : status;
-}
-
-function isValidStoryReply(reply: unknown): reply is string {
-  return typeof reply === "string" && reply.trim().length > 0;
-}
-
-function isReliableStoryBadgeResponse(data: StoryApiResponse) {
-  if (data.fallbackUsed || data.error) {
-    return false;
-  }
-
-  if (data.source === "fallback" || data.source === "demo" || data.mode === "fallback") {
-    return false;
-  }
-
-  return data.awardBadge === true;
+  return isBlockedPlaybackMessage(status) || isBenignPlaybackStopMessage(status) ? "准备出发啦。" : status;
 }
 
 function HabitVisualBoard({
@@ -1489,20 +3493,41 @@ function HabitVisualBoard({
   onTaskComplete,
 }: {
   onSpeak?: SpeakHandler;
-  onTaskComplete?: (gameKey: MiniGameKey, badgeName: string, pickedItems: string[]) => void;
+  onTaskComplete?: (
+    gameKey: MiniGameKey,
+    badgeName: string,
+    pickedItems: string[],
+    detail?: Partial<Omit<MiniGameRecord, "completedAt" | "gameKey" | "badgeName" | "themeId" | "pickedItems">>,
+  ) => void;
 }) {
   const [activeTaskTitle, setActiveTaskTitle] = useState(habitSkillCards[0]?.title ?? "");
-  const [taskFeedback, setTaskFeedback] = useState("先点一张精选任务卡，我会根据图标和文字生成对应的学习问题。");
+  const [taskFeedback, setTaskFeedback] = useState("👉 选一关，听口令，再点答案卡。");
   const [completedTaskTitles, setCompletedTaskTitles] = useState<string[]>([]);
+  const [habitStepProgress, setHabitStepProgress] = useState<Record<string, number>>({});
+  const [wrongAttemptCounts, setWrongAttemptCounts] = useState<Record<string, number>>({});
+  const visibleHabitSkillCards = habitSkillCards.filter((item) => habitChallengeTitles.has(item.title));
+  const effectiveActiveTaskTitle = activeTaskTitle;
   const activeTask =
-    habitSkillCards.find((item) => item.title === activeTaskTitle) ?? habitSkillCards[0];
+    habitSkillCards.find((item) => item.title === effectiveActiveTaskTitle) ??
+    visibleHabitSkillCards[0] ??
+    habitSkillCards[0];
+  const activeTaskIndex = Math.max(
+    0,
+    visibleHabitSkillCards.findIndex((item) => item.title === activeTask?.title),
+  );
+  const activeTaskGameSteps = activeTask ? getHabitGameSteps(activeTask.title) : [];
+  const activeTaskInstance = activeTask ? getHabitTaskGameInstance(activeTask.title) : undefined;
+  const activeTaskCompleted = completedTaskTitles.includes(activeTask?.title ?? "");
+  const activeTaskStepProgress = activeTask
+    ? Math.min(activeTaskGameSteps.length, habitStepProgress[activeTask.title] ?? 0)
+    : 0;
   const answerConfig = activeTask
     ? habitTaskAnswerOptions[activeTask.title] ?? {
         question: activeTask.question,
         options: [activeTask.actionLabel, "我还想听一遍", "换一个任务"],
         correct: activeTask.actionLabel,
         feedback: `${activeTask.badgeName}亮起来啦。`,
-        nextStep: "可以再玩一个任务，或者查看成长记录。",
+        nextStep: "可以再玩一个任务，或者看看小贴纸。",
       }
     : null;
 
@@ -1510,8 +3535,44 @@ function HabitVisualBoard({
     setActiveTaskTitle(item.title);
     const nextAnswerConfig = habitTaskAnswerOptions[item.title];
     const question = nextAnswerConfig?.question ?? item.question;
-    setTaskFeedback("这张图卡已经生成学习问题，听完后选一张答案卡。");
-    onSpeak?.(`${item.taskName}。${item.command}${item.rhyme} ${question}`);
+    const progress = habitStepProgress[item.title] ?? 0;
+    const taskSteps = getHabitGameSteps(item.title);
+    const nextStep = taskSteps[progress] ?? taskSteps.at(-1) ?? item.actionLabel;
+    setTaskFeedback(`👉 图卡亮起来啦，先在游戏舞台点第 ${Math.min(progress + 1, taskSteps.length)} 步：${nextStep}。`);
+    onSpeak?.(`${item.taskName}。${item.command}${item.rhyme} 先点游戏舞台里的步骤：${nextStep}。再选一张小发现：${question}`);
+  }
+
+  function playHabitStep(item: (typeof habitSkillCards)[number], step: string, index: number) {
+    const taskSteps = getHabitGameSteps(item.title);
+    const currentProgress = Math.min(taskSteps.length, habitStepProgress[item.title] ?? 0);
+
+    if (completedTaskTitles.includes(item.title)) {
+      const message = `${item.taskName}已经拿到贴纸啦，可以再玩别的关卡。`;
+      setTaskFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    if (index > currentProgress) {
+      const message = `先点第 ${currentProgress + 1} 步：${taskSteps[currentProgress] ?? step}。`;
+      setTaskFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const nextProgress = Math.min(taskSteps.length, Math.max(currentProgress, index + 1));
+    const nextStep = taskSteps[nextProgress];
+    const allStepsDone = nextProgress >= taskSteps.length;
+    const message = allStepsDone
+      ? `${step}完成啦。这个关卡的动作步骤都走完了，现在选正确答案卡拿贴纸。`
+      : `${step}完成啦。下一步：${nextStep}。`;
+
+    setHabitStepProgress((current) => ({
+      ...current,
+      [item.title]: nextProgress,
+    }));
+    setTaskFeedback(message);
+    onSpeak?.(message);
   }
 
   function chooseAnswer(item: (typeof habitSkillCards)[number], answer: string) {
@@ -1520,11 +3581,20 @@ function HabitVisualBoard({
         question: item.question,
         correct: item.actionLabel,
         feedback: `${item.badgeName}点亮啦。`,
-        nextStep: "可以再玩一个任务，或者查看成长记录。",
+        nextStep: "可以再玩一个任务，或者看看小贴纸。",
       };
 
     if (completedTaskTitles.includes(item.title)) {
-      const message = `${item.taskName}已经打卡啦，可以再玩一个任务，或者查看成长记录。`;
+      const message = `${item.taskName}已经拿到贴纸啦，可以再玩一个任务，老师也看得到。`;
+      setTaskFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const taskSteps = getHabitGameSteps(item.title);
+    const currentProgress = Math.min(taskSteps.length, habitStepProgress[item.title] ?? 0);
+    if (taskSteps.length > 0 && currentProgress < taskSteps.length) {
+      const message = `先把舞台上的第 ${currentProgress + 1} 步“${taskSteps[currentProgress]}”点完，再选一张小发现。`;
       setTaskFeedback(message);
       onSpeak?.(message);
       return;
@@ -1532,15 +3602,30 @@ function HabitVisualBoard({
 
     if (answer !== currentAnswerConfig.correct) {
       const message = `这个做法需要换一换，我们可以这样做：${currentAnswerConfig.correct}。`;
+      setWrongAttemptCounts((current) => ({
+        ...current,
+        [item.title]: (current[item.title] ?? 0) + 1,
+      }));
       setTaskFeedback(message);
       onSpeak?.(message);
       return;
     }
 
-    const pickedItems = [item.taskName, currentAnswerConfig.question, answer];
-    const message = `${currentAnswerConfig.feedback} ${currentAnswerConfig.nextStep}`;
+    const pickedItems = [item.taskName, ...taskSteps, currentAnswerConfig.question, answer];
+    const message = `${currentAnswerConfig.feedback} ${currentAnswerConfig.nextStep} 小贴纸来啦，老师看得到这次小步骤。`;
+    const attempts = (wrongAttemptCounts[item.title] ?? 0) + 1;
 
-    onTaskComplete?.(item.gameKey as MiniGameKey, item.badgeName, pickedItems);
+    onTaskComplete?.(item.gameKey as MiniGameKey, item.badgeName, pickedItems, {
+      ...getHabitTaskGameInstance(item.title),
+      habitTask: `${item.title}：${currentAnswerConfig.correct}`,
+      activityType: "habit-challenge",
+      habitType: item.title,
+      levelId: activeTaskInstance?.gameInstanceId ?? item.title,
+      result: "success",
+      attempts,
+      retryCount: Math.max(0, attempts - 1),
+      status: "completed",
+    });
     setCompletedTaskTitles((current) =>
       current.includes(item.title) ? current : [...current, item.title],
     );
@@ -1552,23 +3637,22 @@ function HabitVisualBoard({
     <div className="rounded-[2.2rem] border border-white/70 bg-white/88 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-amber-700">幼习宝·一日生活常规提醒</p>
-          <h3 className="mt-1 text-2xl font-semibold text-slate-900">点图卡，听 AI 小口令</h3>
-          <p className="mt-2 text-sm leading-7 text-slate-600">
-            主线围绕洗手、喝水、如厕、排队、整理和文明进餐；每张卡都有问题、答案卡和 AI 成长观察记录。
-          </p>
+          <p className="text-sm font-semibold text-amber-700">幼习宝·好习惯闯关</p>
+          <h3 className="mt-1 text-2xl font-semibold text-slate-900">
+            第 {activeTaskIndex + 1} 关 · {activeTask?.title ?? "选一关"}
+          </h3>
         </div>
         <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
-          {habitSkillCards.length} 个常规任务
+          👉 选一个
         </div>
       </div>
-
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {habitSkillCards.map((item) => (
+        {visibleHabitSkillCards.map((item, index) => (
           <button
             key={item.title}
+            id={getHabitTaskAnchor(item.title)}
             onClick={() => startTask(item)}
-            className={`story-card rounded-[1.7rem] bg-[linear-gradient(180deg,#fffdf7_0%,#f5fffe_100%)] p-4 text-left shadow-sm transition hover:-translate-y-0.5 ${
+            className={`story-card scroll-mt-24 rounded-[1.7rem] bg-[linear-gradient(180deg,#fffdf7_0%,#f5fffe_100%)] p-4 text-left shadow-sm transition hover:-translate-y-0.5 ${
               activeTask?.title === item.title ? "ring-2 ring-teal-300" : ""
             }`}
             type="button"
@@ -1578,10 +3662,12 @@ function HabitVisualBoard({
             >
               {item.icon}
             </div>
-            <h4 className="mt-4 text-lg font-semibold text-slate-900">{item.title}</h4>
-            <p className="mt-2 text-sm leading-7 text-slate-600">{item.hint}</p>
+            <h4 className="mt-4 text-lg font-semibold text-slate-900">
+              第 {index + 1} 关 {item.title.replace("小任务", "").replace("小提醒", "")}
+            </h4>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{item.hint.split("，")[0]}。</p>
             <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-teal-800 shadow-sm">
-              {activeTask?.title === item.title ? "正在玩" : "点我开始"}
+              {activeTask?.title === item.title ? "👉 正在玩" : "👉 点我开始"}
             </span>
           </button>
         ))}
@@ -1598,6 +3684,15 @@ function HabitVisualBoard({
               <p className="mt-2 rounded-[1.2rem] bg-white/85 px-4 py-3 text-sm font-semibold text-emerald-900">
                 {activeTask.rhyme}
               </p>
+              <div className="mt-3">
+                <HabitTaskPlayfield
+                  title={activeTask.title}
+                  steps={activeTaskGameSteps}
+                  activeStep={activeTaskStepProgress}
+                  completed={activeTaskCompleted}
+                  onStepClick={(step, index) => playHabitStep(activeTask, step, index)}
+                />
+              </div>
               <div className="mt-3 grid gap-3 rounded-[1.3rem] bg-white/85 p-3 sm:grid-cols-[auto_1fr]">
                 <div
                   className={`flex h-16 w-16 items-center justify-center rounded-[1.2rem] text-3xl ${activeTask.tone}`}
@@ -1605,9 +3700,9 @@ function HabitVisualBoard({
                   {activeTask.icon}
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-500">图文学习卡</p>
+                  <p className="text-xs font-semibold text-slate-500">图卡</p>
                   <p className="mt-1 text-sm leading-7 text-slate-700">
-                    {activeTask.knowledge}
+                    {activeTask.hint.split("，")[0]}。
                   </p>
                 </div>
               </div>
@@ -1619,40 +3714,48 @@ function HabitVisualBoard({
               <SpeechCueButton
                 text={`${activeTask.taskName}。${activeTask.command}${activeTask.rhyme} ${answerConfig?.question ?? activeTask.question}`}
                 onSpeak={onSpeak}
-                label="听任务"
+            label="听一听"
                 tone="emerald"
               />
             </div>
           </div>
-          <p className="mt-4 text-sm font-semibold text-slate-800">选择一张答案卡</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {(answerConfig?.options ?? []).map((answer) => {
-              const isCorrect = answer === answerConfig?.correct;
-              const isDone = completedTaskTitles.includes(activeTask.title);
+          {activeTaskStepProgress >= activeTaskGameSteps.length ? (
+            <>
+              <p className="mt-4 text-sm font-semibold text-slate-800">👉 选一个答案卡</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {(answerConfig?.options ?? []).map((answer) => {
+                  const isCorrect = answer === answerConfig?.correct;
+                  const isDone = completedTaskTitles.includes(activeTask.title);
 
-              return (
-                <button
-                  key={answer}
-                  onClick={() => chooseAnswer(activeTask, answer)}
-                  className={`rounded-[1.3rem] px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
-                    isDone && isCorrect
-                      ? "bg-emerald-700 text-white"
-                      : "bg-white text-slate-800 shadow-sm"
-                  }`}
-                  type="button"
-                >
-                  {answer}
-                  <span className="mt-1 block text-xs opacity-70">
-                    {isCorrect ? "可以完成任务" : "想一想要不要换一换"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  return (
+                    <button
+                      key={answer}
+                      onClick={() => chooseAnswer(activeTask, answer)}
+                      className={`rounded-[1.3rem] px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
+                        isDone && isCorrect
+                          ? "bg-emerald-700 text-white"
+                          : "bg-white text-slate-800 shadow-sm"
+                      }`}
+                      type="button"
+                    >
+                      {answer}
+                      <span className="mt-1 block text-xs opacity-70">
+                        {isCorrect ? "可以完成任务" : "想一想要不要换一换"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="mt-4 rounded-[1.2rem] bg-white/80 px-4 py-3 text-sm font-semibold text-emerald-900">
+              先完成当前步骤：{activeTaskGameSteps[activeTaskStepProgress] ?? "再听任务"}。
+            </div>
+          )}
           <div className="mt-4 rounded-[1.2rem] bg-white/80 px-4 py-3">
             <p className="text-sm font-semibold text-emerald-900">{taskFeedback}</p>
             <p className="mt-2 text-xs font-semibold text-slate-500">
-              完成后可以再玩一个任务、去阅读打卡，或查看成长记录。
+              完成后可以再玩一个任务、去听故事，或看看小贴纸。
             </p>
           </div>
         </div>
@@ -1755,7 +3858,7 @@ function RewardStickerShelf({ badges }: { badges: string[] }) {
               </div>
               <p className="mt-4 text-lg font-semibold text-slate-900">{item.title}</p>
               <p className="mt-2 text-sm leading-7 text-slate-600">
-                {hasBadges ? "已经记录在成长册里。" : "完成对应任务后会点亮。"}
+                {hasBadges ? "已经放进成长小书里。" : "完成对应任务后会点亮。"}
               </p>
             </div>
           ))}
@@ -1816,7 +3919,23 @@ function FoodBadgeWall({
       reply: "你已经能介绍一种家乡美食啦，今天的小播报员任务完成！",
     },
   };
-  const foodOptions = ["泉州海蛎煎", "面线糊", "润饼菜", "石花膏", "土笋冻", "崇武鱼卷", "其他"];
+  const foodOptions = [
+    "泉州海蛎煎",
+    "面线糊",
+    "润饼菜",
+    "石花膏",
+    "土笋冻",
+    "崇武鱼卷",
+    "姜母鸭",
+    "烧肉粽",
+    "炸醋肉",
+    "芋头饼",
+    "牛肉羹",
+    "洪濑鸡爪",
+    "四果汤",
+    "咸饭",
+    "其他",
+  ];
   const placeOptions = ["家里", "学校", "街边", "餐桌", "其他"];
   const stepOptions = ["看一看", "闻一闻", "摸一摸", "尝一点", "说一说"];
   const actionOptions = ["洗菜", "摆碗筷", "搅拌", "端盘", "餐后整理", "其他"];
@@ -1905,7 +4024,7 @@ function FoodBadgeWall({
                 taskTextMap[item.title] ??
                 `${item.title}任务：选一种泉州美食，说一说你看到了什么。`;
               setActiveTask(item.title);
-              setSubmitFeedback("任务已经切换啦，完成后可以提交并记录到成长册。");
+              setSubmitFeedback("任务已经换好啦，完成后可以点亮小章。");
               onSpeak?.(taskText);
             }}
             className={`story-card rounded-[1.8rem] bg-[linear-gradient(180deg,#fff9ec_0%,#ffffff_100%)] p-5 text-left shadow-sm transition hover:-translate-y-0.5 ${
@@ -1949,8 +4068,8 @@ function FoodBadgeWall({
                 onChange={(event) => setSelectedAction(event.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900"
               >
-                {actionOptions.map((item) => (
-                  <option key={item}>{item}</option>
+                {actionOptions.map((item, index) => (
+                  <option key={`${item}-${index}`}>{item}</option>
                 ))}
               </select>
             </label>
@@ -1962,8 +4081,8 @@ function FoodBadgeWall({
                 onChange={(event) => setSelectedFood(event.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900"
               >
-                {foodOptions.map((item) => (
-                  <option key={item}>{item}</option>
+                {foodOptions.map((item, index) => (
+                  <option key={`${item}-${index}`}>{item}</option>
                 ))}
               </select>
             </label>
@@ -1977,8 +4096,8 @@ function FoodBadgeWall({
                 onChange={(event) => setSelectedPlace(event.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900"
               >
-                {placeOptions.map((item) => (
-                  <option key={item}>{item}</option>
+                {placeOptions.map((item, index) => (
+                  <option key={`${item}-${index}`}>{item}</option>
                 ))}
               </select>
             </label>
@@ -1990,8 +4109,8 @@ function FoodBadgeWall({
                 onChange={(event) => setSelectedStep(event.target.value)}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900"
               >
-                {stepOptions.map((item) => (
-                  <option key={item}>{item}</option>
+                {stepOptions.map((item, index) => (
+                  <option key={`${item}-${index}`}>{item}</option>
                 ))}
               </select>
             </label>
@@ -2003,7 +4122,7 @@ function FoodBadgeWall({
         </div>
 
         <label className="mt-4 block text-sm font-semibold text-slate-700">
-          上传照片或视频打卡
+          放一张照片或小视频
           <input
             type="file"
             accept="image/*,video/*"
@@ -2025,7 +4144,7 @@ function FoodBadgeWall({
               />
             )}
             <p className="mt-2 text-xs font-semibold text-slate-500">
-              当前文件：{mediaName}。文件只在这台设备预览，成长记录保存文件名。
+              当前文件：{mediaName}。文件只在这台设备预览，小脚印只保存文件名。
             </p>
           </div>
         ) : null}
@@ -2050,10 +4169,10 @@ function FoodBadgeWall({
           </p>
           <button
             onClick={submitTask}
-            className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5"
             type="button"
           >
-            {activeTask === "闽食宣传员" ? "我会介绍了" : "提交任务"}
+            {activeTask === "闽食宣传员" ? "我会介绍了" : "完成啦"}
           </button>
         </div>
       </div>
@@ -2180,7 +4299,7 @@ function ChildIdentityPanel({
           href="/children"
           className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:-translate-y-0.5"
         >
-          回到儿童入口重新识别
+          🏠 回到儿童入口重新识别
         </Link>
       </div>
 
@@ -2356,13 +4475,13 @@ function MealPhotoBooth({
               <div className="text-4xl">🍱</div>
               <p className="mt-3 text-lg font-semibold text-slate-700">拍一张餐盘照片</p>
               <p className="mt-2 max-w-xs text-sm leading-7 text-slate-500">
-                适合记录孩子餐盘观察、闽食制作或闽食宣传打卡。
+                拍菜品、餐盘或小作品就好。
               </p>
             </div>
           )}
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <label className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+            <label className="rounded-full bg-orange-300 px-4 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5">
               选择照片
               <input
                 ref={fileRef}
@@ -2388,13 +4507,13 @@ function MealPhotoBooth({
             请只选择餐盘或闽食作品照片，不拍孩子正脸。
           </p>
           <p className="mt-2 text-xs leading-6 font-semibold text-amber-800">
-            拍照时尽量避开孩子正脸、姓名牌和班级牌，只记录餐盘或作品。
+            拍照时尽量避开孩子正脸、姓名牌和班级牌，只拍餐盘或作品。
           </p>
         </div>
 
         <div className="rounded-[1.8rem] bg-white/80 p-5">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-500">餐盘记录</p>
+            <p className="text-sm font-semibold text-slate-500">餐盘小照片</p>
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
                 reviewResult?.mode === "ai"
@@ -2421,7 +4540,7 @@ function MealPhotoBooth({
                   "照片已经收好啦，这次先练习观察，食物名字请老师或家长一起确认。"}
               </p>
               <p className="mt-2 text-xs leading-6 font-semibold text-amber-900">
-                拍照任务已经完成；这次只给体验贴纸，不当作真实成长勋章。
+                这次已经完成；先给体验贴纸，不点亮正式小章。
               </p>
             </div>
           ) : null}
@@ -2457,7 +4576,7 @@ function MealPhotoBooth({
               </div>
               <div className="rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
                 <p className="text-xs font-semibold text-slate-500">
-                  {isAiMealPhotoReview(reviewResult) ? "发现说明" : "记录类型"}
+                  {isAiMealPhotoReview(reviewResult) ? "发现说明" : "照片小卡"}
                 </p>
                 <p className="mt-2 text-lg font-semibold text-slate-900">
                   {isAiMealPhotoReview(reviewResult)
@@ -2472,7 +4591,7 @@ function MealPhotoBooth({
             <div className="mt-5 rounded-[1.5rem] bg-white px-4 py-4 shadow-sm">
               <p className="text-sm font-semibold text-slate-700">照片亮点</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {reviewResult.highlightTags.map((item) => (
+                {uniqueTextItems(reviewResult.highlightTags).map((item) => (
                   <span
                     key={item}
                     className="rounded-full bg-cyan-100 px-3 py-2 text-sm font-semibold text-cyan-900"
@@ -2491,16 +4610,16 @@ function MealPhotoBooth({
                   key={item}
                   className="rounded-[1.5rem] bg-slate-50 px-4 py-4 text-center shadow-sm"
                 >
-                  <p className="text-xs font-semibold text-slate-500">拍照记录</p>
+                  <p className="text-xs font-semibold text-slate-500">照片小脚印</p>
                   <p className="mt-2 text-base font-semibold text-slate-900">{item}</p>
                 </div>
               ))}
             </div>
           ) : reviewResult?.scoreCards && reviewResult.scoreCards.length > 0 ? (
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              {reviewResult.scoreCards.map((item) => (
+              {reviewResult.scoreCards.map((item, index) => (
                 <div
-                  key={item.label}
+                  key={`${item.label}-${index}`}
                   className="rounded-[1.5rem] bg-slate-50 px-4 py-4 text-center shadow-sm"
                 >
                   <p className="text-xs font-semibold text-slate-500">{item.label}</p>
@@ -2528,7 +4647,7 @@ function MealPhotoBooth({
                 </p>
               ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                {reviewResult.guessedFoods.map((item) => (
+                {uniqueTextItems(reviewResult.guessedFoods).map((item) => (
                   <span
                     key={item}
                     className="rounded-full bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900"
@@ -2548,17 +4667,17 @@ function MealPhotoBooth({
                 </p>
                 {!canAwardReviewSticker ? (
                   <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
-                    已完成记录
+                    已收好
                   </span>
                 ) : null}
               </div>
               {!canAwardReviewSticker ? (
                 <p className="mt-2 text-xs leading-6 font-semibold text-slate-500">
-                  这次给孩子正向完成反馈，只记录观察贴纸，不写入真实成长勋章。
+                  这次给孩子正向完成反馈，先给观察贴纸，不点亮正式小章。
                 </p>
               ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                {reviewResult.stickers.map((item) => (
+                {uniqueTextItems(reviewResult.stickers).map((item) => (
                   <span
                     key={item}
                     className="rounded-full bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800"
@@ -2571,15 +4690,15 @@ function MealPhotoBooth({
           ) : null}
 
           {reviewResult?.nextMission ? (
-            <div className="mt-5 rounded-[1.5rem] bg-slate-900 px-4 py-4 text-white">
-              <p className="text-sm font-semibold text-white/70">下一步挑战</p>
-              <p className="mt-2 text-sm leading-7 text-white/90">{reviewResult.nextMission}</p>
+            <div className="mt-5 rounded-[1.5rem] bg-orange-50 px-4 py-4 text-orange-950">
+              <p className="text-sm font-semibold text-orange-800">下一小步</p>
+              <p className="mt-2 text-sm leading-7">{reviewResult.nextMission}</p>
             </div>
           ) : null}
 
           {reviewResult ? (
             <div className="mt-5 rounded-[1.5rem] bg-emerald-50 px-4 py-4">
-              <p className="text-sm font-semibold text-emerald-800">下一句鼓励话术</p>
+              <p className="text-sm font-semibold text-emerald-800">老师可以这样夸一夸</p>
               <p className="mt-2 text-sm leading-7 text-slate-700">
                 {buildMealPhotoEncouragement(reviewResult)}
               </p>
@@ -2604,162 +4723,284 @@ function MealPhotoBooth({
 
 function ReadingCheckinGame({
   contentConfig,
+  teacherBooks = [],
   onComplete,
   onSpeak,
 }: {
   contentConfig?: EditableGameContent;
+  teacherBooks?: TeacherPictureBook[];
   onComplete?: (
     pickedItems: string[],
     detail?: Partial<Omit<MiniGameRecord, "completedAt" | "gameKey" | "badgeName" | "themeId" | "pickedItems">>,
   ) => void;
   onSpeak?: SpeakHandler;
 }) {
+  type ReadingBook = {
+    id: string;
+    title: string;
+    coverIcon: string;
+    pages: string[];
+    source: "teacher" | "ai";
+  };
+
   const [storyIdea, setStoryIdea] = useState("");
-  const [storyMission, setStoryMission] = useState(() => buildHabitStoryMission("洗手"));
-  const [selectedAnswer, setSelectedAnswer] = useState("");
-  const [taskDone, setTaskDone] = useState(false);
-  const [feedback, setFeedback] = useState("先说想听什么故事，再听短故事、选答案卡、完成一个习惯小任务。");
+  const teacherReadingBooks = useMemo<ReadingBook[]>(
+    () =>
+      teacherBooks
+        .filter((book) => book.themeId === "habit")
+        .slice(0, 6)
+        .map((book) => ({
+          id: book.id,
+          title: book.title,
+          coverIcon: "📚",
+          pages: splitStoryPages(book.storyText),
+          source: "teacher" as const,
+        })),
+    [teacherBooks],
+  );
+  const defaultBook = teacherReadingBooks[0] ?? buildReadingBookFromIdea("洗手");
+  const [activeBook, setActiveBook] = useState<ReadingBook | null>(null);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [listenCount, setListenCount] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const [checkInCount, setCheckInCount] = useState(0);
+  const [favoriteStory, setFavoriteStory] = useState("");
+  const [feedback, setFeedback] = useState("先找一本小故事，再听一听绘本。");
   const [isStoryListening, setIsStoryListening] = useState(false);
+  const [isFindingStory, setIsFindingStory] = useState(false);
   const completionReportedRef = useRef(false);
+  const generatedStorySequenceRef = useRef(0);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
-  const completed = Boolean(selectedAnswer && taskDone);
-  const introText =
-    contentConfig?.childGoal.trim() ||
-    "听一个围绕洗手、喝水、排队、整理、图书归位或文明进餐的短故事，选答案卡，再完成一个习惯小任务。";
+  const shownBook = activeBook ?? defaultBook;
+  const currentPage = shownBook.pages[Math.min(pageIndex, shownBook.pages.length - 1)] ?? shownBook.title;
+  const completed = checkInCount > 0;
+  const introText = "找一本小故事，听一听绘本，读完后点亮阅读贴纸。";
 
   useEffect(() => {
+    const storyRecognitionRef = recognitionRef;
+
     return () => {
-      recognitionRef.current?.stop();
+      storyRecognitionRef.current?.stop();
     };
   }, []);
 
-  function generateStoryFromIdea() {
-    const nextMission = buildHabitStoryMission(storyIdea || "洗手");
+  function splitStoryPages(text: string) {
+    const pages = text
+      .split(/(?<=[。！？!?])|\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 4);
 
-    setStoryMission(nextMission);
-    setSelectedAnswer("");
-    setTaskDone(false);
+    return pages.length > 0 ? pages : ["翻开小绘本，我们一起听一个温暖的小故事。"];
+  }
+
+  function getReadingIcon(topic: string) {
+    if (/洗手|泡泡/.test(topic)) return "🧼";
+    if (/喝水|水杯/.test(topic)) return "🥤";
+    if (/排队|等待/.test(topic)) return "🚶";
+    if (/整理|玩具|图书/.test(topic)) return "🧸";
+    if (/如厕|厕所/.test(topic)) return "🚻";
+    return "📖";
+  }
+
+  function buildReadingBookFromIdea(rawIdea: string): ReadingBook {
+    const mission = buildHabitStoryMission(rawIdea || "洗手");
+
+    return {
+      id: `ai-${mission.topic}`,
+      title: mission.title,
+      coverIcon: getReadingIcon(mission.topic),
+      pages: splitStoryPages(mission.storyText),
+      source: "ai",
+    };
+  }
+
+  function buildReadingBookFromStoryResponse(rawIdea: string, response: StoryApiResponse): ReadingBook {
+    const cleanIdea = rawIdea.trim() || "小故事";
+    const reply = response.reply?.trim() || buildHabitStoryMission(cleanIdea).storyText;
+    const titleMatch = reply.match(/《([^》]{1,24})》/);
+    const title =
+      titleMatch?.[1]?.trim() ||
+      (cleanIdea.replace(/^我想听/, "").replace(/的故事$/, "").trim()
+        ? `${cleanIdea.replace(/^我想听/, "").replace(/的故事$/, "").trim()}小故事`
+        : "幼习宝小故事");
+    const pages = splitStoryPages(reply.replace(/^绘本故事开始啦。?/, ""));
+
+    generatedStorySequenceRef.current += 1;
+
+    return {
+      id: `ai-story-${generatedStorySequenceRef.current}-${title.replace(/\s+/g, "-").slice(0, 16)}`,
+      title,
+      coverIcon: getReadingIcon(cleanIdea),
+      pages: pages.slice(0, 4),
+      source: "ai",
+    };
+  }
+
+  function resetReadingState(book: ReadingBook, message: string) {
+    setActiveBook(book);
+    setPageIndex(0);
+    setListenCount(0);
+    setFinished(false);
+    setCheckInCount(0);
+    setFavoriteStory("");
     completionReportedRef.current = false;
-    const message = `AI已经把故事收回到“${nextMission.topic}”这个好习惯。先听故事，再选答案卡。`;
     setFeedback(message);
     onSpeak?.(message);
   }
 
-  function playStory() {
-    setFeedback("短故事讲完啦，请选一张答案卡，再完成下面的小习惯任务。");
-    onSpeak?.(storyMission.storyText);
-  }
+  async function findStoryFromIdea(ideaOverride?: string) {
+    const cleanIdea = (ideaOverride ?? storyIdea).trim();
+    const teacherMatch = teacherReadingBooks.find(
+      (book) => cleanIdea && (book.title.includes(cleanIdea) || cleanIdea.includes(book.title)),
+    );
 
-  function pickAnswer(answer: string) {
-    if (completed) {
+    if (teacherMatch) {
+      resetReadingState(teacherMatch, `找到老师放好的《${teacherMatch.title}》。我们先听一听。`);
       return;
     }
 
-    const message =
-      answer === storyMission.answerCards[0]
-        ? `${storyMission.feedback} 现在可以完成一个小习惯任务。`
-        : `你愿意回答就是认真听。我们再听一遍正确做法：${storyMission.answerCards[0]}。现在可以试试小习惯任务。`;
-    setSelectedAnswer(answer);
+    setIsFindingStory(true);
+    setFeedback("正在帮你找一本小故事。");
+
+    try {
+      const response = await fetch("/api/story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "child",
+          theme: "habit",
+          storyType: "pictureBook",
+          userInput: cleanIdea || "洗手的小故事",
+        }),
+      });
+      const data = (await response.json()) as StoryApiResponse;
+      const nextBook = buildReadingBookFromStoryResponse(cleanIdea || "洗手", data);
+
+      resetReadingState(nextBook, `找到《${nextBook.title}》。我们先听一听。`);
+    } catch {
+      const nextBook = buildReadingBookFromIdea(cleanIdea || "洗手");
+
+      resetReadingState(nextBook, `找到《${nextBook.title}》。我们先听一听。`);
+    } finally {
+      setIsFindingStory(false);
+    }
+  }
+
+  function pickTeacherBook(book: ReadingBook) {
+    resetReadingState(book, `选好了《${book.title}》。点“听一听绘本”开始。`);
+  }
+
+  function playCurrentPage() {
+    const nextListenCount = listenCount + 1;
+    const message = `第 ${pageIndex + 1} 页：${currentPage}`;
+
+    setListenCount(nextListenCount);
+    setFeedback("正在听绘本。听完可以翻下一页。");
+    onSpeak?.(message);
+  }
+
+  function goNextPage() {
+    if (pageIndex < shownBook.pages.length - 1) {
+      const nextIndex = pageIndex + 1;
+      const nextText = shownBook.pages[nextIndex] ?? "";
+
+      setPageIndex(nextIndex);
+      setFeedback("翻到下一页啦。可以再点听一听。");
+      onSpeak?.(`下一页。${nextText}`);
+      return;
+    }
+
+    setFinished(true);
+    setFeedback("这本小故事听完啦，可以点“今天读完啦”。");
+    onSpeak?.("这本小故事听完啦，可以点今天读完啦。");
+  }
+
+  function markFavoriteStory() {
+    setFavoriteStory(shownBook.title);
+    const message = `你喜欢《${shownBook.title}》，老师会看到这个小喜欢。`;
+
     setFeedback(message);
     onSpeak?.(message);
   }
 
-  function completeHabitTask() {
-    if (!selectedAnswer) {
-      const message = "先选一张答案卡，或者点“我说了一个发现”。";
-      setFeedback(message);
-      onSpeak?.(message);
-      return;
-    }
-
+  function completeReadingCheckin() {
     if (completionReportedRef.current) {
-      const message = "这次习惯故事小任务已经记录啦，可以换一个故事继续听。";
+      const message = "这次故事小贴纸已经拿到啦，可以换一个故事继续听。";
       setFeedback(message);
       onSpeak?.(message);
       return;
     }
 
-    const message = `AI成长观察已记录：你听了“${storyMission.topic}”故事，回答了“${selectedAnswer}”，也完成了“${storyMission.habitTask}”。`;
+    const nextCheckInCount = checkInCount + 1;
+    const message = `今天读完啦。阅读小贴纸来啦。`;
     const pickedItems = [
-      `故事主题:${storyMission.topic}`,
-      `回答:${selectedAnswer}`,
-      `完成小习惯:${storyMission.habitTask}`,
+      `绘本:${shownBook.title}`,
+      `听了:${listenCount}次`,
+      `喜欢:${favoriteStory || "未选择"}`,
+      `阅读打卡:${nextCheckInCount}`,
     ];
 
-    setTaskDone(true);
+    setFinished(true);
+    setCheckInCount(nextCheckInCount);
     setFeedback(message);
     onSpeak?.(message);
     completionReportedRef.current = true;
     onComplete?.(pickedItems, {
-      storyTopic: storyMission.topic,
-      answerContent: selectedAnswer,
-      habitTask: storyMission.habitTask,
+      activityType: "habit-reading",
+      templateType: "reading-checkin",
+      activityId: shownBook.id,
+      action: "reading-checkin",
+      storyId: shownBook.id,
+      storyTopic: shownBook.title,
+      bookTitle: shownBook.title,
+      listenCount,
+      finished: true,
+      checkInCount: nextCheckInCount,
+      favoriteStory: favoriteStory || shownBook.title,
+      result: "success",
+      attempts: 1,
+      status: "completed",
+      source: shownBook.source === "teacher" ? "teacher-picture-book" : "ai-reading-story",
     });
   }
 
   function resetGame() {
-    const nextMission = buildHabitStoryMission("洗手");
+    const nextBook = teacherReadingBooks[0] ?? buildReadingBookFromIdea("洗手");
 
     setStoryIdea("");
-    setStoryMission(nextMission);
-    setSelectedAnswer("");
-    setTaskDone(false);
-    setFeedback("习惯故事小剧场重新开始。你可以说：我想听洗手的故事。");
-    completionReportedRef.current = false;
-    onSpeak?.("习惯故事小剧场重新开始。先说想听什么好习惯故事。");
+    resetReadingState(nextBook, "我们重新找一本小故事。可以说：我想听洗手的故事。");
   }
 
   function toggleStoryVoiceInput() {
-    if (typeof window === "undefined") {
-      return;
-    }
+    startChildVoiceInput({
+      recognitionRef,
+      isListening: isStoryListening,
+      setListening: setIsStoryListening,
+      onStart: "我在听啦，可以说：我想听洗手的小故事。",
+      onUnsupported: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onError: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onSpeak: (message) => {
+        setFeedback(message);
+        onSpeak?.(message);
+      },
+      onResult: (transcript) => {
+        const nextIdea = transcript.slice(0, 40);
+        const message = `我听见啦：${nextIdea}。我来帮你找一本小故事。`;
 
-    const voiceWindow = window as Window & {
-      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
-      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
-    };
-    const SpeechRecognitionApi =
-      voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionApi) {
-      setFeedback("当前浏览器不支持语音输入，可以先用键盘输入。");
-      return;
-    }
-
-    if (isStoryListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsStoryListening(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognitionApi();
-
-    recognition.lang = "zh-CN";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
-      if (transcript) {
-        setStoryIdea(transcript.slice(0, 40));
-        setFeedback("听到啦。AI会把它整理成一个好习惯短故事。");
-      }
-    };
-    recognition.onerror = () => {
-      setFeedback("刚才没有听清楚，可以再说一次。");
-      setIsStoryListening(false);
-    };
-    recognition.onend = () => setIsStoryListening(false);
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsStoryListening(true);
-    setFeedback("正在听你说：我想听……的故事。");
+        setStoryIdea(nextIdea);
+        setFeedback(message);
+        onSpeak?.(message);
+        void findStoryFromIdea(nextIdea);
+      },
+    });
   }
 
   return (
     <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-violet-700">听故事做任务</p>
+          <p className="text-sm font-semibold text-violet-700">找一本小故事</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">
             {contentConfig?.title || "习惯故事小剧场"}
           </h3>
@@ -2774,11 +5015,11 @@ function ReadingCheckinGame({
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="violet" />
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="violet" />
       </div>
 
       <div className="mt-4 rounded-[1.6rem] bg-violet-50 p-4">
-        <p className="text-sm font-semibold text-violet-900">我想听……的故事</p>
+        <p className="text-sm font-semibold text-violet-900">第一步：找一本小故事</p>
         <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto_auto]">
           <input
             value={storyIdea}
@@ -2789,107 +5030,152 @@ function ReadingCheckinGame({
           <button
             onClick={toggleStoryVoiceInput}
             className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
-              isStoryListening ? "bg-rose-500 text-white" : "bg-slate-900 text-white"
+              isStoryListening ? "bg-rose-100 text-rose-800" : "bg-cyan-100 text-cyan-900"
             }`}
             type="button"
           >
             {isStoryListening ? "停止听写" : "语音输入"}
           </button>
           <button
-            onClick={generateStoryFromIdea}
-            className="rounded-full bg-violet-200 px-5 py-3 text-sm font-semibold text-violet-950 transition hover:-translate-y-0.5"
+            onClick={() => void findStoryFromIdea()}
+            disabled={isFindingStory}
+            className="rounded-full bg-violet-200 px-5 py-3 text-sm font-semibold text-violet-950 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             type="button"
           >
-            生成习惯故事
+            {isFindingStory ? "正在找故事" : "找一本故事"}
           </button>
         </div>
-        <p className="mt-2 text-xs leading-6 font-semibold text-violet-700">
-          AI 会把孩子想听的内容收回到洗手、喝水、排队、整理、图书归位、文明进餐等当前主题习惯。
-        </p>
+        {teacherReadingBooks.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {teacherReadingBooks.map((book) => (
+              <button
+                key={book.id}
+                onClick={() => pickTeacherBook(book)}
+                className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5"
+                type="button"
+              >
+                老师放好的：{book.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-5 rounded-[1.7rem] bg-violet-50 p-5">
         <div className="rounded-[1.5rem] bg-white/90 p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold text-violet-700">当前习惯故事</p>
-              <div className="mt-3 flex h-20 w-20 items-center justify-center rounded-[1.4rem] bg-violet-100 text-5xl">
-                📖
+          <p className="text-xs font-semibold text-violet-700">第二步：听绘本</p>
+          <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="grid overflow-hidden rounded-[1.6rem] border border-violet-100 bg-violet-50 shadow-inner md:grid-cols-2">
+              <div className="min-h-56 border-b border-violet-100 bg-white/90 p-5 md:border-b-0 md:border-r">
+                <div className="flex h-24 w-24 items-center justify-center rounded-[1.4rem] bg-violet-100 text-6xl">
+                  {shownBook.coverIcon}
+                </div>
+                <h4 className="mt-4 text-xl font-semibold text-slate-900">
+                  {shownBook.title}
+                </h4>
+                <p className="mt-2 text-xs font-semibold text-violet-700">
+                  第 {pageIndex + 1} 页 / 共 {shownBook.pages.length} 页
+                </p>
               </div>
-              <h4 className="mt-4 text-xl font-semibold text-slate-900">
-                {storyMission.title}
-              </h4>
-              <p className="mt-2 text-sm leading-7 text-slate-700">
-                {storyMission.question}
-              </p>
+              <div className="min-h-56 bg-[linear-gradient(90deg,#ffffff_0%,#fff7ed_100%)] p-5">
+                <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-[1.2rem] bg-amber-100 text-4xl">
+                  {getReadingIcon(currentPage)}
+                </div>
+                <p className="text-lg font-semibold leading-8 text-slate-900">
+                  {currentPage}
+                </p>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <SpeechCueButton text={storyMission.storyText} onSpeak={onSpeak} label="听短故事" tone="violet" />
+            <div className="flex flex-col gap-2">
               <button
-                onClick={playStory}
-                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                onClick={playCurrentPage}
+                className="rounded-full bg-violet-300 px-5 py-3 text-sm font-semibold text-violet-950 transition hover:-translate-y-0.5 hover:bg-violet-200"
                 type="button"
               >
-                播放故事
+                听一听绘本
+              </button>
+              <button
+                onClick={goNextPage}
+                className="rounded-full bg-emerald-200 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5 hover:bg-emerald-100"
+                type="button"
+              >
+                {pageIndex < shownBook.pages.length - 1 ? "下一页" : "我听完啦"}
+              </button>
+              <button
+                onClick={markFavoriteStory}
+                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5"
+                type="button"
+              >
+                我喜欢这个
               </button>
             </div>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {storyMission.answerCards.map((answer) => (
-              <button
-                key={answer}
-                onClick={() => pickAnswer(answer)}
-                disabled={completed}
-                className={`rounded-[1.4rem] px-4 py-4 text-left text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
-                  selectedAnswer === answer
-                    ? "bg-emerald-100 text-emerald-900 ring-2 ring-emerald-200"
-                    : "bg-violet-100 text-violet-950"
+            {shownBook.pages.map((page, index) => (
+              <div
+                key={`${shownBook.id}-${index}`}
+                className={`rounded-[1.2rem] px-4 py-3 text-sm font-semibold ${
+                  index === pageIndex ? "bg-violet-100 text-violet-950 ring-2 ring-violet-200" : "bg-slate-50 text-slate-600"
                 }`}
-                type="button"
               >
-                {answer}
-                <span className="mt-1 block text-xs leading-5 text-violet-800">点我说发现</span>
-              </button>
+                第 {index + 1} 页
+                <span className="mt-1 block text-xs leading-5 opacity-75">{page.slice(0, 18)}</span>
+              </div>
             ))}
           </div>
-          <button
-            onClick={() => pickAnswer("我说了一个发现")}
-            disabled={completed}
-            className="mt-4 rounded-full bg-white px-4 py-3 text-sm font-semibold text-violet-900 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-            type="button"
-          >
-            我说了一个发现
-          </button>
-          <button
-            onClick={completeHabitTask}
-            disabled={completed}
-            className="mt-4 ml-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-            type="button"
-          >
-            完成小习惯：{storyMission.habitTask}
-          </button>
+
+          <div className="mt-5 rounded-[1.4rem] bg-emerald-50 p-4">
+            <p className="text-sm font-semibold text-emerald-900">第三步：阅读打卡</p>
+            <p className="mt-1 text-xs leading-5 text-emerald-800">
+              听完或翻完小绘本，就可以点“今天读完啦”。
+            </p>
+            <button
+              onClick={completeReadingCheckin}
+              disabled={completed}
+              className="mt-3 rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+            >
+              今天读完啦
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-            1. 听短故事
+            1. 找绘本
           </span>
           <span
             className={`rounded-full px-3 py-2 text-sm font-semibold ${
-              selectedAnswer ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-700"
+              listenCount > 0 || finished ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-700"
             }`}
           >
-            {selectedAnswer ? "✓ " : ""}2. 选答案/说发现
+            {listenCount > 0 || finished ? "✓ " : ""}2. 听绘本
           </span>
           <span
             className={`rounded-full px-3 py-2 text-sm font-semibold ${
-              taskDone ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-700"
+              completed ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-700"
             }`}
           >
-            {taskDone ? "✓ " : ""}3. 完成小习惯
+            {completed ? "✓ " : ""}3. 阅读打卡
           </span>
         </div>
+        {completed ? (
+          <div className="mt-4 rounded-[1.6rem] bg-emerald-100 p-5">
+            <p className="text-sm font-semibold text-emerald-900">今天读完啦</p>
+            <h4 className="mt-1 text-2xl font-semibold text-slate-900">阅读小贴纸来啦</h4>
+            <p className="mt-2 text-sm leading-7 text-slate-700">
+              你听了《{shownBook.title}》，老师和家长都能看到这次阅读打卡。
+            </p>
+            <button
+              onClick={resetGame}
+              className="mt-3 rounded-full bg-white px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm transition hover:-translate-y-0.5"
+              type="button"
+            >
+              再找一本
+            </button>
+          </div>
+        ) : null}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] bg-white/80 px-4 py-3">
           <p className="text-sm font-semibold text-violet-950">{feedback}</p>
           <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听反馈" tone="violet" />
@@ -2899,156 +5185,16 @@ function ReadingCheckinGame({
   );
 }
 
-function TeacherPictureBookShelf({
-  books,
-  themeId,
-  onSpeak,
-  onComplete,
-}: {
-  books: TeacherPictureBook[];
-  themeId: ThemeId;
-  onSpeak?: SpeakHandler;
-  onComplete?: (
-    pickedItems: string[],
-    detail?: Partial<Omit<MiniGameRecord, "completedAt" | "gameKey" | "badgeName" | "themeId" | "pickedItems">>,
-  ) => void;
-}) {
-  const visibleBooks = books.filter((book) => book.themeId === themeId).slice(0, 6);
-  const [activeBookId, setActiveBookId] = useState("");
-  const [selectedOption, setSelectedOption] = useState("");
-  const [feedback, setFeedback] = useState("选一本老师发布的绘本，听完后选一张答案卡打卡。");
-  const activeBook = visibleBooks.find((book) => book.id === activeBookId) ?? visibleBooks[0];
-  const completed = Boolean(activeBook && selectedOption && activeBookId === activeBook.id);
-
-  if (visibleBooks.length === 0) {
-    return (
-      <div className="rounded-[2rem] border border-dashed border-violet-200 bg-white/78 p-5 shadow-sm xl:col-span-2">
-        <p className="text-sm font-semibold text-violet-700">教师绘本馆</p>
-        <h3 className="mt-1 text-xl font-semibold text-slate-900">等待老师发布绘本</h3>
-        <p className="mt-2 text-sm leading-7 text-slate-600">
-          教师端发布绘本后，幼儿可以在区域时间自主选听并完成阅读打卡。
-        </p>
-      </div>
-    );
-  }
-
-  function pickBook(book: TeacherPictureBook) {
-    setActiveBookId(book.id);
-    setSelectedOption("");
-    const message = `选好了《${book.title}》。可以点播放绘本，听完再选答案卡。`;
-    setFeedback(message);
-    onSpeak?.(message);
-  }
-
-  function playBook() {
-    if (!activeBook) {
-      return;
-    }
-
-    setFeedback("绘本正在播放，听完后选一张答案卡。");
-    onSpeak?.(activeBook.storyText);
-  }
-
-  function completeBook(option: string) {
-    if (!activeBook || selectedOption) {
-      return;
-    }
-
-    const message = `阅读打卡完成：你听了《${activeBook.title}》，选择了“${option}”，也完成了“${activeBook.habitTask}”。`;
-    setActiveBookId(activeBook.id);
-    setSelectedOption(option);
-    setFeedback(message);
-    onSpeak?.(message);
-    onComplete?.([
-      `教师绘本:${activeBook.title}`,
-      `回答:${option}`,
-      `小任务:${activeBook.habitTask}`,
-    ], {
-      storyTopic: activeBook.title,
-      answerContent: option,
-      habitTask: activeBook.habitTask,
-    });
-  }
-
-  return (
-    <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)] xl:col-span-2">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-violet-700">教师绘本馆</p>
-          <h3 className="mt-1 text-xl font-semibold text-slate-900">区域时间自主选听</h3>
-          <p className="mt-2 text-sm leading-7 text-slate-600">
-            老师发布的绘本会出现在这里，孩子可以自己选、自己听、自己完成阅读打卡。
-          </p>
-        </div>
-        <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听提示" tone="violet" />
-      </div>
-
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {visibleBooks.map((book) => (
-          <button
-            key={book.id}
-            onClick={() => pickBook(book)}
-            className={`rounded-[1.4rem] px-4 py-4 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
-              activeBook?.id === book.id ? "bg-violet-100 text-violet-950 ring-2 ring-violet-200" : "bg-slate-50 text-slate-800"
-            }`}
-            type="button"
-          >
-            <span className="text-3xl">📖</span>
-            <span className="mt-2 block">{book.title}</span>
-            <span className="mt-1 block text-xs leading-5 text-violet-700">
-              {book.themeId === "food" ? "闽食绘本" : "幼习宝绘本"}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {activeBook ? (
-        <div className="mt-5 rounded-[1.6rem] bg-violet-50 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold text-violet-700">正在听</p>
-              <h4 className="mt-1 text-xl font-semibold text-slate-900">{activeBook.title}</h4>
-              <p className="mt-2 line-clamp-3 text-sm leading-7 text-slate-700">{activeBook.storyText}</p>
-            </div>
-            <button
-              onClick={playBook}
-              className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
-              type="button"
-            >
-              播放绘本
-            </button>
-          </div>
-          <p className="mt-4 text-sm font-semibold text-violet-900">{activeBook.question}</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {activeBook.options.map((option) => (
-              <button
-                key={option}
-                onClick={() => completeBook(option)}
-                disabled={completed}
-                className={`rounded-[1.3rem] px-4 py-3 text-left text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
-                  selectedOption === option ? "bg-emerald-100 text-emerald-900" : "bg-white text-violet-950"
-                }`}
-                type="button"
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          <p className="mt-4 rounded-[1.2rem] bg-white/80 px-4 py-3 text-sm font-semibold text-violet-950">
-            {feedback}
-          </p>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function HabitTemplateCheckinPanel({
+  mode = "talk",
   templates,
+  onBackToHome,
   onSpeak,
   onComplete,
 }: {
+  mode?: "talk" | "task";
   templates: HabitCheckinTemplate[];
+  onBackToHome?: () => void;
   onSpeak?: SpeakHandler;
   onComplete?: (
     pickedItems: string[],
@@ -3057,75 +5203,95 @@ function HabitTemplateCheckinPanel({
 }) {
   const [activeTemplateId, setActiveTemplateId] = useState("");
   const [childReply, setChildReply] = useState("");
+  const [mediaName, setMediaName] = useState("");
+  const [mediaType, setMediaType] = useState<"photo" | "video" | "">("");
+  const [talkType, setTalkType] = useState("我想说开心的事");
+  const [replyInputMode, setReplyInputMode] = useState<"text" | "voice">("text");
   const [selectedCard, setSelectedCard] = useState("");
-  const [feedback, setFeedback] = useState("选一个老师发布的待定模板，可以用语音或文字对老师说。");
+  const [feedback, setFeedback] = useState(
+    mode === "task" ? "先看老师的小任务，听一听，再做一小步。" : "可以说一句、写一句，也可以拍一张或放一段小视频给老师。",
+  );
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
-  const activeTemplate = templates.find((template) => template.id === activeTemplateId) ?? templates[0];
+  const defaultTemplate = useMemo<HabitCheckinTemplate>(
+    () => ({
+      id: "child-to-teacher-free-talk",
+      title: "我想对老师说",
+      habitFocus: "幼儿表达",
+      childPrompt: "我想对老师说：",
+      teacherPrompt: "请关注幼儿想法、心情、需要帮助的地方和愿意完成的小步。",
+      storyText: "这里可以说一个想法、一个心情，或者一个想请老师帮忙的小秘密。老师会收到。",
+      answerCards: ["我想告诉老师", "我想请老师帮忙", "我完成了一小步"],
+      habitTask: "说一句想法或心情",
+      publishedAt: new Date(0).toISOString(),
+    }),
+    [],
+  );
+  const availableTemplates = mode === "talk" ? [defaultTemplate] : templates;
+  const activeTemplate =
+    availableTemplates.find((template) => template.id === activeTemplateId) ?? availableTemplates[0];
   const completed = Boolean(selectedCard);
 
   useEffect(() => {
+    const templateRecognitionRef = recognitionRef;
+
     return () => {
-      recognitionRef.current?.stop();
+      templateRecognitionRef.current?.stop();
     };
   }, []);
-
-  if (templates.length === 0) {
-    return null;
-  }
 
   function pickTemplate(template: HabitCheckinTemplate) {
     setActiveTemplateId(template.id);
     setChildReply("");
+    setMediaName("");
+    setMediaType("");
     setSelectedCard("");
-    const message = `老师发布了${template.title}。你可以听故事，也可以对老师说一句。`;
+    const message =
+      mode === "task"
+        ? `老师给了${template.title}。先听任务，再完成一个小步骤。`
+        : `这里是${template.title}。你可以说一句、写一句，也可以拍一张或放一段小视频给老师。`;
     setFeedback(message);
     onSpeak?.(message);
   }
 
+  function handleMediaSelect(file?: File) {
+    if (!file) {
+      setMediaName("");
+      setMediaType("");
+      return;
+    }
+
+    setMediaName(file.name);
+    setMediaType(file.type.startsWith("video/") ? "video" : "photo");
+    setFeedback(
+      mode === "task"
+        ? `已经选择${file.name}。完成后可以给老师看。`
+        : `已经放好${file.name}。想说的话也可以一起送给老师。`,
+    );
+  }
+
   function toggleVoiceInput() {
-    if (typeof window === "undefined") {
-      return;
-    }
+    startChildVoiceInput({
+      recognitionRef,
+      isListening,
+      setListening: setIsListening,
+      onStart: mode === "task" ? "我在听啦，可以说说你完成了哪一步。" : "我在听啦，可以跟老师说开心、不开心，或一个小秘密。",
+      onUnsupported: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onError: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onSpeak: (message) => {
+        setFeedback(message);
+        onSpeak?.(message);
+      },
+      onResult: (transcript) => {
+        const nextReply = transcript.slice(0, 80);
+        const message = mode === "task" ? `我听见啦：${nextReply}。再选一张答案卡。` : `我听见啦：${nextReply}。可以送给老师。`;
 
-    const voiceWindow = window as Window & {
-      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
-      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
-    };
-    const SpeechRecognitionApi =
-      voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionApi) {
-      setFeedback("当前浏览器不支持语音输入，可以先用文字对老师说。");
-      return;
-    }
-
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognitionApi();
-    recognition.lang = "zh-CN";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
-      if (transcript) {
-        setChildReply(transcript.slice(0, 80));
-        setFeedback("老师听到你的想法啦。再选一张打卡答案卡。");
-      }
-    };
-    recognition.onerror = () => {
-      setFeedback("刚才没有听清楚，可以再说一次或用文字输入。");
-      setIsListening(false);
-    };
-    recognition.onend = () => setIsListening(false);
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
-    setFeedback("正在听你对老师说。");
+        setChildReply(nextReply);
+        setReplyInputMode("voice");
+        setFeedback(message);
+        onSpeak?.(message);
+      },
+    });
   }
 
   function completeTemplate(card: string) {
@@ -3133,13 +5299,16 @@ function HabitTemplateCheckinPanel({
       return;
     }
 
-    const reply = childReply.trim() || activeTemplate.childPrompt;
-    const message = `待定模板打卡完成：你选择了“${card}”，也对老师说：“${reply}”。`;
+    const reply = childReply.trim() || (mediaName ? `我上传了${mediaName}` : activeTemplate.childPrompt);
+    const message =
+      mode === "task"
+        ? `老师给我的任务完成啦：你选择了“${card}”，也完成了“${activeTemplate.habitTask}”。小贴纸来啦。`
+        : `老师收到啦：你选择了“${card}”，也说了“${reply}”。`;
     setSelectedCard(card);
     setFeedback(message);
     onSpeak?.(message);
     onComplete?.([
-      `待定模板:${activeTemplate.title}`,
+      `小任务:${activeTemplate.title}`,
       `回应:${reply}`,
       `答案:${card}`,
       `小任务:${activeTemplate.habitTask}`,
@@ -3147,24 +5316,257 @@ function HabitTemplateCheckinPanel({
       storyTopic: activeTemplate.title,
       answerContent: card,
       habitTask: activeTemplate.habitTask,
+      childUtterance: reply,
+      activityType: mode === "talk" ? "child-message" : "teacher-task",
+      taskId: activeTemplate.id,
+      assignedByTeacher: mode === "task",
+      status: "completed",
+      result: "success",
+      attempts: 1,
+      retryCount: 0,
+      messageType: mediaType || (childReply.trim() ? "text" : "mixed"),
+      mediaUrl: mediaName,
+      uploadedFileName: mediaName,
+      teacherRead: false,
+      teacherReply: "",
+      source: mode === "task" ? "teacher-assigned-task" : "child-to-teacher",
     });
+  }
+
+  function resetTalkMailbox() {
+    setChildReply("");
+    setMediaName("");
+    setMediaType("");
+    setSelectedCard("");
+    setReplyInputMode("text");
+    const message = "小信箱打开啦。你可以再跟老师说一件事。";
+    setFeedback(message);
+    onSpeak?.(message);
+  }
+
+  function sendTalkMessage() {
+    const reply = childReply.trim();
+
+    if (!reply && !mediaName) {
+      const message = "可以先说一句，或者写一句，再送给老师。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const safeReply = reply || `我给老师放了${mediaName}`;
+    const message = "老师收到啦。老师会认真看见你。";
+
+    setSelectedCard("老师收到啦");
+    setFeedback(message);
+    onSpeak?.(message);
+    onComplete?.([
+      "对老师说",
+      `心情:${talkType}`,
+      `内容:${safeReply}`,
+      mediaName ? `小文件:${mediaName}` : "",
+    ].filter(Boolean), {
+      activityType: "child-message",
+      templateType: "child-to-teacher",
+      activityId: "child-warm-mailbox",
+      action: "send-to-teacher",
+      storyTopic: "对老师说",
+      answerContent: talkType,
+      childUtterance: safeReply,
+      result: "success",
+      attempts: 1,
+      status: "completed",
+      messageType: mediaType ? mediaType : replyInputMode,
+      mediaUrl: mediaName,
+      uploadedFileName: mediaName,
+      teacherRead: false,
+      teacherReply: "",
+      source: "child-to-teacher",
+    });
+  }
+
+  if (mode === "talk") {
+    const canSendTalk = Boolean(childReply.trim() || mediaName);
+    const talkSent = Boolean(selectedCard);
+    const introText =
+      "你可以跟老师分享快乐的事、不开心的事，或者一个小秘密。老师会认真看见你。";
+    const talkTypeOptions = [
+      { icon: "😊", label: "我想说开心的事", hint: "把快乐说给老师听" },
+      { icon: "☁️", label: "我有一点不开心", hint: "老师陪你慢慢说" },
+      { icon: "🤝", label: "我想请老师帮忙", hint: "告诉老师需要什么" },
+      { icon: "💌", label: "我有一个小秘密", hint: "放进温馨小信箱" },
+    ];
+
+    return (
+      <div className="rounded-[2rem] border border-rose-100 bg-[linear-gradient(135deg,#fff7fb_0%,#ffffff_52%,#effdf6_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)] xl:col-span-2">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-rose-700">温馨小信箱</p>
+            <h3 className="mt-1 text-xl font-semibold text-slate-900">我想对老师说</h3>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-700">{introText}</p>
+          </div>
+          <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="rose" />
+        </div>
+
+        {talkSent ? (
+          <div className="mt-5 rounded-[1.8rem] bg-emerald-100 p-5">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-white text-5xl shadow-sm">
+                💌
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-emerald-900">老师收到啦</p>
+                <h4 className="mt-1 text-2xl font-semibold text-slate-900">你的小话已经送到啦</h4>
+                <p className="mt-2 text-sm leading-7 text-slate-700">
+                  老师会认真看见你，也会温柔地回应你。
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={resetTalkMailbox}
+                className="rounded-full bg-rose-200 px-5 py-3 text-sm font-semibold text-rose-950 transition hover:-translate-y-0.5"
+                type="button"
+              >
+                我还想说
+              </button>
+              <button
+                onClick={() => {
+                  resetTalkMailbox();
+                  onBackToHome?.();
+                }}
+                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm transition hover:-translate-y-0.5"
+                type="button"
+              >
+                🏠 回到我的小首页
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {talkTypeOptions.map((option) => (
+                <button
+                  key={option.label}
+                  onClick={() => {
+                    setTalkType(option.label);
+                    const message = `${option.label}。可以说给老师听。`;
+                    setFeedback(message);
+                    onSpeak?.(message);
+                  }}
+                  className={`min-h-32 rounded-[1.5rem] p-4 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
+                    talkType === option.label
+                      ? "bg-rose-100 text-rose-950 ring-2 ring-rose-200"
+                      : "bg-white/85 text-slate-800"
+                  }`}
+                  type="button"
+                >
+                  <span className="text-4xl">{option.icon}</span>
+                  <span className="mt-3 block">{option.label}</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-600">👉 {option.hint}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-5 rounded-[1.7rem] bg-white/86 p-5 shadow-sm">
+              <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+                <textarea
+                  value={childReply}
+                  onChange={(event) => {
+                    setReplyInputMode("text");
+                    setChildReply(event.target.value.slice(0, 120));
+                  }}
+                  placeholder="可以写：老师，我今天很开心……"
+                  className="min-h-28 rounded-[1.2rem] border border-rose-100 bg-rose-50/60 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-rose-300"
+                />
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={toggleVoiceInput}
+                    className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                      isListening ? "bg-rose-700 text-white" : "bg-cyan-100 text-cyan-900"
+                    }`}
+                    type="button"
+                  >
+                    {isListening ? "我说完啦" : "🎤 说给老师听"}
+                  </button>
+                  <label className="rounded-[1.2rem] bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+                    <span className="flex items-center gap-2">
+                      <span className="text-2xl">📷</span>
+                      拍一张给老师看
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => handleMediaSelect(event.target.files?.[0])}
+                      className="mt-2 w-full text-xs font-semibold text-slate-700"
+                    />
+                  </label>
+                  <label className="rounded-[1.2rem] bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">
+                    <span className="flex items-center gap-2">
+                      <span className="text-2xl">🎬</span>
+                      放一段小视频给老师看
+                    </span>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={(event) => handleMediaSelect(event.target.files?.[0])}
+                      className="mt-2 w-full text-xs font-semibold text-slate-700"
+                    />
+                  </label>
+                </div>
+              </div>
+              {mediaName ? (
+                <p className="mt-3 rounded-[1rem] bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-900">
+                  已选择：{mediaName}。点“送给老师”，老师就能看到。
+                </p>
+              ) : null}
+              {canSendTalk ? (
+                <button
+                  onClick={sendTalkMessage}
+                  className="mt-4 rounded-full bg-orange-300 px-6 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5 hover:bg-orange-200"
+                  type="button"
+                >
+                  送给老师
+                </button>
+              ) : null}
+              <p className="mt-4 rounded-[1.2rem] bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-950">
+                {feedback}
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
     <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)] xl:col-span-2">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-emerald-700">老师发布的待定模板</p>
-          <h3 className="mt-1 text-xl font-semibold text-slate-900">我想对老师说</h3>
+          <p className="text-sm font-semibold text-emerald-700">
+            {mode === "task" ? "老师给我的任务" : "对老师说"}
+          </p>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">
+            {mode === "task" ? "完成老师的小任务" : "我想告诉老师"}
+          </h3>
           <p className="mt-2 text-sm leading-7 text-slate-600">
-            幼儿可以选择当前班级需要练习的习惯，用语音或文字说给老师，再完成一张打卡答案卡。
+            {mode === "task"
+              ? "只看老师给的小练习，做完老师就知道啦。"
+              : "可以说想法、心情或小秘密，老师会收到并回复。"}
           </p>
         </div>
         <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听提示" tone="emerald" />
       </div>
 
+      {availableTemplates.length === 0 ? (
+        <div className="mt-5 rounded-[1.5rem] bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-900">
+          今天先去好习惯闯关或故事小剧场玩一玩，小任务等会儿再来。
+        </div>
+      ) : null}
+
+      {availableTemplates.length > 0 ? (
       <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {templates.slice(0, 6).map((template) => (
+        {availableTemplates.slice(0, 6).map((template) => (
           <button
             key={template.id}
             onClick={() => pickTemplate(template)}
@@ -3175,16 +5577,26 @@ function HabitTemplateCheckinPanel({
           >
             <span className="text-3xl">🗣️</span>
             <span className="mt-2 block">{template.title}</span>
+            <span className="mt-1 inline-flex rounded-full bg-white/80 px-2 py-1 text-[11px] text-emerald-800">
+              👉 选这个
+            </span>
             <span className="mt-1 block text-xs leading-5 text-emerald-700">{template.habitFocus}</span>
           </button>
         ))}
       </div>
+      ) : null}
 
       {activeTemplate ? (
         <div className="mt-5 rounded-[1.6rem] bg-emerald-50 p-5">
+          <TeacherMessageQuestStage
+            activeTemplate={activeTemplate}
+            childReply={childReply}
+            onPlayStory={() => onSpeak?.(activeTemplate.storyText)}
+            selectedCard={selectedCard}
+          />
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold text-emerald-800">当前模板故事</p>
+              <p className="text-xs font-semibold text-emerald-800">现在想说</p>
               <h4 className="mt-1 text-xl font-semibold text-slate-900">{activeTemplate.title}</h4>
               <p className="mt-2 text-sm leading-7 text-slate-700">{activeTemplate.storyText}</p>
             </div>
@@ -3200,11 +5612,11 @@ function HabitTemplateCheckinPanel({
             <button
               onClick={toggleVoiceInput}
               className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
-                isListening ? "bg-rose-100 text-rose-800" : "bg-slate-900 text-white"
+                isListening ? "bg-rose-100 text-rose-800" : "bg-cyan-100 text-cyan-900"
               }`}
               type="button"
             >
-              {isListening ? "停止听写" : "语音对老师说"}
+              {isListening ? "停止听写" : "🎤 语音对老师说"}
             </button>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -3218,13 +5630,38 @@ function HabitTemplateCheckinPanel({
                 }`}
                 type="button"
               >
-                {card}
+                👉 选这个：{card}
               </button>
             ))}
           </div>
           <p className="mt-4 rounded-[1.2rem] bg-white/80 px-4 py-3 text-sm font-semibold text-emerald-950">
             {feedback}
           </p>
+          {completed ? (
+            <div className="mt-4 rounded-[1.6rem] bg-emerald-100 p-5">
+              <p className="text-sm font-semibold text-emerald-900">老师的小任务完成啦</p>
+              <h4 className="mt-1 text-2xl font-semibold text-slate-900">小贴纸来啦</h4>
+              <p className="mt-2 text-sm leading-7 text-slate-700">
+                你完成了“{activeTemplate.title}”，老师能看到这次小练习。
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  onClick={() => pickTemplate(activeTemplate)}
+                  className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5"
+                  type="button"
+                >
+                  再试一次也可以
+                </button>
+                <button
+                  onClick={() => onBackToHome?.()}
+                  className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-emerald-900 shadow-sm transition hover:-translate-y-0.5"
+                  type="button"
+                >
+                  🏠 回到我的小首页
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -3302,7 +5739,23 @@ function MealMannersGame({
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="amber" />
+          <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="amber" />
+      </div>
+      <div className="mt-4">
+        <GameEngineStage
+          gameKey="mealManners"
+          activeStep={completedActions.length}
+          pickedItems={completedActions}
+          tone="amber"
+        />
+      </div>
+      <div className="mt-4">
+        <MealMannersRhythmStage
+          actions={mealMannerActions}
+          currentIndex={currentIndex}
+          completedActions={completedActions}
+          onPickAction={completeCurrentAction}
+        />
       </div>
 
       <div className="mt-5 rounded-[1.7rem] bg-amber-50 p-5">
@@ -3332,7 +5785,7 @@ function MealMannersGame({
               <button
                 onClick={completeCurrentAction}
                 disabled={completed}
-                className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                 type="button"
               >
                 我做到了
@@ -3436,7 +5889,7 @@ function HabitTrafficLightGame({
     <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-rose-700">常规判断任务</p>
+          <p className="text-sm font-semibold text-rose-700">红绿牌小游戏</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">
             {contentConfig?.title || "好习惯红绿牌"}
           </h3>
@@ -3446,12 +5899,28 @@ function HabitTrafficLightGame({
           className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800 transition hover:bg-rose-200"
           type="button"
         >
-          重新开始
+          再玩一次
         </button>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="rose" />
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="rose" />
+      </div>
+      <div className="mt-4">
+        <GameEngineStage
+          gameKey="habitTrafficLight"
+          activeStep={answers.length}
+          pickedItems={answers}
+          tone="rose"
+        />
+      </div>
+      <div className="mt-4">
+        <TrafficLightDecisionStage
+          answers={answers}
+          completed={completed}
+          currentIndex={currentIndex}
+          onAnswer={answer}
+        />
       </div>
 
       <div className="mt-5 rounded-[1.7rem] bg-rose-50 p-5">
@@ -3605,7 +6074,24 @@ function FoodTrainGame({
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="teal" />
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="teal" />
+      </div>
+      <div className="mt-4">
+        <GameEngineStage
+          gameKey="foodTrain"
+          activeStep={arrivedStations.length}
+          pickedItems={arrivedStations}
+          tone="teal"
+        />
+      </div>
+      <div className="mt-4">
+        <FoodTrainTrack
+          route={route}
+          stationIndex={stationIndex}
+          arrivedStations={arrivedStations}
+          completed={completed}
+          onPickStation={pickStation}
+        />
       </div>
 
       <div className="mt-5 rounded-[1.7rem] bg-teal-50 p-5">
@@ -3630,12 +6116,12 @@ function FoodTrainGame({
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          {choiceBoard.map((station) => {
+          {choiceBoard.map((station, index) => {
             const done = arrivedStations.includes(station.label);
 
             return (
               <button
-                key={station.label}
+                key={`${station.station}-${station.label}-${index}`}
                 onClick={() => pickStation(station.label)}
                 disabled={done || completed}
                 className={`rounded-[1.3rem] px-3 py-4 text-center text-sm font-semibold transition ${
@@ -3645,8 +6131,7 @@ function FoodTrainGame({
                 }`}
                 type="button"
               >
-                <span className="block text-3xl">{station.icon}</span>
-                <span className="mt-2 block">{station.label}</span>
+                <FoodMiniMaterialCard label={station.label} compact />
                 <span className="mt-1 block text-xs leading-5 text-slate-500">
                   {done ? "已到站" : station.station}
                 </span>
@@ -3677,6 +6162,7 @@ function FoodGuessGame({
   const [rounds, setRounds] = useState(() => createFoodGuessRound(false));
   const [roundIndex, setRoundIndex] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
+  const [revealedHintCount, setRevealedHintCount] = useState(1);
   const [feedback, setFeedback] = useState("打开美食宝箱，听线索猜食材。");
   const [mistakeCount, setMistakeCount] = useState(0);
   const completionReportedRef = useRef(false);
@@ -3694,6 +6180,7 @@ function FoodGuessGame({
     if (label !== currentRound.answer) {
       const message = `再找一找。线索是：${currentRound.hints.join("，")}。`;
       setMistakeCount((count) => count + 1);
+      setRevealedHintCount(currentRound.hints.length);
       setFeedback(message);
       onSpeak?.(message);
       return;
@@ -3715,14 +6202,32 @@ function FoodGuessGame({
     }
 
     if (!allDone) {
+      setRevealedHintCount(1);
       setRoundIndex((index) => index + 1);
     }
+  }
+
+  function revealTreasureHint() {
+    if (completed || !currentRound) {
+      return;
+    }
+
+    const nextCount = Math.min(currentRound.hints.length, revealedHintCount + 1);
+    setRevealedHintCount(nextCount);
+    const hint = currentRound.hints[nextCount - 1] ?? currentRound.hints[0];
+    const message =
+      nextCount >= currentRound.hints.length
+        ? `宝箱线索都翻开啦：${currentRound.hints.join("，")}。现在点食材卡。`
+        : `翻开一条线索：${hint}。还可以继续翻，或者直接猜。`;
+    setFeedback(message);
+    onSpeak?.(message);
   }
 
   function resetGame() {
     setRounds(createFoodGuessRound());
     setRoundIndex(0);
     setAnswers([]);
+    setRevealedHintCount(1);
     setMistakeCount(0);
     setFeedback("宝箱顺序已经换啦。听线索猜食材。");
     completionReportedRef.current = false;
@@ -3748,7 +6253,28 @@ function FoodGuessGame({
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="cyan" />
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="cyan" />
+      </div>
+      <div className="mt-4">
+        <GameEngineStage
+          gameKey="foodGuess"
+          activeStep={answers.length}
+          pickedItems={answers}
+          tone="cyan"
+        />
+      </div>
+      <div className="mt-4">
+        <FoodGuessChestStage
+          answers={answers}
+          completed={completed}
+          currentRound={currentRound}
+          onOpenChest={revealTreasureHint}
+          onPickOption={pickAnswer}
+          options={currentRound?.options ?? []}
+          revealedHintCount={revealedHintCount}
+          roundIndex={roundIndex}
+          total={rounds.length}
+        />
       </div>
 
       <div className="mt-5 rounded-[1.7rem] bg-cyan-50 p-5">
@@ -3875,10 +6401,11 @@ function FoodTreasureQuestGame({
     const nextIngredients = [...collectedIngredients, ingredient];
     setCollectedIngredients(nextIngredients);
     const nutritionText = buildIngredientNutritionIntro(ingredient);
+    const shapeText = getFoodPreferenceShapeHint(ingredient);
     const message =
       nextIngredients.length === ingredientTotal
-        ? `${ingredient}食材卡收好啦。${nutritionText}${currentFood.label}的食材卡集齐了，可以听故事、选小步，再去下一摊。`
-        : `${ingredient}食材卡收好啦。${nutritionText}继续找下一张食材卡。`;
+        ? `${ingredient}食材卡收好啦。样子线索：${shapeText}。${nutritionText}${currentFood.label}的食材卡集齐了，可以听故事、选小步，再去下一摊。`
+        : `${ingredient}食材卡收好啦。样子线索：${shapeText}。${nutritionText}继续找下一张食材卡。`;
     setFeedback(message);
     onSpeak?.(message);
   }
@@ -3918,7 +6445,7 @@ function FoodTreasureQuestGame({
     setSelectedApproachStep("");
 
     if (nextMatched.length === questFoods.length) {
-      const message = "泉州美食摊位寻宝完成啦。你认识了名字、食材、小故事，也选了靠近美食的小步骤。AI成长观察已记录。";
+      const message = "泉州美食摊位寻宝完成啦。你认识了名字、食材、小故事，也愿意靠近一点点。小贴纸来啦。";
       setFeedback(message);
       onSpeak?.(message);
       if (!completionReportedRef.current) {
@@ -3973,7 +6500,38 @@ function FoodTreasureQuestGame({
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="teal" />
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="teal" />
+      </div>
+      <div className="mt-4">
+        <MiniLoopChips steps={["听线索", "看摊位", "找食材", "点图片", "靠近一步", "完成啦"]} />
+      </div>
+      <div className="mt-3">
+        <GameEngineStage
+          gameKey="foodObserve"
+          activeStep={Math.min(
+            3,
+            matched.length + (selectedFood ? 1 : 0) + (ingredientsComplete ? 1 : 0) + (selectedApproachStep ? 1 : 0),
+          )}
+          pickedItems={[
+            ...matched,
+            selectedFood ? `找到:${selectedFood}` : "",
+            ingredientsComplete ? "食材卡集齐" : "",
+            selectedApproachStep,
+          ].filter(Boolean)}
+          tone="teal"
+        />
+      </div>
+      <div className="mt-4">
+        <FoodTreasureMapStage
+          completed={completed}
+          questFoods={questFoods}
+          currentIndex={currentIndex}
+          matched={matched}
+          onPickFood={handlePickFood}
+          selectedFood={selectedFood}
+          ingredientsComplete={ingredientsComplete}
+          selectedApproachStep={selectedApproachStep}
+        />
       </div>
 
       <div className="mt-5 rounded-[1.6rem] bg-teal-50 p-4">
@@ -3994,13 +6552,13 @@ function FoodTreasureQuestGame({
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          {questFoods.map((food, index) => {
+        {questFoods.map((food, index) => {
             const done = matched.includes(food.label);
             const current = index === currentIndex && !completed;
 
             return (
               <div
-                key={food.label}
+                key={getFoodOptionKey(food, index)}
                 className={`rounded-[1.3rem] px-3 py-4 text-center text-sm font-semibold ${
                   done
                     ? "bg-emerald-600 text-white"
@@ -4025,16 +6583,16 @@ function FoodTreasureQuestGame({
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-4">
-        {choiceBoard.map((food) => {
+        {choiceBoard.map((food, index) => {
           const done = matched.includes(food.label);
           const disabled = done || completed;
 
           return (
           <button
-            key={food.label}
+            key={getFoodOptionKey(food, index)}
             onClick={() => handlePickFood(food.label)}
             disabled={disabled}
-            className={`rounded-[1.5rem] px-4 py-4 text-left text-sm font-semibold transition ${
+            className={`rounded-[1.5rem] px-3 py-3 text-left text-sm font-semibold transition ${
               done
                 ? "bg-emerald-100 text-emerald-800"
                 : disabled
@@ -4042,16 +6600,9 @@ function FoodTreasureQuestGame({
                   : "bg-amber-100 text-amber-950 hover:-translate-y-0.5 hover:bg-amber-200"
             }`}
           >
-            <span className="flex items-center gap-3">
-              <span className="flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-white text-3xl shadow-sm">
-                {food.icon}
-              </span>
-              <span>
-                <span className="block text-base">{food.label}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-600">
-                  {done ? "这个摊位食材已认识" : food.stall}
-                </span>
-              </span>
+            <FoodMiniMaterialCard label={food.label} ingredients={food.ingredients} compact />
+            <span className="mt-2 block text-xs leading-5 text-slate-600">
+              {done ? "这个摊位食材已认识" : food.stall}
             </span>
           </button>
           );
@@ -4091,21 +6642,24 @@ function FoodTreasureQuestGame({
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {currentFood.ingredients.map((ingredient) => {
+            {uniqueTextItems(currentFood.ingredients).map((ingredient) => {
               const collected = collectedIngredients.includes(ingredient);
 
               return (
                 <button
-                  key={ingredient}
+                  key={`${currentFood.label}-${ingredient}`}
                   onClick={() => handlePickIngredient(ingredient)}
                   disabled={collected}
-                  className={`rounded-[1.3rem] px-4 py-3 text-left text-sm font-semibold transition ${
+                  className={`rounded-[1.3rem] px-3 py-3 text-left text-sm font-semibold transition ${
                     collected
                       ? "bg-emerald-100 text-emerald-800"
                       : "bg-teal-50 text-slate-800 hover:-translate-y-0.5 hover:bg-teal-100"
                   }`}
                 >
-                  {collected ? "✓" : "☆"} 食材卡：{ingredient}
+                  <span className="mb-2 block text-xs font-semibold">
+                    {collected ? "✓ 已收集" : "☆ 食材卡"}
+                  </span>
+                  <FoodMiniMaterialCard label={ingredient} compact />
                 </button>
               );
             })}
@@ -4164,7 +6718,7 @@ function FoodTreasureQuestGame({
 
           <button
             onClick={goNextStall}
-            className="mt-4 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            className="mt-4 rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5 hover:bg-emerald-200"
             type="button"
           >
             {currentIndex + 1 === questFoods.length ? "完成探味寻宝" : "去下一摊"}
@@ -4188,9 +6742,40 @@ function TodayMenuBroadcast({
 }: {
   entries: WeeklyMenuEntry[];
   onSpeak?: SpeakHandler;
-  onPickFood: (foodLabel: string) => void;
+  onPickFood: (foodLabel: string, ingredients?: string[], entry?: WeeklyMenuEntry, nutritionPlayed?: boolean) => void;
 }) {
+  const [selectedMenuFood, setSelectedMenuFood] = useState("");
+  const [pickedNutritionMessage, setPickedNutritionMessage] = useState("");
   const menuSpeech = buildTodayMenuSpeech(entries);
+  const firstEntry = entries[0];
+  const dateLine = firstEntry ? `今天 ${formatMenuDate(firstEntry.date)} ${getWeekdayLabel(firstEntry.date)}` : "";
+
+  function pickMenuEntry(entry: WeeklyMenuEntry) {
+    playMenuImageIntro(entry);
+  }
+
+  function playMenuImageIntro(entry: WeeklyMenuEntry) {
+    const nutritionIngredients =
+      entry.focusIngredients.length > 0 ? entry.focusIngredients : entry.ingredients;
+    const ingredientText = nutritionIngredients.slice(0, 3).join("、") || "颜色、形状和气味";
+    const intro = `${entry.dishName}，今天${entry.mealType}可以先看一看。找找它的颜色、形状，还有${ingredientText}。`;
+
+    setSelectedMenuFood(entry.dishName);
+    setPickedNutritionMessage(intro);
+    onPickFood(entry.dishName, nutritionIngredients, entry, false);
+    onSpeak?.(intro);
+  }
+
+  function playMenuNutritionTip(entry: WeeklyMenuEntry) {
+    const nutritionIngredients =
+      entry.focusIngredients.length > 0 ? entry.focusIngredients : entry.ingredients;
+    const nutritionMessage = getFoodCardNutritionText(entry.dishName, nutritionIngredients);
+
+    setSelectedMenuFood(entry.dishName);
+    setPickedNutritionMessage(nutritionMessage);
+    onPickFood(entry.dishName, nutritionIngredients, entry, true);
+    onSpeak?.(nutritionMessage);
+  }
 
   if (entries.length === 0) {
     return (
@@ -4209,12 +6794,21 @@ function TodayMenuBroadcast({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-cyan-700">今日闽食播报</p>
-          <h3 className="mt-1 text-xl font-semibold text-slate-900">先听今天会遇见的菜和食材</h3>
+          <h3 className="mt-1 text-xl font-semibold text-slate-900">
+            {entries.length === 1 ? `${dateLine} ${entries[0].mealType}` : `${dateLine} 闽食播报`}
+          </h3>
           <p className="mt-2 text-sm leading-7 text-slate-600">
-            老师录入的今日食谱会优先进入美食认识观察卡，孩子可以先看一看、闻一闻，不着急入口。
+            老师录入的今日食谱会优先进入美食观察与靠近一点点，孩子可以先看一看、闻一闻，不着急入口。
           </p>
         </div>
         <SpeechCueButton text={menuSpeech} onSpeak={onSpeak} label="听今日食谱" tone="cyan" />
+      </div>
+      <div className="mt-4">
+        <MenuPlateStage
+          entries={entries}
+          onPickEntry={pickMenuEntry}
+          selectedMenuFood={selectedMenuFood}
+        />
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -4223,28 +6817,88 @@ function TodayMenuBroadcast({
             entry.focusIngredients.length > 0
               ? entry.focusIngredients.join("、")
               : entry.ingredients.slice(0, 3).join("、") || "观察颜色和气味";
+          const selected = selectedMenuFood === entry.dishName;
+          const coverImage = getMenuCoverImage(entry);
+          const mediaSourceLabel = getMenuMediaSourceText(
+            entry.mediaSource ?? getConfirmedMenuObservationImages(entry)[0]?.mediaSource,
+          );
+          const childSourceLabel = getChildMenuEntrySourceLabel(entry);
 
           return (
-            <button
+            <article
               key={entry.id}
-              onClick={() => onPickFood(entry.dishName)}
-              className="rounded-[1.5rem] bg-white/86 px-4 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-cyan-50"
-              type="button"
+              className={`rounded-[1.5rem] bg-white/86 px-4 py-4 text-left shadow-sm transition ${
+                selected ? "ring-2 ring-cyan-500" : ""
+              }`}
             >
-              <span className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-900">
-                {entry.mealType}
+              <span className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-900">
+                  {entry.mealType}
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    childSourceLabel === "今天换餐"
+                      ? "bg-rose-100 text-rose-800"
+                      : "bg-emerald-100 text-emerald-800"
+                  }`}
+                >
+                  {childSourceLabel}
+                </span>
               </span>
               <span className="mt-3 block text-lg font-semibold text-slate-900">{entry.dishName}</span>
+              <span className="mt-1 block text-xs font-semibold text-slate-500">
+                日期：{formatMenuDate(entry.date)} · {getWeekdayLabel(entry.date)}
+              </span>
+              <button
+                onClick={() => playMenuImageIntro(entry)}
+                className="mt-3 block w-full overflow-hidden rounded-[1.2rem] text-left ring-2 ring-transparent transition hover:-translate-y-0.5 hover:ring-cyan-200"
+                type="button"
+              >
+                {coverImage ? (
+                  <span className="block">
+                    <SafeFoodImage
+                      image={resolveSafeFoodImage(entry.dishName, {
+                        scene: "menuImage",
+                        menuEntries: entries,
+                        ingredients:
+                          entry.focusIngredients.length > 0 ? entry.focusIngredients : entry.ingredients.slice(0, 3),
+                      })}
+                      alt={`${entry.dishName}观察图`}
+                      className="h-36 w-full object-cover"
+                    />
+                    <span className="block bg-cyan-900 px-3 py-2 text-xs font-semibold text-white">
+                      👆 点图听菜名 · {mediaSourceLabel}
+                    </span>
+                  </span>
+                ) : (
+                  <FoodMiniMaterialCard
+                    label={entry.dishName}
+                    ingredients={
+                      entry.focusIngredients.length > 0 ? entry.focusIngredients : entry.ingredients.slice(0, 3)
+                    }
+                    compact
+                  />
+                )}
+              </button>
               <span className="mt-2 block text-sm leading-6 text-slate-600">
                 食材：{entry.ingredients.join("、") || "老师稍后补充"}
               </span>
-              <span className="mt-2 block rounded-[1.1rem] bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                点击进入观察：{focusText}
-              </span>
-            </button>
+              <button
+                onClick={() => playMenuNutritionTip(entry)}
+                className="mt-2 w-full rounded-[1.1rem] bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-amber-100"
+                type="button"
+              >
+                🥕 听营养小发现 · 我想认识：{focusText}
+              </button>
+            </article>
           );
         })}
       </div>
+      {pickedNutritionMessage ? (
+        <p className="mt-4 rounded-[1.3rem] bg-cyan-900 px-4 py-3 text-sm font-semibold leading-7 text-white">
+          🔊 已播放：{pickedNutritionMessage}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -4255,12 +6909,14 @@ function FoodPreferenceGame({
   onSpeak,
   preferredFoodLabel = "",
   todayMenuEntries = [],
+  prioritizeTodayMenuFoods = true,
 }: {
   contentConfig?: EditableGameContent;
   onComplete?: (record: FoodPreferenceRecord) => void;
   onSpeak?: SpeakHandler;
   preferredFoodLabel?: string;
   todayMenuEntries?: WeeklyMenuEntry[];
+  prioritizeTodayMenuFoods?: boolean;
 }) {
   const cleanPreferredFood = preferredFoodLabel.trim();
   const [foodChoices, setFoodChoices] = useState(() => {
@@ -4277,20 +6933,30 @@ function FoodPreferenceGame({
   const [customFoodMode, setCustomFoodMode] = useState(false);
   const [customFoodName, setCustomFoodName] = useState("");
   const [isListeningForFood, setIsListeningForFood] = useState(false);
+  const [isListeningForReason, setIsListeningForReason] = useState(false);
+  const [expandedNutritionLabel, setExpandedNutritionLabel] = useState("");
+  const [preferMenuFirst, setPreferMenuFirst] = useState(prioritizeTodayMenuFoods);
   const [feedback, setFeedback] = useState(
     cleanPreferredFood
       ? `已选择${cleanPreferredFood}。再说说原因，并选一个愿意靠近的小步。`
       : "选一种今天正在认识的食物，再说说原因和愿意靠近的小步。",
   );
+  const [materialImageStatus, setMaterialImageStatus] =
+    useState("先看老师确认的观察图；没有图片时，就用食材图文卡。");
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const reasonRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const completionReportedRef = useRef(false);
   const displayFoodChoices = useMemo(() => {
     const menuChoices = createMenuFoodPreferenceChoices(todayMenuEntries);
     const menuLabelSet = new Set(menuChoices.map((item) => item.label));
     const customAndFallbackChoices = foodChoices.filter((item) => !menuLabelSet.has(item.label));
 
-    return [...menuChoices, ...customAndFallbackChoices].slice(0, 18);
-  }, [foodChoices, todayMenuEntries]);
+    return dedupeFoodPreferenceOptions(
+      preferMenuFirst
+        ? [...menuChoices, ...customAndFallbackChoices]
+        : [...customAndFallbackChoices, ...menuChoices],
+    ).slice(0, 18);
+  }, [foodChoices, preferMenuFirst, todayMenuEntries]);
   const menuChoiceLabels = useMemo(
     () => new Set(createMenuFoodPreferenceChoices(todayMenuEntries).map((item) => item.label)),
     [todayMenuEntries],
@@ -4298,12 +6964,28 @@ function FoodPreferenceGame({
   const selectedFoodInfo =
     displayFoodChoices.find((food) => food.label === selectedFood) ??
     (selectedFood ? buildFoodPreferenceOption(selectedFood) : null);
-  const introText =
-    contentConfig?.childGoal.trim() ||
-    "这不是给孩子贴标签，只记录今天还在认识的食物，帮助老师和家长温和陪伴。";
-  const foodRoleIntroText = selectedFoodInfo
-    ? buildFoodRoleIntro(selectedFoodInfo)
-    : "";
+  const introText = contentConfig?.childGoal.trim() || "先认名字，再选一个靠近小步。";
+  const materialSource = resolveFoodMaterialSource(
+    selectedFood,
+    customFoodName,
+    selectedFoodInfo,
+    todayMenuEntries,
+  );
+  const menuImageContext = findBestMenuImageContext(materialSource.subject, todayMenuEntries, "observationFoodImage");
+  const materialDisplayImageUrl = menuImageContext.coverImageUrl;
+  const materialDisplaySourceLabel = menuImageContext.sourceLabel?.includes("老师确认")
+    ? "老师确认好的观察图"
+    : "老师准备好的观察图";
+
+  useEffect(() => {
+    const foodRecognitionRef = recognitionRef;
+    const foodReasonRecognitionRef = reasonRecognitionRef;
+
+    return () => {
+      foodRecognitionRef.current?.stop();
+      foodReasonRecognitionRef.current?.stop();
+    };
+  }, []);
 
   function submitPreference(nextReason = selectedReason, nextApproach = selectedApproachStep) {
     if (!selectedFood || !nextReason || !nextApproach || completionReportedRef.current) {
@@ -4316,15 +6998,46 @@ function FoodPreferenceGame({
     completionReportedRef.current = true;
     onComplete?.({
       recordedAt: new Date().toISOString(),
+      foodId: menuContext.ingredientName ?? food.label,
       foodLabel: selectedFood,
       reasonLabel: nextReason,
       reason: nextReason,
       strategy: reason?.strategy ?? "",
       gentleTryTip: `今天选择了一个靠近小步：${nextApproach}。${food.gentleTryTip}`,
       approachStep: nextApproach,
+      acceptedLevel: nextApproach,
+      nutritionPlayed: expandedNutritionLabel === food.label,
       themeSource: "foodPreference",
       ...menuContext,
     });
+  }
+
+  function playNutritionTip(food = selectedFoodInfo) {
+    const targetFood = food ?? selectedFoodInfo;
+
+    if (!targetFood) {
+      const message = "先选一种食物，再听营养小发现。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const nutritionText = buildFoodNutritionIntro(targetFood.label, targetFood.ingredients);
+    const message = `${targetFood.label}营养小发现：${nutritionText}`;
+
+    setExpandedNutritionLabel(targetFood.label);
+    setFeedback(message);
+    onSpeak?.(message);
+  }
+
+  function playMaterialIntro() {
+    const targetFood = selectedFoodInfo ?? buildFoodPreferenceOption(materialSource.subject);
+    const nutritionText = buildFoodNutritionIntro(targetFood.label, targetFood.ingredients);
+    const message = `${materialSource.subject}。${getFoodDishShortIntro(targetFood.label, targetFood.ingredients)}营养小发现：${nutritionText}。`;
+
+    setExpandedNutritionLabel(targetFood.label);
+    setFeedback(message);
+    onSpeak?.(message);
   }
 
   function handleFoodPick(label: string) {
@@ -4333,7 +7046,10 @@ function FoodPreferenceGame({
     setSelectedReason("");
     setSelectedApproachStep("");
     setCustomFoodMode(false);
-    const message = food ? buildFoodRoleIntro(food) : "记录下来：今天有一种食物还在慢慢认识。";
+    setExpandedNutritionLabel("");
+    const nutritionText = buildFoodNutritionIntro(food.label, food.ingredients);
+    const message = `${food.label}。${food.colorShape}。营养小发现：${nutritionText}。你可以说说原因，再选一个靠近小步。`;
+    setExpandedNutritionLabel(food.label);
     setFeedback(message);
     onSpeak?.(message);
     completionReportedRef.current = false;
@@ -4352,8 +7068,8 @@ function FoodPreferenceGame({
     setSelectedReason(label);
     const message =
       food && reason
-        ? `谢谢你告诉我：今天可能是${reason.label}。${buildFoodNutritionIntro(food.label, food.ingredients)}接下来选一个愿意靠近的小步就好。`
-        : "已经记录原因，先认识这种食物就很好。";
+        ? `谢谢你告诉我：今天可能是${reason.label}。接下来选一个愿意靠近的小步就好。`
+        : "我知道你的想法啦，先认识这种食物就很好。";
     setFeedback(message);
     onSpeak?.(message);
     submitPreference(label, selectedApproachStep);
@@ -4375,7 +7091,7 @@ function FoodPreferenceGame({
     }
 
     setSelectedApproachStep(step);
-    const message = `你告诉我你正在认识${selectedFood}，今天先${step}也很好。AI成长观察已记录。`;
+    const message = `你愿意靠近一点点：今天先${step}也很好。小贴纸来啦。`;
     setFeedback(message);
     onSpeak?.(message);
     submitPreference(selectedReason, step);
@@ -4392,65 +7108,68 @@ function FoodPreferenceGame({
     setCustomFoodName(label);
     setFoodChoices((current) => {
       const exists = current.some((food) => food.label === label);
-      return exists ? current : [buildFoodPreferenceOption(label), ...current].slice(0, 18);
+      return exists ? current : dedupeFoodPreferenceOptions([buildFoodPreferenceOption(label), ...current]).slice(0, 18);
     });
     handleFoodPick(label);
   }
 
   function toggleCustomFoodVoice() {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const voiceWindow = window as Window & {
-      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
-      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
-    };
-    const SpeechRecognitionApi =
-      voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionApi) {
-      setFeedback("当前浏览器不支持语音输入，可以先用文字输入。");
-      return;
-    }
-
-    if (isListeningForFood && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListeningForFood(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognitionApi();
-    recognition.lang = "zh-CN";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
-      if (transcript) {
+    startChildVoiceInput({
+      recognitionRef,
+      isListening: isListeningForFood,
+      setListening: setIsListeningForFood,
+      onStart: "我在听啦，可以说香菇、姜母鸭，或其他正在认识的食物。",
+      onUnsupported: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onError: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onSpeak: (message) => {
+        setFeedback(message);
+        onSpeak?.(message);
+      },
+      onResult: (transcript) => {
         applyCustomFoodName(transcript.replace(/[。？！,.，、\s]/g, ""));
-      }
-    };
-    recognition.onerror = () => {
-      setFeedback("刚才没听清楚，可以再说一次食物名字，或用文字输入。");
-      setIsListeningForFood(false);
-    };
-    recognition.onend = () => setIsListeningForFood(false);
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListeningForFood(true);
-    setFeedback("我在听啦，可以说“香菇”“青椒”或其他正在认识的食物。");
+      },
+    });
+  }
+
+  function toggleReasonVoiceInput() {
+    if (!selectedFood) {
+      const message = "先选一种食物，再说说你的感觉。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    startChildVoiceInput({
+      recognitionRef: reasonRecognitionRef,
+      isListening: isListeningForReason,
+      setListening: setIsListeningForReason,
+      onStart: "我在听啦，可以说味道重、气味冲，或者今天没胃口。",
+      onUnsupported: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onError: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onSpeak: (message) => {
+        setFeedback(message);
+        onSpeak?.(message);
+      },
+      onResult: (transcript) => {
+        const matchedReason = matchFoodPreferenceReasonFromSpeech(transcript);
+        handleReasonPick(matchedReason);
+      },
+    });
   }
 
   function resetGame() {
     const nextRound = createFoodPreferenceRound(todayMenuEntries);
     setFoodChoices(nextRound.foods);
     setReasonChoices(nextRound.reasons);
+    setPreferMenuFirst(false);
     setSelectedFood("");
     setSelectedReason("");
     setSelectedApproachStep("");
     setCustomFoodMode(false);
     setCustomFoodName("");
-    setFeedback("食物卡和原因卡已经换顺序啦。选一种今天正在认识的食物，再说说原因和愿意靠近的小步。");
+    setExpandedNutritionLabel("");
+    setMaterialImageStatus("食物卡已换顺序，这次不把今日食谱排在最前面。");
+    setFeedback("食物卡和原因卡已经换顺序啦。这次先换一种泉州美食，再说说原因和愿意靠近的小步。");
     completionReportedRef.current = false;
   }
 
@@ -4458,26 +7177,127 @@ function FoodPreferenceGame({
     <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-cyan-700">观察陌生食材</p>
+          <p className="text-sm font-semibold text-cyan-700">美食小观察</p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">
-            {contentConfig?.title || "美食认识观察卡"}
+            {contentConfig?.title || "美食观察与靠近一点点"}
           </h3>
         </div>
         <button
           onClick={() => {
             resetGame();
-            onSpeak?.("美食认识观察卡重新开始。先选一种今天还在认识的泉州美食。");
+            onSpeak?.("美食观察与靠近一点点重新开始。这次换一种泉州美食。");
           }}
           className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-200"
         >
-          重新记录
+          再玩一次
         </button>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听说明" tone="cyan" />
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="cyan" />
       </div>
+      <div className="mt-4">
+        <MiniLoopChips
+          steps={["选食物", "看观察卡", "听营养", "选原因", "靠近一步"]}
+          activeIndex={selectedApproachStep ? 5 : selectedReason ? 3 : selectedFood ? 1 : 0}
+        />
+      </div>
+
+      {selectedFood ? (
+      <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <button
+          onClick={playMaterialIntro}
+          className="overflow-hidden rounded-[1.6rem] bg-white text-left shadow-sm ring-2 ring-transparent transition hover:-translate-y-0.5 hover:ring-cyan-200"
+          type="button"
+        >
+          {materialDisplayImageUrl ? (
+            <SafeFoodImage
+              image={{ url: menuImageContext.coverImageUrl, candidates: menuImageContext.imageCandidates }}
+              alt={`${materialSource.subject}食育材料图`}
+              className="h-64 w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-64 flex-col justify-center bg-[linear-gradient(135deg,#ecfeff_0%,#ffffff_55%,#fef3c7_100%)] px-5">
+              <FoodMiniMaterialCard
+                label={materialSource.subject}
+                ingredients={materialSource.ingredients}
+              />
+              <p className="mt-3 rounded-[1rem] bg-white/80 px-3 py-2 text-center text-sm leading-6 text-slate-700">
+                重点看：{materialSource.focusIngredient} · {materialSource.ingredients.join("、") || "颜色、形状、气味"}
+              </p>
+            </div>
+          )}
+          <span className="block bg-cyan-900 px-4 py-3 text-center text-sm font-semibold text-white">
+            👆 点图片听名字、观察和营养小发现
+          </span>
+        </button>
+        <div className="rounded-[1.6rem] bg-cyan-50 p-5">
+          <p className="text-sm font-semibold text-cyan-900">食育材料图</p>
+          <h4 className="mt-1 text-xl font-semibold text-slate-900">{materialSource.subject}</h4>
+          <span
+            className={`mt-2 inline-flex rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm ${
+              materialDisplaySourceLabel.includes("老师确认")
+                ? "bg-amber-100 text-amber-900"
+                : "bg-white text-cyan-900"
+            }`}
+          >
+            {materialDisplaySourceLabel}
+          </span>
+          <p className="mt-2 text-sm leading-7 text-slate-700">先看颜色、形状和名字。</p>
+          {menuImageContext.images.length > 1 ? (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {menuImageContext.images.slice(0, 6).map((image) => (
+                <button
+                  key={image.id}
+                  onClick={() => {
+                    const message = `${materialSource.subject}观察图。可以找找颜色、形状和食材。`;
+                    setFeedback(message);
+                    onSpeak?.(message);
+                  }}
+                  className="overflow-hidden rounded-[0.9rem] ring-2 ring-white transition hover:-translate-y-0.5 hover:ring-cyan-300"
+                  type="button"
+                >
+                  <SafeFoodImage image={{ url: image.url }} alt={image.label} className="h-16 w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {uniqueTextItems([materialSource.focusIngredient, ...materialSource.ingredients])
+              .slice(0, 5)
+              .map((item) => (
+                <span
+                  key={`${materialSource.subject}-${item}`}
+                  className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-cyan-900 shadow-sm"
+                >
+                  {item}
+                </span>
+              ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => playNutritionTip(selectedFoodInfo ?? buildFoodPreferenceOption(materialSource.focusIngredient || materialSource.subject))}
+              className="rounded-full bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900 transition hover:-translate-y-0.5"
+              type="button"
+            >
+              🥕 再听营养小发现
+            </button>
+            <SpeechCueButton
+              text={`${materialSource.subject}材料图。重点看${materialSource.focusIngredient}。`}
+              onSpeak={onSpeak}
+              label="听材料"
+              tone="cyan"
+            />
+          </div>
+          <p className="mt-3 text-xs leading-6 font-semibold text-cyan-800">{materialImageStatus}</p>
+        </div>
+      </div>
+      ) : (
+        <div className="mt-4 rounded-[1.5rem] bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900">
+          👇 先选一种食物，观察卡和靠近小步会跟着出现。
+        </div>
+      )}
 
       <div className="mt-5 rounded-[1.6rem] bg-cyan-50 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -4500,22 +7320,47 @@ function FoodPreferenceGame({
           ) : null}
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          {displayFoodChoices.map((food) => {
+          {displayFoodChoices.map((food, index) => {
             const selected = selectedFood === food.label;
             const fromTodayMenu = menuChoiceLabels.has(food.label);
+            const nutritionOpen = expandedNutritionLabel === food.label;
+            const foodImageContext = findBestMenuImageContext(food.label, todayMenuEntries, "observationFoodImage");
 
             return (
-              <button
-                key={food.label}
-                onClick={() => handleFoodPick(food.label)}
-                className={`rounded-[1.4rem] px-4 py-4 text-center text-sm font-semibold transition ${
-                  selected
-                    ? "bg-cyan-700 text-white"
-                    : "bg-white text-slate-800 hover:-translate-y-0.5 hover:bg-cyan-100"
+              <article
+                key={getFoodOptionKey(food, index)}
+                className={`rounded-[1.4rem] p-3 text-center text-sm font-semibold transition ${
+                  selected ? "bg-cyan-700 text-white" : "bg-white text-slate-800"
                 }`}
               >
-                <span className="block text-4xl">{food.icon}</span>
-                <span className="mt-2 block">{food.label}</span>
+                <button
+                  onClick={() => handleFoodPick(food.label)}
+                  className="w-full overflow-hidden rounded-[1rem] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                  type="button"
+                >
+                  {foodImageContext.coverImageUrl ? (
+                    <span className="block bg-white text-left shadow-sm">
+                      <SafeFoodImage
+                        image={{ url: foodImageContext.coverImageUrl, candidates: foodImageContext.imageCandidates }}
+                        alt={`${food.label}观察图`}
+                        className="h-28 w-full object-cover"
+                      />
+                      <span className="block px-3 py-2 text-sm font-semibold text-slate-900">{food.label}</span>
+                      <span className="block px-3 pb-2 text-[11px] leading-4 text-slate-600">
+                        {getFoodDishShortIntro(food.label, food.ingredients)}
+                      </span>
+                    </span>
+                  ) : (
+                    <FoodMiniMaterialCard label={food.label} ingredients={food.ingredients} compact />
+                  )}
+                  <span
+                    className={`mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
+                      selected ? "bg-white/20 text-white" : "bg-cyan-50 text-cyan-800"
+                    }`}
+                  >
+                    👆 点图片听一听
+                  </span>
+                </button>
                 {fromTodayMenu ? (
                   <span
                     className={`mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
@@ -4525,14 +7370,24 @@ function FoodPreferenceGame({
                     今日食谱
                   </span>
                 ) : null}
-              </button>
+                {nutritionOpen ? (
+                  <details
+                    className={`mt-2 rounded-[1rem] px-3 py-2 text-left text-xs leading-5 ${
+                      selected ? "bg-white/15 text-white" : "bg-cyan-50 text-cyan-950"
+                    }`}
+                  >
+                    <summary className="cursor-pointer font-semibold">营养小字</summary>
+                    <p className="mt-2">{buildFoodNutritionIntro(food.label, food.ingredients)}</p>
+                  </details>
+                ) : null}
+              </article>
             );
           })}
         </div>
         <div className="mt-4 rounded-[1.3rem] bg-white/80 p-4">
           <button
             onClick={() => setCustomFoodMode((current) => !current)}
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            className="rounded-full bg-orange-300 px-4 py-2 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5 hover:bg-orange-200"
             type="button"
           >
             我想说别的食物
@@ -4547,10 +7402,10 @@ function FoodPreferenceGame({
               />
               <button
                 onClick={() => applyCustomFoodName(customFoodName)}
-                className="rounded-full bg-cyan-700 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                className="rounded-full bg-orange-300 px-4 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5 hover:bg-orange-200"
                 type="button"
               >
-                记录这个食物
+                👉 选这个食物
               </button>
               <button
                 onClick={toggleCustomFoodVoice}
@@ -4559,15 +7414,27 @@ function FoodPreferenceGame({
                 }`}
                 type="button"
               >
-                {isListeningForFood ? "我说完了" : "语音说食物"}
+                {isListeningForFood ? "我说完了" : "🎤 说食物"}
               </button>
             </div>
           ) : null}
         </div>
       </div>
 
+      {selectedFood ? (
       <div className="mt-5 rounded-[1.6rem] bg-amber-50 p-4">
-        <p className="text-sm font-semibold text-amber-900">可能是什么原因？</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-amber-900">可能是什么原因？</p>
+          <button
+            onClick={toggleReasonVoiceInput}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${
+              isListeningForReason ? "bg-rose-100 text-rose-800" : "bg-sky-100 text-sky-900"
+            }`}
+            type="button"
+          >
+            {isListeningForReason ? "我说完啦" : "🎤 我来说原因"}
+          </button>
+        </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {reasonChoices.map((reason) => {
             const selected = selectedReason === reason.label;
@@ -4583,60 +7450,54 @@ function FoodPreferenceGame({
                 }`}
               >
                 <span className="mr-2 text-2xl">{reason.icon}</span>
-                {reason.label}
+                👉 {reason.label}
               </button>
             );
           })}
         </div>
       </div>
+      ) : null}
 
-      <div className="mt-5 rounded-[1.6rem] bg-emerald-50 p-4">
-        <p className="text-sm font-semibold text-emerald-900">今天愿意靠近哪一步？</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          {foodPreferenceApproachSteps.map((step) => {
-            const selected = selectedApproachStep === step;
-
-            return (
-              <button
-                key={step}
-                onClick={() => handleApproachPick(step)}
-                className={`rounded-[1.4rem] px-4 py-3 text-left text-sm font-semibold transition ${
-                  selected
-                    ? "bg-emerald-700 text-white"
-                    : "bg-white text-slate-800 hover:-translate-y-0.5 hover:bg-emerald-100"
-                }`}
-                type="button"
-              >
-                {step}
-              </button>
-            );
-          })}
-        </div>
+      {selectedFood && selectedReason ? (
+      <div className="mt-5 scroll-mt-24 rounded-[1.6rem] bg-emerald-50 p-4">
+        <p className="mb-3 text-sm font-semibold text-emerald-900">今天愿意靠近哪一步？</p>
+        <FoodApproachLadderStage
+          foodImageUrl={materialDisplayImageUrl}
+          onPickStep={handleApproachPick}
+          selectedFood={selectedFood}
+          selectedApproachStep={selectedApproachStep}
+        />
       </div>
+      ) : null}
 
       <div className="mt-5 rounded-[1.5rem] bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold text-slate-900">{feedback}</p>
-          <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听记录" tone="cyan" />
+          <SpeechCueButton text={feedback} onSpeak={onSpeak} label="听一听" tone="cyan" />
         </div>
         {selectedFoodInfo ? (
           <div className="mt-4 rounded-[1.3rem] bg-cyan-50 px-4 py-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-cyan-800">食物小角色自我介绍</p>
-                <p className="mt-2 text-sm leading-7 text-slate-700">{foodRoleIntroText}</p>
+                <p className="text-sm font-semibold text-cyan-800">已选图卡</p>
+                <p className="mt-2 text-sm leading-7 text-slate-700">
+                  {selectedFoodInfo.label} · {selectedFoodInfo.colorShape}
+                </p>
               </div>
-              <SpeechCueButton
-                text={foodRoleIntroText}
-                onSpeak={onSpeak}
-                label="听食材"
-                tone="cyan"
-              />
+              <span className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-cyan-900 shadow-sm">
+                👆 点图片自动播放
+              </span>
             </div>
+            {expandedNutritionLabel === selectedFoodInfo.label ? (
+              <details className="mt-3 rounded-[1rem] bg-white/80 px-3 py-2 text-sm leading-6 text-cyan-950">
+                <summary className="cursor-pointer font-semibold">营养小字</summary>
+                <p className="mt-2">{buildFoodNutritionIntro(selectedFoodInfo.label, selectedFoodInfo.ingredients)}</p>
+              </details>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
-              {selectedFoodInfo.ingredients.map((ingredient) => (
+              {uniqueTextItems(selectedFoodInfo.ingredients).map((ingredient) => (
                 <span
-                  key={ingredient}
+                  key={`${selectedFoodInfo.label}-${ingredient}`}
                   className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-cyan-900 shadow-sm"
                 >
                   {ingredient}
@@ -4652,39 +7513,72 @@ function FoodPreferenceGame({
 
 function FoodKitchenGame({
   contentConfig,
+  mode = "kitchen",
   onComplete,
   onSpeak,
+  todayMenuEntries = [],
 }: {
   contentConfig?: EditableGameContent;
+  mode?: "kitchen" | "broadcast";
   onComplete?: (
     pickedItems: string[],
     detail?: Partial<Omit<MiniGameRecord, "completedAt" | "gameKey" | "badgeName" | "themeId" | "pickedItems">>,
   ) => void;
   onSpeak?: SpeakHandler;
+  todayMenuEntries?: WeeklyMenuEntry[];
 }) {
-  const [recipeChoices, setRecipeChoices] = useState(() => createFoodKitchenRound(false));
+  const isBroadcastMode = mode === "broadcast";
+  const [recipeChoices, setRecipeChoices] = useState(() =>
+    isBroadcastMode ? createFoodReporterRound(false) : createFoodKitchenRound(false),
+  );
   const [selectedRecipeLabel, setSelectedRecipeLabel] = useState("");
   const [customRecipeInput, setCustomRecipeInput] = useState("");
   const [isListeningForKitchen, setIsListeningForKitchen] = useState(false);
   const [completedActions, setCompletedActions] = useState<string[]>([]);
+  const [droppedKitchenIngredients, setDroppedKitchenIngredients] = useState<string[]>([]);
   const [feedback, setFeedback] = useState("选一道泉州美食，按顺序点制作动作卡。");
   const [kitchenSentence, setKitchenSentence] = useState("");
   const [aiBroadcastText, setAiBroadcastText] = useState("");
   const [workMediaPreview, setWorkMediaPreview] = useState("");
   const [workMediaName, setWorkMediaName] = useState("");
   const [workMediaType, setWorkMediaType] = useState<"image" | "video" | "">("");
+  const [kitchenSuccess, setKitchenSuccess] = useState(false);
+  const [broadcastSuccess, setBroadcastSuccess] = useState(false);
   const completionReportedRef = useRef(false);
   const kitchenRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
-  const selectedRecipe =
-    recipeChoices.find((item) => item.label === selectedRecipeLabel) ?? recipeChoices[0] ?? foodKitchenRecipes[0];
+  const selectedRecipe = recipeChoices.find((item) => item.label === selectedRecipeLabel);
   const introText =
     contentConfig?.childGoal.trim() ||
-    "在区域或家庭发现、制作泉州美食后，选择美食、点动作卡、上传作品，再让 AI 帮忙整理一句播报词。";
+    (isBroadcastMode
+      ? "上传作品或说原话，我帮你整理成小小播报词。"
+      : "说菜名，我帮你整理步骤图卡，孩子点一个参与步骤。");
   const nextAction = selectedRecipe?.actions[completedActions.length];
+  const selectedRecipeIngredients = selectedRecipe ? getKitchenRecipeIngredients(selectedRecipe).slice(0, 5) : [];
+  const allIngredientsInPot =
+    selectedRecipeIngredients.length === 0 ||
+    selectedRecipeIngredients.every((ingredient) => droppedKitchenIngredients.includes(ingredient));
   const completed = Boolean(selectedRecipe && completedActions.length === selectedRecipe.actions.length);
+  const kitchenImageContext = selectedRecipe
+    ? findBestMenuImageContext(
+        selectedRecipe.label,
+        todayMenuEntries,
+        isBroadcastMode ? "reporterFoodImage" : "kitchenDishImage",
+      )
+    : {
+        coverImageUrl: "",
+        mediaSource: undefined,
+        sourceLabel: "",
+        imageSource: "",
+        teacherConfirmed: false,
+        aiGenerated: false,
+        imageCandidates: [] as SafeFoodImageCandidate[],
+        fallbackSource: "",
+      };
   const hasSelectedRecipe = Boolean(selectedRecipeLabel);
-  const canOrganizeBroadcast = hasSelectedRecipe || Boolean(kitchenSentence.trim()) || Boolean(workMediaName);
-  const hasActionOrUpload = completedActions.length > 0 || Boolean(workMediaName);
+  const canOrganizeBroadcast = hasSelectedRecipe;
+  const hasActionOrUpload = isBroadcastMode
+    ? Boolean(selectedRecipe && (workMediaName || kitchenSentence.trim() || selectedRecipeLabel))
+    : completedActions.length > 0;
 
   useEffect(() => {
     return () => {
@@ -4695,8 +7589,10 @@ function FoodKitchenGame({
   }, [workMediaPreview]);
 
   useEffect(() => {
+    const recognitionRefForCleanup = kitchenRecognitionRef;
+
     return () => {
-      kitchenRecognitionRef.current?.stop();
+      recognitionRefForCleanup.current?.stop();
     };
   }, []);
 
@@ -4723,8 +7619,11 @@ function FoodKitchenGame({
   function selectKitchenRecipe(recipe: FoodKitchenRecipe) {
     setSelectedRecipeLabel(recipe.label);
     setCompletedActions([]);
+    setDroppedKitchenIngredients([]);
     setKitchenSentence("");
     setAiBroadcastText("");
+    setKitchenSuccess(false);
+    setBroadcastSuccess(false);
     handleWorkMediaSelect();
     completionReportedRef.current = false;
     const message = `${recipe.area}开张啦。第一步：${recipe.actions[0]}。`;
@@ -4745,11 +7644,39 @@ function FoodKitchenGame({
     selectKitchenRecipe(recipe);
   }
 
-  function applyCustomKitchenRecipe(rawValue = customRecipeInput) {
+  function selectBroadcastRecipe(recipe: FoodKitchenRecipe) {
+    setSelectedRecipeLabel(recipe.label);
+    setCompletedActions([]);
+    setDroppedKitchenIngredients([]);
+    setKitchenSentence("");
+    setAiBroadcastText("");
+    setKitchenSuccess(false);
+    setBroadcastSuccess(false);
+    handleWorkMediaSelect();
+    completionReportedRef.current = false;
+    const message = `选好${recipe.label}啦。可以说一句你想介绍的话。`;
+    setFeedback(message);
+    onSpeak?.(message);
+  }
+
+  function pickBroadcastRecipe(label: string) {
+    const recipe = recipeChoices.find((item) => item.label === label);
+
+    if (!recipe) {
+      const message = "还没找到这个作品，可以先输入名字，再说一句想介绍的话。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    selectBroadcastRecipe(recipe);
+  }
+
+  function applyCustomBroadcastRecipe(rawValue = customRecipeInput) {
     const label = normalizeKitchenDishLabel(rawValue);
 
     if (!label) {
-      const message = "可以说或输入一道想做的菜，比如紫菜蛋汤、青菜豆腐或润饼菜。";
+      const message = "可以输入或说一个作品名，比如姜母鸭、烧肉粽、四果汤。";
       setFeedback(message);
       onSpeak?.(message);
       return;
@@ -4761,67 +7688,101 @@ function FoodKitchenGame({
       recipe,
       ...current.filter((item) => item.label !== recipe.label),
     ].slice(0, 8));
+    selectBroadcastRecipe(recipe);
+  }
+
+  function applyCustomKitchenRecipe(rawValue = customRecipeInput) {
+    const label = normalizeKitchenDishLabel(rawValue);
+
+    if (!label) {
+      const message = "可以说或输入一道想做的菜，比如紫菜蛋汤、青菜豆腐或润饼菜。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const displayKey = getKitchenDishDisplayKey(label);
+    const recipe =
+      recipeChoices.find((item) => getKitchenDishDisplayKey(item.label) === displayKey || item.label === label) ??
+      foodKitchenRecipes.find((item) => getKitchenDishDisplayKey(item.label) === displayKey || item.label === label);
+
+    if (!recipe) {
+      const message = `我听到啦：${label}。这道菜的步骤要先请老师确认，今天先从下面老师准备好的菜里选一道。`;
+
+      setCustomRecipeInput(label);
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    setCustomRecipeInput(recipe.label);
+    setRecipeChoices((current) => [
+      recipe,
+      ...current.filter((item) => item.label !== recipe.label),
+    ].slice(0, 8));
     selectKitchenRecipe(recipe);
-    const message = `AI已经把“${recipe.label}”整理成小厨房步骤图卡。先看第一步：${recipe.actions[0]}。`;
+    const message = `已经把“${recipe.label}”整理成小厨房步骤图卡。先看第一步：${recipe.actions[0]}。`;
     setFeedback(message);
     onSpeak?.(message);
   }
 
   function toggleKitchenVoiceInput() {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const voiceWindow = window as Window & {
-      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
-      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
-    };
-    const SpeechRecognitionApi =
-      voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionApi) {
-      const message = "当前浏览器不支持语音输入，可以先用文字输入想做的菜。";
-      setFeedback(message);
-      onSpeak?.(message);
-      return;
-    }
-
-    if (isListeningForKitchen && kitchenRecognitionRef.current) {
-      kitchenRecognitionRef.current.stop();
-      setIsListeningForKitchen(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognitionApi();
-    recognition.lang = "zh-CN";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
-      if (transcript) {
+    startChildVoiceInput({
+      recognitionRef: kitchenRecognitionRef,
+      isListening: isListeningForKitchen,
+      setListening: setIsListeningForKitchen,
+      onStart: "我在听啦，可以说：我想做姜母鸭，或者我要做烧肉粽。",
+      onUnsupported: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onError: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onSpeak: (message) => {
+        setFeedback(message);
+        onSpeak?.(message);
+      },
+      onResult: (transcript) => {
         setCustomRecipeInput(transcript.slice(0, 24));
         applyCustomKitchenRecipe(transcript);
-      }
-    };
-    recognition.onerror = () => {
-      const message = "刚才没听清楚，可以再说一次想做的菜，也可以直接输入。";
-      setFeedback(message);
-      onSpeak?.(message);
-      setIsListeningForKitchen(false);
-    };
-    recognition.onend = () => setIsListeningForKitchen(false);
-    kitchenRecognitionRef.current = recognition;
-    recognition.start();
-    setIsListeningForKitchen(true);
-    const message = "我在听啦，可以说：我想做紫菜蛋汤，或者我要做青菜豆腐。";
-    setFeedback(message);
-    onSpeak?.(message);
+      },
+    });
+  }
+
+  function toggleBroadcastSentenceVoice() {
+    startChildVoiceInput({
+      recognitionRef: kitchenRecognitionRef,
+      isListening: isListeningForKitchen,
+      setListening: setIsListeningForKitchen,
+      onStart: "我在听你的原话，可以说：我今天认识了姜母鸭，热热香香。",
+      onUnsupported: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onError: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onSpeak: (message) => {
+        setFeedback(message);
+        onSpeak?.(message);
+      },
+      onResult: (transcript) => {
+        setKitchenSentence(transcript.slice(0, 90));
+        if (selectedRecipe) {
+          const nextBroadcast = buildKitchenBroadcastText(selectedRecipe, transcript, workMediaName);
+          const message = `我听见啦，整理成小播报：${nextBroadcast}`;
+
+          setAiBroadcastText(nextBroadcast);
+          setBroadcastSuccess(false);
+          setFeedback(message);
+          onSpeak?.(message);
+          return;
+        }
+
+        const message = "我听见啦。先选一个作品，我再帮你整理成小播报。";
+        setFeedback(message);
+        onSpeak?.(message);
+      },
+    });
   }
 
   function pickAction(action: string) {
     if (!selectedRecipe || completed) {
       return;
     }
+
+    setKitchenSuccess(false);
 
     if (action !== nextAction) {
       const message = `先做“${nextAction}”，小厨房要按顺序慢慢来。`;
@@ -4834,23 +7795,92 @@ function FoodKitchenGame({
     setCompletedActions(nextActions);
     const done = nextActions.length === selectedRecipe.actions.length;
     const message = done
-      ? `${buildKitchenStepSpeech(selectedRecipe)} 步骤完成啦，可以上传照片或视频，再说一句介绍进行播报分享。`
+      ? `${buildKitchenStepSpeech(selectedRecipe)} 步骤完成啦，点完成小厨房拿贴纸。`
       : `做对啦。下一步：${selectedRecipe.actions[nextActions.length]}。`;
     setFeedback(message);
     onSpeak?.(message);
   }
 
+  function completeKitchenStepRecord() {
+    if (!selectedRecipe) {
+      const message = "先选一道泉州美食，再按步骤做菜。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    if (completedActions.length === 0) {
+      const message = "先点一个你参与的步骤卡。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    if (!allIngredientsInPot) {
+      const message = "先把材料卡放进锅里，再完成小厨房。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const message = `${selectedRecipe.label}小厨房完成啦：${droppedKitchenIngredients.join("、")}都进锅里了。安全提醒：请和老师或家长一起完成。`;
+    setFeedback(message);
+    onSpeak?.(message);
+    setKitchenSuccess(true);
+
+    if (!completionReportedRef.current) {
+      completionReportedRef.current = true;
+      onComplete?.(
+        [
+          selectedRecipe.label,
+          ...completedActions,
+          `放进锅里:${droppedKitchenIngredients.join("、")}`,
+          `步骤图卡:${selectedRecipe.actions.join("、")}`,
+          kitchenImageContext.sourceLabel ? `成品图:${kitchenImageContext.sourceLabel}` : "",
+          "安全提醒:和老师或家长一起完成",
+        ].filter(Boolean),
+        {
+          foodLabel: selectedRecipe.label,
+          dishName: selectedRecipe.label,
+          activityType: "food-kitchen",
+          dishId: selectedRecipe.label,
+          stepOrder: completedActions,
+          stepsCompleted: completedActions,
+          ingredientsAdded: droppedKitchenIngredients,
+          isCorrect: completed,
+          attempts: completedActions.length,
+          result: completed ? "success" : "completed",
+          status: completed ? "completed" : "in-progress",
+          childUtterance: `参与步骤：${completedActions.join("、")}`,
+          coverImageUrl: kitchenImageContext.coverImageUrl,
+          mediaSource: kitchenImageContext.mediaSource,
+          teacherConfirmed: kitchenImageContext.teacherConfirmed,
+          aiGenerated: kitchenImageContext.aiGenerated,
+          imageSourceLabel: kitchenImageContext.sourceLabel,
+          imageSource: kitchenImageContext.imageSource || kitchenImageContext.sourceLabel,
+        },
+      );
+    }
+  }
+
   function resetGame() {
-    const nextRecipes = createFoodKitchenRound();
+    const nextRecipes = isBroadcastMode ? createFoodReporterRound() : createFoodKitchenRound();
     setRecipeChoices(nextRecipes);
     setCustomRecipeInput("");
     setIsListeningForKitchen(false);
-    setSelectedRecipeLabel(nextRecipes[0]?.label ?? "");
+    setSelectedRecipeLabel("");
     setCompletedActions([]);
+    setDroppedKitchenIngredients([]);
     setKitchenSentence("");
     setAiBroadcastText("");
+    setKitchenSuccess(false);
+    setBroadcastSuccess(false);
     handleWorkMediaSelect();
-    setFeedback("小厨房菜单已经换顺序啦。选一道泉州美食，按顺序点制作动作卡。");
+    setFeedback(
+      isBroadcastMode
+        ? "播报菜单已经换顺序啦。选作品、说原话，再整理播报词。"
+        : "小厨房菜单已经换顺序啦。选一道泉州美食，按顺序点制作动作卡。",
+    );
     completionReportedRef.current = false;
   }
 
@@ -4862,9 +7892,17 @@ function FoodKitchenGame({
       return;
     }
 
-    const nextBroadcast = buildKitchenBroadcastText(selectedRecipe, kitchenSentence, workMediaName);
-    const message = `AI帮你整理好了：${nextBroadcast}`;
+    if (!selectedRecipe) {
+      const message = "先选一道菜品或输入作品名，再整理播报词。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
 
+    const nextBroadcast = buildKitchenBroadcastText(selectedRecipe, kitchenSentence, workMediaName);
+    const message = `播报词整理好了：${nextBroadcast}`;
+
+    setBroadcastSuccess(false);
     setAiBroadcastText(nextBroadcast);
     setFeedback(message);
     onSpeak?.(message);
@@ -4872,7 +7910,7 @@ function FoodKitchenGame({
 
   function playKitchenBroadcast() {
     if (!aiBroadcastText) {
-      const message = "先点 AI帮我整理，生成播报词。";
+      const message = "先点整理播报词，再练小小播报。";
       setFeedback(message);
       onSpeak?.(message);
       return;
@@ -4882,52 +7920,355 @@ function FoodKitchenGame({
     onSpeak?.(aiBroadcastText);
   }
 
+  function putKitchenIngredientInPot(ingredient: string) {
+    if (!selectedRecipe || isBroadcastMode) {
+      return;
+    }
+
+    if (droppedKitchenIngredients.includes(ingredient)) {
+      const message = `${ingredient}已经在锅里啦。`;
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
+    const nextIngredients = [...droppedKitchenIngredients, ingredient];
+    const done = selectedRecipeIngredients.every((item) => nextIngredients.includes(item));
+    const message = done
+      ? "材料都进锅里啦。现在按步骤图卡慢慢做。"
+      : `${ingredient}放进锅里啦，再选一个材料。`;
+
+    setDroppedKitchenIngredients(nextIngredients);
+    setFeedback(message);
+    onSpeak?.(message);
+  }
+
   function completeKitchenShare() {
+    if (!selectedRecipe) {
+      const message = "先选一道菜品或输入作品名。";
+      setFeedback(message);
+      onSpeak?.(message);
+      return;
+    }
+
     if (!hasActionOrUpload) {
-      const message = "先上传作品或完成一个动作。";
+      const message = isBroadcastMode ? "先上传作品或说一句孩子原话。" : "先完成一个做菜步骤。";
       setFeedback(message);
       onSpeak?.(message);
       return;
     }
 
     if (!aiBroadcastText) {
-      const message = "先点 AI帮我整理，再完成播报分享。";
+      const message = "先点整理播报词，再完成播报分享。";
       setFeedback(message);
       onSpeak?.(message);
       return;
     }
 
     const sentence = aiBroadcastText;
-    const message = `小厨师播报：${sentence} AI成长观察已记录，可以和同伴分享。`;
+    const message = `小播报员说得真清楚：${sentence} 小贴纸来啦。`;
     setFeedback(message);
     onSpeak?.(message);
     setAiBroadcastText(sentence);
+    setBroadcastSuccess(true);
 
     if (!completionReportedRef.current) {
       completionReportedRef.current = true;
       onComplete?.([
         selectedRecipe.label,
         ...completedActions,
-        `上传文件:${workMediaName}`,
+        workMediaName ? `小作品:${workMediaName}` : "",
         `孩子原话:${kitchenSentence.trim() || "还在练习表达"}`,
-        `AI播报:${sentence}`,
+        `小播报词:${sentence}`,
         workMediaName ? `本机${workMediaType === "video" ? "视频" : "照片"}：${workMediaName}` : "",
       ].filter(Boolean), {
         foodLabel: selectedRecipe.label,
+        dishName: selectedRecipe.label,
+        activityType: "food-reporter",
+        dishId: selectedRecipe.label,
+        scriptText: sentence,
+        voiceText: kitchenSentence.trim() || sentence,
+        mediaUrl: workMediaName,
+        audioUrl: "",
+        submittedAt: new Date().toISOString(),
+        messageType:
+          workMediaType === "video"
+            ? "video"
+            : workMediaType === "image"
+              ? "photo"
+              : kitchenSentence.trim()
+                ? "text"
+                : "mixed",
+        result: "success",
+        attempts: 1,
+        status: "completed",
         uploadedFileName: workMediaName,
+        mediaName: workMediaName,
         childUtterance: kitchenSentence.trim() || "还在练习表达",
         aiBroadcastText: sentence,
       });
     }
   }
 
+  if (isBroadcastMode) {
+    return (
+      <div className="min-w-0 rounded-[2rem] border border-rose-100 bg-[linear-gradient(135deg,#fff1f2_0%,#ffffff_52%,#eefdfa_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-rose-700">小小闽食播报员</p>
+            <h3 className="mt-1 text-xl font-semibold text-slate-900">
+              {contentConfig?.title || "小小闽食播报员"}
+            </h3>
+          </div>
+          <button
+            onClick={() => {
+              resetGame();
+              onSpeak?.("小播报员重新开始。先选一个作品，再说一句发现。");
+            }}
+            className="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800 transition hover:bg-rose-200"
+            type="button"
+          >
+            换一个作品
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm leading-7 text-slate-600">
+            选菜品或上传作品，说一句原话，我帮你整理成小播报。
+          </p>
+          <SpeechCueButton
+            text="先选一个作品，再说一句原话，最后提交分享。"
+            onSpeak={onSpeak}
+            label="听一听"
+            tone="violet"
+          />
+        </div>
+        <div className="mt-4">
+          <MiniLoopChips steps={["选作品", "说原话", "整理词", "听一听", "提交分享"]} />
+        </div>
+
+        <div className="mt-5 rounded-[1.6rem] bg-white/82 p-4">
+          <p className="text-sm font-semibold text-rose-900">我想介绍什么</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <input
+              value={customRecipeInput}
+              onChange={(event) => setCustomRecipeInput(event.target.value.slice(0, 24))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  applyCustomBroadcastRecipe();
+                }
+              }}
+              placeholder="例如：姜母鸭、烧肉粽、四果汤"
+              className="rounded-[1.1rem] border border-rose-100 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-rose-300"
+            />
+            <button
+              onClick={() => applyCustomBroadcastRecipe()}
+              className="rounded-full bg-orange-300 px-4 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5"
+              type="button"
+            >
+              选这个
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          {recipeChoices.slice(0, 6).map((recipe, index) => {
+            const recipeImageContext = findBestMenuImageContext(recipe.label, todayMenuEntries, "reporterFoodImage");
+            const recipeIngredients = getKitchenRecipeIngredients(recipe);
+
+            return (
+              <button
+                key={`broadcast-${recipe.area ?? "recipe"}-${recipe.label}-${index}`}
+                onClick={() => pickBroadcastRecipe(recipe.label)}
+                className={`w-full max-w-[13.5rem] rounded-[1.4rem] p-3 text-left text-sm font-semibold transition sm:w-[13.5rem] ${
+                  selectedRecipeLabel === recipe.label
+                    ? "bg-rose-100 text-rose-900 ring-2 ring-rose-200"
+                    : "bg-white/82 text-slate-700 hover:-translate-y-0.5 hover:bg-rose-50"
+                }`}
+                type="button"
+              >
+                <span className="block overflow-hidden rounded-[1.1rem] bg-white p-2 shadow-sm">
+                  <SafeFoodImage
+                    image={{ url: recipeImageContext.coverImageUrl, candidates: recipeImageContext.imageCandidates }}
+                    alt={`${recipe.label}菜品图`}
+                    className="h-28 w-full rounded-[0.9rem] object-cover"
+                  />
+                </span>
+                <span className="mt-3 block text-base font-semibold text-slate-900">🎤 {recipe.label}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-600">
+                  {getFoodDishShortIntro(recipe.label, recipeIngredients)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedRecipe ? (
+          <div className="mt-5 rounded-[1.8rem] bg-rose-50 p-5">
+            <div className="grid gap-4 md:grid-cols-[11rem_1fr]">
+              <div className="overflow-hidden rounded-[1.2rem] bg-white p-2 shadow-sm">
+                <SafeFoodImage
+                  image={{ url: kitchenImageContext.coverImageUrl, candidates: kitchenImageContext.imageCandidates }}
+                  alt={`${selectedRecipe.label}播报作品图`}
+                  className="h-36 w-full rounded-[1rem] object-cover"
+                />
+                {kitchenImageContext.mediaSource === "ai_generated" ? (
+                  <span className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
+                    {aiConfirmedUseNotice}
+                  </span>
+                ) : null}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-rose-900">今天介绍：{selectedRecipe.label}</p>
+                <p className="mt-2 text-sm leading-7 text-slate-700">
+                  上传作品可以，直接说一句也可以。
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm font-semibold text-slate-700">
+                    上传照片或视频
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={(event) => handleWorkMediaSelect(event.target.files?.[0])}
+                      className="mt-2 w-full rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                    />
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    我想这样说
+                    <input
+                      value={kitchenSentence}
+                      onChange={(event) => setKitchenSentence(event.target.value.slice(0, 90))}
+                      placeholder={`例如：我今天认识了${selectedRecipe.label}`}
+                      className="mt-2 w-full rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-rose-300"
+                    />
+                    <button
+                      onClick={toggleBroadcastSentenceVoice}
+                      className={`mt-2 rounded-full px-4 py-2 text-xs font-semibold transition hover:-translate-y-0.5 ${
+                        isListeningForKitchen ? "bg-rose-200 text-rose-900" : "bg-white text-rose-900 shadow-sm"
+                      }`}
+                      type="button"
+                    >
+                      {isListeningForKitchen ? "我说完啦" : "说给小话筒"}
+                    </button>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {workMediaPreview ? (
+              <div className="mt-4 overflow-hidden rounded-[1.3rem] bg-white p-3 shadow-sm">
+                {workMediaType === "video" ? (
+                  <video src={workMediaPreview} controls className="h-48 w-full rounded-[1rem] object-cover" />
+                ) : (
+                  <div
+                    aria-label="闽食播报作品预览"
+                    className="h-48 w-full rounded-[1rem] bg-cover bg-center"
+                    role="img"
+                    style={{ backgroundImage: `url(${workMediaPreview})` }}
+                  />
+                )}
+                <p className="mt-2 text-xs font-semibold text-slate-500">当前作品：{workMediaName}</p>
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="rounded-[1.2rem] bg-white px-4 py-3 text-sm font-semibold leading-6 text-rose-900">
+                {feedback}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={organizeKitchenBroadcast}
+                  className="rounded-full bg-orange-300 px-5 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5"
+                  type="button"
+                >
+                  整理播报词
+                </button>
+                <button
+                  onClick={playKitchenBroadcast}
+                  className={`rounded-full bg-sky-100 px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                    aiBroadcastText ? "text-sky-900" : "text-slate-400"
+                  }`}
+                  type="button"
+                >
+                  听一听
+                </button>
+                <button
+                  onClick={completeKitchenShare}
+                  disabled={broadcastSuccess || !hasActionOrUpload}
+                  className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                    broadcastSuccess
+                      ? "bg-emerald-100 text-emerald-700"
+                      : hasActionOrUpload
+                        ? "bg-emerald-300 text-emerald-950"
+                        : "bg-slate-200 text-slate-500"
+                  }`}
+                  type="button"
+                >
+                  {broadcastSuccess ? "小贴纸来啦" : "提交分享"}
+                </button>
+              </div>
+            </div>
+
+            {aiBroadcastText ? (
+              <div className="mt-4 rounded-[1.2rem] bg-white px-4 py-3 text-sm font-semibold leading-7 text-rose-950 shadow-sm">
+                <span className="mb-2 block text-xs text-rose-700">{aiConfirmedUseNotice}</span>
+                {aiBroadcastText}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-[1.6rem] bg-rose-50 px-4 py-4 text-sm font-semibold text-rose-900">
+            👆 先选一个想介绍的美食或作品。
+          </div>
+        )}
+
+        {broadcastSuccess && selectedRecipe ? (
+          <div className="mt-4 rounded-[1.8rem] bg-emerald-100 p-5 text-emerald-950 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-[10rem_1fr]">
+              <div className="overflow-hidden rounded-[1.2rem] bg-white p-2">
+                  <SafeFoodImage
+                    image={{ url: kitchenImageContext.coverImageUrl, candidates: kitchenImageContext.imageCandidates }}
+                    alt={`${selectedRecipe.label}播报完成`}
+                    className="h-32 w-full rounded-[1rem] object-cover"
+                  />
+              </div>
+              <div className="rounded-[1.2rem] bg-white/80 px-4 py-4">
+                <p className="text-2xl font-semibold">小播报员完成啦</p>
+                <p className="mt-2 text-sm font-semibold leading-7">
+                  小播报员说得真清楚，老师和家人都能看见。
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    onClick={resetGame}
+                    className="rounded-full bg-orange-200 px-5 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5"
+                    type="button"
+                  >
+                    再选一道
+                  </button>
+                  <SpeechCueButton
+                    text={`${selectedRecipe.label}播报完成啦，小播报员说得真清楚。`}
+                    onSpeak={onSpeak}
+                    label="听一听"
+                    tone="emerald"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="min-w-0 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-orange-700">小厨房播报</p>
+          <p className="text-sm font-semibold text-orange-700">
+            {isBroadcastMode ? "小小闽食播报员" : "泉州小厨房"}
+          </p>
           <h3 className="mt-1 text-xl font-semibold text-slate-900">
-            {contentConfig?.title || "泉州小厨房"}
+            {isBroadcastMode ? "小小闽食播报员" : contentConfig?.title || "泉州小厨房"}
           </h3>
         </div>
         <button
@@ -4944,14 +8285,30 @@ function FoodKitchenGame({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-7 text-slate-600">{introText}</p>
-        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听规则" tone="orange" />
+        <SpeechCueButton text={introText} onSpeak={onSpeak} label="听一听" tone="orange" />
+      </div>
+      <div className="mt-4">
+        <MiniLoopChips
+          steps={
+            isBroadcastMode
+              ? ["选作品", "说原话", "整理词", "听播报", "完成展示"]
+              : ["选菜", "放材料", "点步骤", "安全提醒", "完成啦"]
+          }
+        />
       </div>
 
       <div className="mt-5 rounded-[1.6rem] bg-orange-50 p-4">
-        <p className="text-sm font-semibold text-orange-900">我想做什么菜</p>
-        <p className="mt-1 text-xs leading-6 text-orange-800">
-          幼儿可以说或输入一道想做的菜，AI 会整理成可点选的步骤图卡和播报词。
+        <p className="text-sm font-semibold text-orange-900">
+          {isBroadcastMode ? "我想播报什么作品" : "我想做什么菜"}
         </p>
+        <p className="mt-1 text-xs leading-6 text-orange-800">
+          {isBroadcastMode
+            ? "上传作品、说一句原话，我只帮你整理播报词。"
+            : "说或输入一道想做的菜，我会整理成可点选的步骤图卡。"}
+        </p>
+        <span className="mt-2 inline-flex rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-orange-900 shadow-sm">
+          {aiConfirmedUseNotice}
+        </span>
         <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
           <input
             value={customRecipeInput}
@@ -4969,39 +8326,152 @@ function FoodKitchenGame({
             className="rounded-full bg-orange-200 px-4 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5"
             type="button"
           >
-            AI生成步骤
+            {isBroadcastMode ? "👉 选这个作品" : "▶ 变成步骤图卡"}
           </button>
           <button
             onClick={toggleKitchenVoiceInput}
             className={`rounded-full px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
-              isListeningForKitchen ? "bg-rose-100 text-rose-800" : "bg-slate-900 text-white"
+              isListeningForKitchen ? "bg-rose-100 text-rose-800" : "bg-cyan-100 text-cyan-900"
             }`}
             type="button"
           >
-            {isListeningForKitchen ? "停止听写" : "语音说菜"}
+            {isListeningForKitchen ? "我说完啦" : "🎤 说菜名"}
           </button>
         </div>
       </div>
 
       <div className="mt-5 flex flex-wrap gap-3">
-        {recipeChoices.map((recipe) => (
-          <button
-            key={recipe.label}
-            onClick={() => pickRecipe(recipe.label)}
-            className={`rounded-[1.4rem] px-4 py-3 text-left text-sm font-semibold transition ${
-              selectedRecipeLabel === recipe.label
-                ? "bg-orange-100 text-orange-900 ring-2 ring-orange-200"
-                : "bg-amber-50 text-slate-700 hover:-translate-y-0.5 hover:bg-amber-100"
-            }`}
-            type="button"
-          >
-            <span className="text-2xl">{recipe.icon}</span> {recipe.label}
-          </button>
-        ))}
+        {recipeChoices.map((recipe, index) => {
+          const recipeImageContext = findBestMenuImageContext(recipe.label, todayMenuEntries, "kitchenDishImage");
+          const recipeIngredients = getKitchenRecipeIngredients(recipe);
+
+          return (
+            <button
+              key={`${recipe.area ?? "recipe"}-${recipe.label}-${index}`}
+              onClick={() => pickRecipe(recipe.label)}
+              className={`w-full max-w-[13.5rem] rounded-[1.4rem] p-3 text-left text-sm font-semibold transition sm:w-[13.5rem] ${
+                selectedRecipeLabel === recipe.label
+                  ? "bg-orange-100 text-orange-900 ring-2 ring-orange-200"
+                  : "bg-amber-50 text-slate-700 hover:-translate-y-0.5 hover:bg-amber-100"
+              }`}
+              type="button"
+            >
+              {recipeImageContext.coverImageUrl ? (
+                <span className="block overflow-hidden rounded-[1.1rem] bg-white p-2 shadow-sm">
+                  <SafeFoodImage
+                    image={{ url: recipeImageContext.coverImageUrl, candidates: recipeImageContext.imageCandidates }}
+                    alt={`${recipe.label}菜品图`}
+                    className="h-28 w-full rounded-[0.9rem] object-cover"
+                  />
+                </span>
+              ) : (
+                <FoodMiniMaterialCard label={recipe.label} ingredients={recipeIngredients} compact />
+              )}
+              <span className="mt-3 block text-base font-semibold text-slate-900">👉 {recipe.label}</span>
+              <span className="mt-1 block text-xs leading-5 text-slate-600">
+                {recipeIngredients.slice(0, 3).join("、") || "看图做小菜"}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
+      {!isBroadcastMode && selectedRecipe ? (
       <div className="mt-5 rounded-[1.8rem] bg-orange-50 p-5">
         <p className="text-sm font-semibold text-orange-900">{selectedRecipe?.area ?? "泉州小厨房"}</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-[10rem_1fr]">
+          {kitchenImageContext.coverImageUrl ? (
+            <div className="overflow-hidden rounded-[1.2rem] bg-white p-2 shadow-sm">
+              <SafeFoodImage
+                image={{ url: kitchenImageContext.coverImageUrl, candidates: kitchenImageContext.imageCandidates }}
+                alt={`${selectedRecipe.label}成品图`}
+                className="h-32 w-full rounded-[1rem] object-cover"
+              />
+              <span
+                className={`mt-2 inline-flex rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  kitchenImageContext.mediaSource === "ai_generated"
+                    ? "bg-amber-100 text-amber-900"
+                    : "bg-cyan-100 text-cyan-900"
+                }`}
+              >
+                {kitchenImageContext.mediaSource === "ai_generated" ? aiConfirmedUseNotice : "老师准备好的菜品图"}
+              </span>
+            </div>
+          ) : (
+            <FoodMiniMaterialCard
+              label={selectedRecipe.label}
+              ingredients={selectedRecipe.actions.slice(0, 3)}
+              compact
+            />
+          )}
+          <div className="rounded-[1.2rem] bg-white/85 px-4 py-3">
+            <p className="text-sm font-semibold text-orange-950">我们一起做：{selectedRecipe.label}</p>
+            <p className="mt-2 text-sm leading-7 text-slate-700">
+              先把材料放进锅里，再按顺序点步骤。
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_14rem]">
+          <div className="rounded-[1.5rem] bg-white/82 p-4">
+            <p className="text-sm font-semibold text-orange-950">材料卡</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {selectedRecipeIngredients.map((ingredient) => {
+                const inPot = droppedKitchenIngredients.includes(ingredient);
+
+                return (
+                  <button
+                    key={`${selectedRecipe.label}-${ingredient}`}
+                    draggable
+                    onClick={() => putKitchenIngredientInPot(ingredient)}
+                    onDragStart={(event) => event.dataTransfer.setData("text/plain", ingredient)}
+                    className={`rounded-[1.2rem] border px-3 py-3 text-left transition hover:-translate-y-0.5 ${
+                      inPot
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                        : "border-orange-100 bg-white text-slate-800"
+                    }`}
+                    type="button"
+                  >
+                    <FoodMiniMaterialCard label={ingredient} ingredients={[ingredient]} compact />
+                    <span className="mt-2 block text-xs font-semibold">
+                      {inPot ? "已经在锅里" : "拖一拖，或点一下放进锅"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const ingredient = event.dataTransfer.getData("text/plain");
+              if (ingredient) {
+                putKitchenIngredientInPot(ingredient);
+              }
+            }}
+            className="flex min-h-[15rem] flex-col items-center justify-center rounded-[1.6rem] border-2 border-dashed border-orange-200 bg-[radial-gradient(circle_at_center,#fed7aa_0%,#fff7ed_58%,#ffffff_100%)] p-4 text-center shadow-inner"
+          >
+            <span className="text-6xl">🍲</span>
+            <p className="mt-2 text-sm font-semibold text-orange-950">小锅在这里</p>
+            <p className="mt-1 text-xs leading-5 text-orange-800">把材料卡放进锅里</p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              {droppedKitchenIngredients.length > 0 ? (
+                droppedKitchenIngredients.map((ingredient) => (
+                  <span
+                    key={`pot-${ingredient}`}
+                    className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-orange-900 shadow-sm"
+                  >
+                    {ingredient}
+                  </span>
+                ))
+              ) : (
+                <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-orange-700">
+                  等材料来
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {selectedRecipe?.actions.map((action, index) => {
             const done = completedActions.includes(action);
@@ -5027,7 +8497,7 @@ function FoodKitchenGame({
                   <span className="text-sm leading-6">{action}</span>
                 </span>
                 <span className="mt-2 block text-xs leading-5 text-slate-600">
-                  {buildKitchenStepVisual(action, selectedRecipe)}
+                  👆 点这步 · {buildKitchenStepVisual(action, selectedRecipe)}
                 </span>
               </button>
             );
@@ -5040,99 +8510,82 @@ function FoodKitchenGame({
           <SpeechCueButton
             text={selectedRecipe ? buildKitchenStepSpeech(selectedRecipe, nextAction) : feedback}
             onSpeak={onSpeak}
-            label="听口令"
+              label="听一听"
             tone="orange"
           />
+          {completed && !kitchenSuccess ? (
+            <button
+              onClick={completeKitchenStepRecord}
+              className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:-translate-y-0.5 hover:bg-emerald-200"
+              type="button"
+            >
+              ✅ 完成小厨房
+            </button>
+          ) : null}
         </div>
       </div>
+      ) : null}
 
-      {completed ? (
-        <div className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-900">
-          步骤完成啦。上传照片或视频，说一句介绍，再点“AI帮我整理”和“听我的播报”。
+      {!isBroadcastMode && !selectedRecipe ? (
+        <div className="mt-5 rounded-[1.6rem] bg-orange-50 px-4 py-4 text-sm font-semibold text-orange-900">
+          👇 先选择一道菜，步骤图卡会在这里出现。
         </div>
       ) : null}
 
-      <div className="mt-4 rounded-[1.6rem] bg-slate-50 p-4">
-        <p className="text-sm font-semibold text-slate-800">小厨房作品上传与播报</p>
-        <div className="mt-3 grid gap-4 md:grid-cols-2">
-          <label className="text-sm font-semibold text-slate-700">
-            上传美食照片或视频
-            <input
-              type="file"
-              accept="image/*,video/*"
-              onChange={(event) => handleWorkMediaSelect(event.target.files?.[0])}
-              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
-            />
-          </label>
-          <label className="text-sm font-semibold text-slate-700">
-            我想这样介绍
-            <input
-              value={kitchenSentence}
-              onChange={(event) => setKitchenSentence(event.target.value.slice(0, 90))}
-              placeholder={selectedRecipe ? `例如：我做${selectedRecipe.label} / 热热的 / 我不知道怎么说` : "说一句小厨师介绍"}
-              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-orange-300"
-            />
-          </label>
+      {!isBroadcastMode && completed && !kitchenSuccess ? (
+        <div className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-900">
+          这道菜做好啦。可以点“完成小厨房”拿贴纸。
         </div>
-        {workMediaPreview ? (
-          <div className="mt-4 overflow-hidden rounded-[1.3rem] bg-white p-3 shadow-sm">
-            {workMediaType === "video" ? (
-              <video src={workMediaPreview} controls className="h-48 w-full rounded-[1rem] object-cover" />
+      ) : null}
+
+      {!isBroadcastMode && kitchenSuccess && selectedRecipe ? (
+        <div className="mt-4 rounded-[1.8rem] bg-emerald-100 p-5 text-emerald-950 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-[10rem_1fr]">
+            {kitchenImageContext.coverImageUrl ? (
+              <div className="overflow-hidden rounded-[1.2rem] bg-white p-2">
+                <SafeFoodImage
+                  image={{ url: kitchenImageContext.coverImageUrl, candidates: kitchenImageContext.imageCandidates }}
+                  alt={`${selectedRecipe.label}做好啦`}
+                  className="h-32 w-full rounded-[1rem] object-cover"
+                />
+                {kitchenImageContext.mediaSource === "ai_generated" ? (
+                  <span className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">
+                    {aiConfirmedUseNotice}
+                  </span>
+                ) : null}
+              </div>
             ) : (
-              <div
-                aria-label="泉州小厨房作品预览"
-                className="h-48 w-full rounded-[1rem] bg-cover bg-center"
-                role="img"
-                style={{ backgroundImage: `url(${workMediaPreview})` }}
+              <FoodMiniMaterialCard
+                label={selectedRecipe.label}
+                ingredients={selectedRecipe.actions.slice(0, 3)}
+                compact
               />
             )}
-            <p className="mt-2 text-xs font-semibold text-slate-500">
-              当前作品：{workMediaName}。文件只在本机预览，成长记录保存文件名。
-            </p>
+            <div className="rounded-[1.2rem] bg-white/80 px-4 py-4">
+              <p className="text-2xl font-semibold">这道菜做好啦</p>
+              <p className="mt-2 text-sm font-semibold leading-7">
+                小厨师完成一道菜，小贴纸来啦。
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  onClick={resetGame}
+                  className="rounded-full bg-orange-200 px-5 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5"
+                  type="button"
+                >
+                  再做一道
+                </button>
+                <SpeechCueButton
+                  text={`${selectedRecipe.label}做好啦，小厨师完成一道菜。`}
+                  onSpeak={onSpeak}
+                  label="听一听"
+                  tone="emerald"
+                />
+              </div>
+            </div>
           </div>
-        ) : null}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm leading-7 text-slate-600">
-            小小播报员可以接着小厨房作品做分享：先展示作品，再说名字、食材和一个发现。
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={organizeKitchenBroadcast}
-              className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
-                canOrganizeBroadcast
-                  ? "bg-orange-100 text-orange-900"
-                  : "bg-slate-100 text-slate-500"
-              }`}
-              type="button"
-            >
-              AI帮我整理
-            </button>
-            <button
-              onClick={playKitchenBroadcast}
-              className={`rounded-full bg-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 ${
-                aiBroadcastText ? "text-slate-700" : "text-slate-400"
-              }`}
-              type="button"
-            >
-              听我的播报
-            </button>
-          </div>
-          <button
-            onClick={completeKitchenShare}
-            className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
-              hasActionOrUpload ? "bg-slate-900 text-white" : "bg-slate-200 text-slate-500"
-            }`}
-            type="button"
-          >
-            完成播报分享
-          </button>
         </div>
-        {aiBroadcastText ? (
-          <div className="mt-4 rounded-[1.2rem] bg-white px-4 py-3 text-sm font-semibold leading-7 text-orange-950 shadow-sm">
-            AI整理后的播报词：{aiBroadcastText}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
+
     </div>
   );
 }
@@ -5150,6 +8603,9 @@ function GrowthArchivePanel({
   const visibleMealReviews = childId
     ? archive.mealReviews.filter((item) => item.childId === childId)
     : archive.mealReviews;
+  const visibleMiniGameRecords = childId
+    ? archive.miniGameRecords.filter((item) => item.childId === childId)
+    : archive.miniGameRecords;
   const uniqueBadgeCount = countUniqueBadges(archive, childId);
   const totalMiniGames = getMiniGameCompletionTotal(archive, childId);
   const latestBadges = visibleBadgeRecords.slice(0, 4);
@@ -5158,16 +8614,16 @@ function GrowthArchivePanel({
   const badgeLevel = getBadgeLevelSummary(archive, childId);
   const nextFocus =
     totalMiniGames < 2
-      ? "先完成一个成长任务"
+      ? "先玩一个小任务"
       : uniqueBadgeCount < 3
-        ? "继续点亮新勋章"
-        : "鼓励孩子复述收获";
+        ? "继续点亮新小章"
+        : "说一说今天喜欢什么";
 
   return (
     <div className="rounded-[2.2rem] border border-white/70 bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_55%,#e6fbfa_100%)] p-6 shadow-[0_18px_50px_rgba(35,88,95,0.12)]">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-teal-700">成长记录册</p>
+          <p className="text-sm font-semibold text-teal-700">成长小书</p>
           <h3 className="mt-1 text-2xl font-semibold text-slate-900">孩子下次再来，也能接着成长</h3>
         </div>
         <p className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
@@ -5181,7 +8637,7 @@ function GrowthArchivePanel({
           <p className="mt-2 text-3xl font-semibold text-slate-900">{uniqueBadgeCount}</p>
         </div>
         <div className="rounded-[1.6rem] bg-white/85 p-4 text-center shadow-sm">
-          <p className="text-xs font-semibold text-slate-500">成长任务记录</p>
+          <p className="text-xs font-semibold text-slate-500">今天玩过</p>
           <p className="mt-2 text-3xl font-semibold text-slate-900">{totalMiniGames}</p>
           {latestMiniGameBadge ? (
             <p className="mt-2 text-xs font-semibold text-amber-800">
@@ -5231,6 +8687,14 @@ function GrowthArchivePanel({
         </div>
       </div>
 
+      <div className="mt-5 rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+          <p className="text-sm font-semibold text-teal-700">游戏贴纸轨迹</p>
+          <h4 className="mt-1 text-xl font-semibold text-slate-900">最近完成的玩法会按自己的形式留下贴纸</h4>
+        <div className="mt-4">
+          <GameRewardTrail records={visibleMiniGameRecords} />
+        </div>
+      </div>
+
       <div className="mt-6 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="rounded-[1.8rem] bg-white/82 p-5 shadow-sm">
           <p className="text-sm font-semibold text-slate-700">最近点亮的勋章</p>
@@ -5254,7 +8718,7 @@ function GrowthArchivePanel({
               ))
             ) : (
               <p className="rounded-[1.3rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
-                还没有勋章记录，先完成一个成长任务或经确认的拍图记录吧。故事互动会先给进度贴纸。
+                还没有小章，先玩一个小任务或拍一张餐盘图吧。听故事也会先拿贴纸。
               </p>
             )}
           </div>
@@ -5284,9 +8748,9 @@ function GrowthArchivePanel({
                   <p className="mt-2 text-sm leading-7 text-slate-600">{item.summary}</p>
                   {item.guessedFoods.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {item.guessedFoods.map((food) => (
+                      {uniqueTextItems(item.guessedFoods).map((food) => (
                         <span
-                          key={food}
+                          key={`${item.reviewedAt}-${food}`}
                           className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900"
                         >
                           {food}
@@ -5298,7 +8762,7 @@ function GrowthArchivePanel({
               ))
             ) : (
               <p className="rounded-[1.3rem] bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-500">
-                还没有拍图记录，等你记录第一张餐盘照片后，这里会自动保存。
+                还没有餐盘照片，等你拍第一张餐盘图后，这里会出现。
               </p>
             )}
           </div>
@@ -5331,20 +8795,12 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     },
   ]);
   const [quickChoices, setQuickChoices] = useState(themes[initialThemeId].choices);
-  const [isLoading, setIsLoading] = useState(false);
+  const isLoading = false;
   const [imageUrl, setImageUrl] = useState("");
   const [isPainting, setIsPainting] = useState(false);
   const [lastImagePrompt, setLastImagePrompt] = useState("");
   const [storyDraft, setStoryDraft] = useState("");
-  const [storyInteractionMode, setStoryInteractionMode] =
-    useState<StoryInteractionMode>("adventure");
-  const [latestPictureBookText, setLatestPictureBookText] = useState("");
-  const [pictureBookCheckinFeedback, setPictureBookCheckinFeedback] =
-    useState("听完绘本后，选择一张阅读打卡答案卡。");
-  const [pictureBookCheckinDone, setPictureBookCheckinDone] = useState(false);
-  const [pictureBookCheckinOptions, setPictureBookCheckinOptions] = useState(
-    defaultPictureBookCheckinOptions,
-  );
+  const [recommendationRequested, setRecommendationRequested] = useState(false);
   const [status, setStatus] = useState(getThemeReadyStatus(initialThemeId));
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [usePremiumVoice, setUsePremiumVoice] = useState(premiumTtsEnabled);
@@ -5356,6 +8812,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   const [latestGrowthFeedbackSource, setLatestGrowthFeedbackSource] = useState<
     "story" | "mini-game" | "meal-review" | ""
   >("");
+  const [latestCompletion, setLatestCompletion] = useState<GameCompletionState | null>(null);
   const [growthArchive, setGrowthArchive] = useState<GrowthArchive>(createEmptyGrowthArchive());
   const [gameContentConfigs, setGameContentConfigs] =
     useState<EditableGameContent[]>(defaultGameContentConfigs);
@@ -5366,6 +8823,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     label: "",
     nonce: 0,
   });
+  const [prioritizeTodayMenuInObservation, setPrioritizeTodayMenuInObservation] = useState(true);
   const [childRoster, setChildRoster] = useState<ChildProfile[]>([]);
   const [selectedChildId, setSelectedChildId] = useState("");
   const [childIdentityInput, setChildIdentityInput] = useState("");
@@ -5380,32 +8838,22 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   const messageEndRef = useRef<HTMLDivElement | null>(null);
 
   const activeTheme = themes[themeId];
+  const activeChildDirectoryItems =
+    themeId === "food" ? foodChildDirectoryItems : habitChildDirectoryItems;
   const storyPanelCopy =
     themeId === "food"
       ? {
-          eyebrow: "闽食绘本摊",
-          title: "听泉州美食绘本，或继续闽食故事",
-          pictureBookLabel: "听闽食绘本",
-          adventureLabel: "逛闽食故事",
-          prompt:
-            storyInteractionMode === "pictureBook"
-              ? "说一句想认识的泉州美食，AI 会讲一段闽食绘本，听完后用食物、画面或喜欢点打卡。"
-              : "说一句闽食发现，AI 会继续泉州美食故事，也可以按这句话生成插图。",
-          picturePlaceholder: "可以说：我想听海蛎小勇士的绘本",
-          adventurePlaceholder: "可以说：我想让海蛎小勇士去古城小吃摊",
-          imageTitle: "边听边看闽食绘本画面",
+          eyebrow: "说一说 / 写一写",
+          title: "告诉 AI 今天想玩什么或想认识什么菜",
+          prompt: "说菜名、玩法或小想法，我帮你找1到2个入口。",
+          adventurePlaceholder: "可以说：我想认识姜母鸭 / 我想玩厨房",
+          imageTitle: "闽食材料图",
         }
       : {
-          eyebrow: "幼习宝绘本馆",
-          title: "听好习惯绘本，或继续成长故事",
-          pictureBookLabel: "听习惯绘本",
-          adventureLabel: "练成长故事",
-          prompt:
-            storyInteractionMode === "pictureBook"
-              ? "说一句想练习的好习惯，AI 会讲一段生活化绘本，听完后用角色、画面或图书归位打卡。"
-              : "说一句生活场景，AI 会继续成长故事，也可以按这句话生成插图。",
-          picturePlaceholder: "可以说：我想听饭前洗手小星的绘本",
-          adventurePlaceholder: "可以说：我想练习餐后整理的小故事",
+          eyebrow: "说一说 / 写一写",
+          title: "告诉 AI 今天想玩什么",
+          prompt: "说一说想听故事、闯关，还是想告诉老师一句话。",
+          adventurePlaceholder: "我想玩洗手 / 我想听绘本 / 我想对老师说",
           imageTitle: "边听边看好习惯绘本画面",
         };
   const activeMissions = storyMissionMap[themeId];
@@ -5413,6 +8861,8 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     () => childRoster.find((child) => child.id === selectedChildId) ?? null,
     [childRoster, selectedChildId],
   );
+  const [activeChildPanel, setActiveChildPanel] = useState<ChildPanelKey>("home");
+  const activeChildPanelHref = activeChildPanel === "home" ? "" : `#${activeChildPanel}`;
   const childRecordFields = useMemo<ChildRecordFields>(
     () =>
       selectedChild
@@ -5433,12 +8883,21 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
             .filter(
               (record) =>
                 record.themeId === themeId &&
-                (selectedChild ? record.childId === selectedChild.id : true),
+                (selectedChild ? record.childId === selectedChild.id : false),
             )
             .map((record) => record.name),
         ),
       ),
     [growthArchive.badgeRecords, selectedChild, themeId],
+  );
+  const activeThemeMiniGameRecords = useMemo(
+    () =>
+      growthArchive.miniGameRecords.filter(
+        (record) =>
+          record.themeId === themeId &&
+          (selectedChild ? record.childId === selectedChild.id : false),
+      ),
+    [growthArchive.miniGameRecords, selectedChild, themeId],
   );
   const todayAiRecordCount = useMemo(() => {
     const todayKey = new Date().toDateString();
@@ -5448,7 +8907,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       return !Number.isNaN(date.getTime()) && date.toDateString() === todayKey;
     };
     const matchChild = (record: ChildRecordFields) =>
-      selectedChild ? record.childId === selectedChild.id : !record.childId;
+      selectedChild ? record.childId === selectedChild.id : false;
     const miniGameCount = growthArchive.miniGameRecords.filter(
       (record) => record.themeId === themeId && matchChild(record) && isToday(record.completedAt),
     ).length;
@@ -5602,18 +9061,20 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       return;
     }
 
+    const readTodayMenuEntries = () =>
+      getEffectiveMenuForDate(
+        parseWeeklyMenuEntries(window.localStorage.getItem(weeklyMenuStorageKey)),
+        parseDailyMenuOverrides(window.localStorage.getItem(dailyMenuOverrideStorageKey)),
+        getLocalDateKey(),
+      );
+
     const restoreHandle = window.setTimeout(() => {
       const savedArchive = window.localStorage.getItem(growthArchiveStorageKey);
       setGrowthArchive(parseGrowthArchive(savedArchive));
       setGameContentConfigs(
         parseGameContentConfigs(window.localStorage.getItem(gameContentConfigStorageKey)),
       );
-      setTodayMenuEntries(
-        getPublishedMenuForDate(
-          parseWeeklyMenuEntries(window.localStorage.getItem(weeklyMenuStorageKey)),
-          getLocalDateKey(),
-        ),
-      );
+      setTodayMenuEntries(readTodayMenuEntries());
       setTeacherPictureBooks(
         parseTeacherPictureBooks(window.localStorage.getItem(teacherPictureBooksStorageKey)),
       );
@@ -5646,7 +9107,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   }, [growthArchive]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !growthArchiveHydratedRef.current) {
       return;
     }
 
@@ -5664,9 +9125,13 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     }
 
     function handleSharedDataUpdate(event: StorageEvent) {
-      if (event.key === weeklyMenuStorageKey) {
+      if (event.key === weeklyMenuStorageKey || event.key === dailyMenuOverrideStorageKey) {
         setTodayMenuEntries(
-          getPublishedMenuForDate(parseWeeklyMenuEntries(event.newValue), getLocalDateKey()),
+          getEffectiveMenuForDate(
+            parseWeeklyMenuEntries(window.localStorage.getItem(weeklyMenuStorageKey)),
+            parseDailyMenuOverrides(window.localStorage.getItem(dailyMenuOverrideStorageKey)),
+            getLocalDateKey(),
+          ),
         );
       }
 
@@ -5697,6 +9162,26 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     setChildIdentityInput(formatChildLabel(child));
     setChildIdentitySuggestions([]);
     setStatus(`${formatChildLabel(child)} 的小名牌拿好啦，今天的任务会记到这个名字下面。`);
+  }
+
+  function openChildPanel(panel: ChildPanelKey) {
+    setActiveChildPanel(panel);
+    setLatestCompletion(null);
+    if (panel === "food-observation-card") {
+      setPrioritizeTodayMenuInObservation(true);
+    }
+  }
+
+  function openChildDirectoryItem(item: SectionDirectoryItem) {
+    const nextPanel = getChildPanelFromHref(item.href);
+    const guide = childDirectoryVoiceGuides[nextPanel];
+
+    setActiveChildPanel(nextPanel);
+    setLatestCompletion(null);
+    if (nextPanel === "food-observation-card") {
+      setPrioritizeTodayMenuInObservation(true);
+    }
+    void startSpeechPlayback(guide ? `${item.label}。${guide}` : item.label);
   }
 
   function applyChildIdentityText(rawValue = childIdentityInput) {
@@ -5765,7 +9250,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       }
     };
     recognition.onerror = () => {
-      setStatus("刚才没听清楚，可以再说一次，也可以直接手动输入。");
+      setStatus("刚刚没有听清，可以再说一次，也可以请老师帮你打字。");
       setIsChildIdentityListening(false);
     };
     recognition.onend = () => setIsChildIdentityListening(false);
@@ -5799,6 +9284,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
           },
         ]);
         setQuickChoices(themes[initialTheme].choices);
+        setRecommendationRequested(false);
         setStatus(getThemeReadyStatus(initialTheme));
         setStoryStateHydrated(true);
       }, 0);
@@ -5826,21 +9312,26 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
         status?: string;
         badges?: string[];
       };
+      const shouldRestoreSavedContent =
+        !initialTheme || !parsed.themeId || parsed.themeId === initialTheme;
 
       const restoreHandle = window.setTimeout(() => {
-        if (parsed.themeId && themes[parsed.themeId]) {
+        if (initialTheme && themes[initialTheme]) {
+          setThemeId(initialTheme);
+        } else if (parsed.themeId && themes[parsed.themeId]) {
           setThemeId(parsed.themeId);
         }
 
-        if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+        if (shouldRestoreSavedContent && Array.isArray(parsed.messages) && parsed.messages.length > 0) {
           setMessages(parsed.messages);
         }
 
-        if (Array.isArray(parsed.quickChoices) && parsed.quickChoices.length > 0) {
+        if (shouldRestoreSavedContent && Array.isArray(parsed.quickChoices) && parsed.quickChoices.length > 0) {
           setQuickChoices(parsed.quickChoices);
         }
 
         if (
+          shouldRestoreSavedContent &&
           typeof parsed.imageUrl === "string" &&
           !parsed.imageUrl.startsWith("data:") &&
           parsed.imageUrl.length < 1200
@@ -5848,11 +9339,11 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
           setImageUrl(parsed.imageUrl);
         }
 
-        if (typeof parsed.lastImagePrompt === "string") {
+        if (shouldRestoreSavedContent && typeof parsed.lastImagePrompt === "string") {
           setLastImagePrompt(parsed.lastImagePrompt);
         }
 
-        if (typeof parsed.status === "string" && parsed.status.trim()) {
+        if (shouldRestoreSavedContent && typeof parsed.status === "string" && parsed.status.trim()) {
           setStatus(normalizeRestoredStoryStatus(parsed.status));
         }
 
@@ -5899,6 +9390,40 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [isLoading, messages]);
 
+  async function syncGrowthArchiveToClassAccount(nextArchive: GrowthArchive) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const account = window.localStorage.getItem(teacherAccountStorageKey)?.trim() ?? "";
+    const passcode = window.localStorage.getItem(teacherPasscodeStorageKey)?.trim() ?? "";
+
+    if (!account || !passcode) {
+      return;
+    }
+
+    try {
+      await fetch("/api/account-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "push",
+          account,
+          passcode,
+          role: "child",
+          payload: {
+            growthArchive: JSON.stringify(nextArchive),
+          },
+          ...getAccountSyncDeviceInfo(),
+        }),
+      });
+    } catch {
+      // Growth records stay in localStorage with syncStatus=pending until the teacher syncs again.
+    }
+  }
+
   function updateGrowthArchive(updater: (current: GrowthArchive) => GrowthArchive) {
     setGrowthArchive((current) => {
       const baseArchive =
@@ -5909,23 +9434,11 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
 
       if (typeof window !== "undefined") {
         window.localStorage.setItem(growthArchiveStorageKey, JSON.stringify(nextArchive));
+        void syncGrowthArchiveToClassAccount(nextArchive);
       }
 
       return nextArchive;
     });
-  }
-
-  function logBadgeRecords(nextBadges: string[], source: "story" | "meal-review" | "mini-game") {
-    if (nextBadges.length === 0) {
-      return;
-    }
-
-    updateGrowthArchive((current) =>
-      nextBadges.reduce(
-        (draft, badge) => recordBadge(draft, badge, themeId, source, childRecordFields),
-        current,
-      ),
-    );
   }
 
   function logMiniGameCompletion(
@@ -5938,6 +9451,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   ) {
     const theme = miniGameThemeMap[gameKey];
     const gameContent = getConfiguredGameContent(gameKey);
+    const gameInstanceDetail = getGameInstanceMetadata(gameKey, extraDetail);
     const childHasBadge = growthArchive.badgeRecords.some(
       (record) =>
         record.name === badgeName &&
@@ -5950,6 +9464,8 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
         badgeName,
         themeId: theme,
         pickedItems,
+        source: getMiniGameSourceLabel(gameKey),
+        ...gameInstanceDetail,
         ...extraDetail,
         ...childRecordFields,
       });
@@ -5959,11 +9475,38 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
         : recordBadge(withGame, badgeName, theme, "mini-game", childRecordFields);
     });
     const completionCopy = buildMiniGameCompletionCopy(gameKey, badgeName, pickedItems, gameContent);
+    void recordGameEngineAttempt({
+      gameKey,
+      gameInstanceId: gameInstanceDetail.gameInstanceId,
+      gameInstanceMechanic: gameInstanceDetail.gameInstanceMechanic,
+      gameInstanceTitle: gameInstanceDetail.gameInstanceTitle,
+      badgeName,
+      themeId: theme,
+      source: getMiniGameSourceLabel(gameKey),
+      pickedItems,
+      detail: {
+        ...gameInstanceDetail,
+        ...extraDetail,
+      },
+      ...childRecordFields,
+    });
 
     setBadges((current) => (current.includes(badgeName) ? current : [...current, badgeName]));
     setLatestBadgeFeedback(childHasBadge ? "" : completionCopy.feedback);
     setLatestExperienceStickerFeedback(childHasBadge ? buildRepeatedMiniGameStatus(gameKey, gameContent) : "");
     setLatestGrowthFeedbackSource("mini-game");
+    setLatestCompletion({
+      title: gameInstanceDetail.gameInstanceTitle ?? gameContent?.title ?? childPanelLabels[activeChildPanel],
+      badgeName,
+      detail: formatInteractionRecord(pickedItems),
+      themeId: theme,
+      panelKey: activeChildPanel,
+      gameKey,
+      imageUrl: extraDetail.coverImageUrl,
+      imageAlt: extraDetail.foodLabel ? `${extraDetail.foodLabel}完成图片` : undefined,
+      imageSourceLabel: extraDetail.imageSourceLabel,
+      imageAiGenerated: extraDetail.aiGenerated,
+    });
     setStatus(childHasBadge ? buildRepeatedMiniGameStatus(gameKey, gameContent) : completionCopy.status);
   }
 
@@ -5982,6 +9525,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       record.approachStep ?? "",
     ].filter(Boolean);
     const stage = getAiObservationStage("foodPreference", pickedItems);
+    const gameInstanceDetail = getGameInstanceMetadata("foodPreference");
     const hasPreferenceBadge = growthArchive.badgeRecords.some(
       (item) =>
         item.name === badgeName &&
@@ -5995,12 +9539,42 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
         badgeName,
         themeId: "food",
         pickedItems,
+        source: getMiniGameSourceLabel("foodPreference"),
+        ...gameInstanceDetail,
+        activityType: "food-approach",
+        foodId: recordWithChild.foodId ?? recordWithChild.ingredientName ?? recordWithChild.foodLabel,
+        foodLabel: recordWithChild.foodLabel,
+        dishId: recordWithChild.dishName ?? recordWithChild.foodLabel,
+        approachStep: recordWithChild.approachStep,
+        acceptedLevel: recordWithChild.acceptedLevel ?? recordWithChild.approachStep,
+        nutritionPlayed: recordWithChild.nutritionPlayed ?? false,
+        menuDate: recordWithChild.menuDate,
+        mealType: recordWithChild.mealType,
+        answerContent: recordWithChild.reasonLabel,
+        result: "success",
+        attempts: 1,
+        status: "completed",
         ...childRecordFields,
       });
 
       return hasPreferenceBadge
         ? withGame
         : recordBadge(withGame, badgeName, "food", "mini-game", childRecordFields);
+    });
+    void recordGameEngineAttempt({
+      gameKey: "foodPreference",
+      gameInstanceId: gameInstanceDetail.gameInstanceId,
+      gameInstanceMechanic: gameInstanceDetail.gameInstanceMechanic,
+      gameInstanceTitle: gameInstanceDetail.gameInstanceTitle,
+      badgeName,
+      themeId: "food",
+      source: getMiniGameSourceLabel("foodPreference"),
+      pickedItems,
+      detail: {
+        ...gameInstanceDetail,
+        ...recordWithChild,
+      },
+      ...childRecordFields,
     });
 
     if (!hasPreferenceBadge) {
@@ -6014,14 +9588,22 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     );
     setLatestExperienceStickerFeedback("");
     setLatestGrowthFeedbackSource("mini-game");
+    setLatestCompletion({
+      title: "美食观察与靠近一点点",
+      badgeName,
+      detail: `${record.foodLabel} · ${record.reasonLabel}${record.approachStep ? ` · ${record.approachStep}` : ""}`,
+      themeId: "food",
+      panelKey: activeChildPanel,
+      gameKey: "foodPreference",
+    });
     setStatus(
       [
-        `AI成长观察：孩子正在认识“${record.foodLabel}”`,
-        record.dishName && record.dishName !== record.foodLabel ? `今日食谱关联：${record.dishName}` : "",
-        `选择/动作记录：${record.reasonLabel}${record.approachStep ? `，${record.approachStep}` : ""}`,
-        `观察线索：${followUp.observation}`,
-        `阶段提示：${stage}`,
-        `下一步温和跟进：${followUp.homeTask}`,
+        `老师会看到：正在认识“${record.foodLabel}”`,
+        record.dishName && record.dishName !== record.foodLabel ? `今日食谱：${record.dishName}` : "",
+        `这次选择：${record.reasonLabel}${record.approachStep ? `，${record.approachStep}` : ""}`,
+        `老师会看到：${followUp.observation}`,
+        `现在小步：${stage}`,
+        `下一小步：${followUp.homeTask}`,
         gameContent?.reminderText ? `老师提醒：${gameContent.reminderText}` : "",
       ]
         .filter(Boolean)
@@ -6038,7 +9620,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       const withReview = recordMealReview(current, {
         reviewedAt: new Date().toISOString(),
         mode: review.mode ?? "demo",
-        summary: review.summary ?? "餐盘照片已完成一次观察记录。",
+        summary: review.summary ?? "餐盘照片已完成一次观察。",
         guessedFoods: review.guessedFoods ?? [],
         stickers: recordedStickers,
         plateState: review.plateState ?? "等待现场确认",
@@ -6065,22 +9647,32 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
           current,
         ),
       );
-      setLatestBadgeFeedback(`泉州闽食拍图打卡：${firstSticker}`);
-      setStatus(`闽食照片记录完成啦，围绕${formatFoodList(review.guessedFoods ?? [])}继续说一说。`);
+      setLatestBadgeFeedback(`闽食小照片：${firstSticker}`);
+      setStatus(`闽食照片收好啦，围绕${formatFoodList(review.guessedFoods ?? [])}继续说一说。`);
     } else {
       setLatestBadgeFeedback("");
       setStatus("闽食拍照练习完成啦，可以请老师或家长一起确认餐盘里的泉州闽南味。");
     }
 
     setLatestExperienceStickerFeedback(
-      shouldAwardBadges ? "" : `闽食体验贴纸：${firstSticker}。拍照和观察任务已经完成啦。`,
+      shouldAwardBadges ? "" : `闽食体验贴纸：${firstSticker}。拍照和观察小任务已经完成啦。`,
     );
     setLatestGrowthFeedbackSource("meal-review");
+    setLatestCompletion({
+      title: "闽食照片观察",
+      badgeName: firstSticker,
+      detail: `围绕${formatFoodList(review.guessedFoods ?? [])}完成拍图观察。`,
+      themeId: "food",
+      panelKey: activeChildPanel,
+    });
   }
 
   function switchTheme(nextTheme: ThemeId) {
+    recognitionRef.current?.stop();
+    childIdentityRecognitionRef.current?.stop();
     stopSpeaking();
     setThemeId(nextTheme);
+    setActiveChildPanel("home");
     setMessages([
       {
         role: "assistant",
@@ -6088,14 +9680,17 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       },
     ]);
     setQuickChoices(themes[nextTheme].choices);
-    setPictureBookCheckinOptions(defaultPictureBookCheckinOptions);
-    setPictureBookCheckinDone(false);
-    setLatestPictureBookText("");
+    setRecommendationRequested(false);
     setImageUrl("");
     setLastImagePrompt("");
+    setStoryDraft("");
+    setIsListening(false);
+    setIsChildIdentityListening(false);
+    setIsPainting(false);
     setLatestExperienceStickerFeedback("");
     setLatestBadgeFeedback("");
     setLatestGrowthFeedbackSource("");
+    setLatestCompletion(null);
     setStatus(getThemeReadyStatus(nextTheme));
   }
 
@@ -6110,9 +9705,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       },
     ]);
     setQuickChoices(themes[resetTheme].choices);
-    setPictureBookCheckinOptions(defaultPictureBookCheckinOptions);
-    setPictureBookCheckinDone(false);
-    setLatestPictureBookText("");
+    setRecommendationRequested(false);
     setImageUrl("");
     setLastImagePrompt("");
     setStoryDraft("");
@@ -6125,6 +9718,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     setLatestBadgeFeedback("");
     setLatestExperienceStickerFeedback("");
     setLatestGrowthFeedbackSource("");
+    setLatestCompletion(null);
     stopSpeaking();
 
     if (typeof window !== "undefined") {
@@ -6132,202 +9726,40 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     }
   }
 
-  async function sendMessage(messageText: string) {
-    const cleanText = messageText.trim();
+  async function chooseStoryOption(choice: string) {
+    const target = getStoryOptionTarget(choice, themeId);
+    const visual = getStoryOptionVisual(choice, themeId);
+    const nextPanel = getChildPanelFromHref(target);
 
-    if (!cleanText || isLoading) {
-      return;
-    }
-
-    if (cleanText.length > storyInputMaxLength) {
-      setStatus(`故事请求太长啦，请控制在 ${storyInputMaxLength} 个字以内。`);
-      return;
-    }
-
-    setMessages((current) => [...current, { role: "user", content: cleanText }]);
-    setIsLoading(true);
-    setStatus("故事伙伴正在想下一段...");
-
-    try {
-      const nextMessages = [...messages, { role: "user" as const, content: cleanText }];
-      const response = await fetch("/api/story", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mode: "child",
-          theme: themeId,
-          userInput: cleanText,
-          messages: nextMessages,
-        }),
-      });
-
-      const data = (await response.json().catch(() => ({}))) as StoryApiResponse;
-      const reply = isValidStoryReply(data.reply) ? data.reply.trim() : "";
-
-      if (!response.ok || !reply) {
-        throw new Error(data.error || "故事伙伴暂时没有接上，请再试一次。");
-      }
-
-      const choices =
-        Array.isArray(data.choices) && data.choices.length > 0 ? data.choices : activeTheme.choices;
-      const badgeName = typeof data.badge === "string" ? data.badge.trim() : "";
-      const progressSticker =
-        typeof data.templateBadge === "string" && data.templateBadge.trim()
-          ? data.templateBadge.trim()
-          : badgeName;
-      const shouldAwardStoryBadge = Boolean(badgeName && isReliableStoryBadgeResponse(data));
-
-      startTransition(() => {
-        setMessages((current) => [...current, { role: "assistant", content: reply }]);
-        setQuickChoices(choices);
-
-        if (!shouldAwardStoryBadge) {
-          setLatestBadgeFeedback("");
-          setLatestGrowthFeedbackSource("");
-          setLatestExperienceStickerFeedback(
-            progressSticker
-              ? `故事进度贴纸：${progressSticker}。继续讲故事，不计入真实成长勋章。`
-              : "故事进度贴纸：新的故事节点已经解锁。",
-          );
-        }
-      });
-
-      if (shouldAwardStoryBadge) {
-        setBadges((current) => {
-          if (current.includes(badgeName)) {
-            return current;
-          }
-
-          return [...current, badgeName];
-        });
-        logBadgeRecords([badgeName], "story");
-        setLatestBadgeFeedback(`刚刚点亮：${badgeName}`);
-        setLatestExperienceStickerFeedback("");
-        setLatestGrowthFeedbackSource("story");
-      }
-
-      const fallbackReminder = data.error ?? "这是体验备用故事，不计入真实成长勋章。";
-      setStatus(
-        data.error || data.fallbackUsed || data.source === "fallback" || data.source === "demo"
-          ? `故事已经接上啦，不过还有一点小提醒：${fallbackReminder}`
-          : shouldAwardStoryBadge
-            ? `太棒啦，点亮了${badgeName}。`
-            : "新的故事节点已经解锁，获得一枚故事进度贴纸。",
-      );
-    } catch (error) {
-      setMessages((current) => [
-        ...current,
-        {
-          role: "assistant",
-          content: "我刚刚被海风吹乱了故事书，我们再试一次，好吗？",
-        },
-      ]);
-      setStatus(error instanceof Error ? error.message : "刚才连接有点不稳，可以再点一次。");
-    } finally {
-      setIsLoading(false);
-    }
+    setActiveChildPanel(nextPanel);
+    setLatestCompletion(null);
+    setStatus(`先玩：${visual.title}。进去试一试，玩完小贴纸才会来。`);
+    await startSpeechPlayback(visual.title);
   }
 
-  async function chooseStoryOption(choice: string) {
-    await startSpeechPlayback(choice);
-    await sendMessage(choice);
+  async function applyStoryRecommendation(rawText: string, source: "text" | "voice" | "default" = "text") {
+    const cleanText = rawText.trim();
+    const nextChoices = recommendStoryOptionsFromInput(cleanText, themeId);
+
+    setQuickChoices(nextChoices);
+    setRecommendationRequested(true);
+    const heardVerb = source === "text" ? "我看到啦" : "我听到啦";
+
+    setStatus(
+      cleanText
+        ? `${heardVerb}，你想玩“${cleanText}”。我们一起去试试：${nextChoices[0]}。`
+        : `先给你找两个小入口。点“开始玩”进去看看。`,
+    );
+    await startSpeechPlayback(
+      cleanText
+        ? `${heardVerb}，你想玩${cleanText}。我们一起去试试${nextChoices[0]}。`
+        : `可以先玩${nextChoices[0]}。`,
+    );
   }
 
   async function submitStoryDraft() {
-    const cleanText = storyDraft.trim();
-
-    if (!cleanText) {
-      setStatus("可以先说一句或输入一句想听的故事。");
-      return;
-    }
-
-    await sendMessage(cleanText);
+    await applyStoryRecommendation(storyDraft, storyDraft.trim() ? "text" : "default");
     setStoryDraft("");
-  }
-
-  async function generatePictureBookStory() {
-    if (isLoading) {
-      return;
-    }
-
-    const cleanText =
-      storyDraft.trim() ||
-      (themeId === "food" ? "我想听一个泉州美食绘本故事" : "我想听一个幼习宝好习惯绘本故事");
-    setIsLoading(true);
-    setStoryInteractionMode("pictureBook");
-    setStatus("故事伙伴正在翻绘本，马上讲给你听...");
-    setMessages((current) => [...current, { role: "user", content: `我想听绘本：${cleanText}` }]);
-
-    try {
-      const response = await fetch("/api/story", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mode: "child",
-          storyType: "pictureBook",
-          theme: themeId,
-          userInput: cleanText,
-          messages,
-        }),
-      });
-      const data = (await response.json().catch(() => ({}))) as StoryApiResponse;
-      const reply = isValidStoryReply(data.reply) ? data.reply.trim() : "";
-
-      if (!response.ok || !reply) {
-        throw new Error(data.error || "绘本故事暂时没有接上，请再试一次。");
-      }
-
-      const choices =
-        Array.isArray(data.choices) && data.choices.length > 0 ? data.choices : activeTheme.choices;
-
-      setMessages((current) => [...current, { role: "assistant", content: reply }]);
-      setQuickChoices(choices);
-      setLatestPictureBookText(reply);
-      setPictureBookCheckinOptions(buildPictureBookCheckinOptions(choices));
-      setPictureBookCheckinDone(false);
-      setPictureBookCheckinFeedback("绘本听完啦，选一张答案卡完成阅读打卡。");
-      setLatestBadgeFeedback("");
-      setLatestGrowthFeedbackSource("");
-      setLatestExperienceStickerFeedback("绘本倾听贴纸：已经听完一个绘本故事，完成阅读打卡后会写入成长记录。");
-      setStatus("绘本故事生成好了，正在播放给你听。");
-      void startSpeechPlayback(reply);
-    } catch (error) {
-      setMessages((current) => [
-        ...current,
-        {
-          role: "assistant",
-          content: "绘本书页刚刚卡住了，我们换一句想听的内容再试一次。",
-        },
-      ]);
-      setStatus(error instanceof Error ? error.message : "绘本故事暂时没有接上，可以再点一次。");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  function completePictureBookCheckin(option: PictureBookCheckinOption) {
-    if (!latestPictureBookText) {
-      const message = "先生成并听一段绘本故事，再完成阅读打卡。";
-      setPictureBookCheckinFeedback(message);
-      setStatus(message);
-      return;
-    }
-
-    if (pictureBookCheckinDone) {
-      const message = "这次绘本已经完成阅读打卡啦，可以继续听绘本或去玩一个成长任务。";
-      setPictureBookCheckinFeedback(message);
-      void startSpeechPlayback(message);
-      return;
-    }
-
-    const pickedItems = [themeId === "food" ? "闽食绘本摊" : "幼习宝绘本馆", option.label, option.source];
-    logMiniGameCompletion("readingCheckin", "阅读小书虫", pickedItems);
-    setPictureBookCheckinDone(true);
-    setPictureBookCheckinFeedback(`${option.feedback} 下一步：再玩一个任务、继续冒险，或查看成长记录。`);
   }
 
   async function generateImage(imageIdea = "") {
@@ -6359,12 +9791,12 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       const data = (await response.json()) as { imageUrl?: string; error?: string };
 
       if (!response.ok || !data.imageUrl) {
-        throw new Error(data.error || "图片生成失败");
+        throw new Error(data.error || "图片暂时画不出来");
       }
 
       setImageUrl(data.imageUrl);
       setLastImagePrompt(prompt);
-      setStatus("绘本插图生成好了。");
+      setStatus("绘本插图画好了。");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "图片暂时画不出来，稍后再试。");
     } finally {
@@ -6373,74 +9805,105 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   }
 
   function toggleVoiceInput() {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const voiceWindow = window as Window & {
-      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
-      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
-    };
-
-    const SpeechRecognitionApi =
-      voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionApi) {
-      setStatus("当前浏览器不支持语音输入，建议用 Chrome 或 Edge。");
-      return;
-    }
-
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-      return;
-    }
-
     stopSpeaking();
-
-    const recognition = new SpeechRecognitionApi();
-    recognition.lang = "zh-CN";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? "";
-      if (transcript) {
+    startChildVoiceInput({
+      recognitionRef,
+      isListening,
+      setListening: setIsListening,
+      onStart: themeId === "food" ? "我在听，你可以说：我想认识姜母鸭。" : "我在听，你可以说：我想洗手，或我想听故事。",
+      onUnsupported: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onError: "刚刚没有听清，可以再说一次，也可以请老师帮你打字。",
+      onSpeak: (message) => {
+        setStatus(message);
+        void startSpeechPlayback(message);
+      },
+      onResult: (transcript) => {
         const nextText = transcript.slice(0, storyInputMaxLength);
         setStoryDraft(nextText);
-        setStatus(
-          themeId === "food"
-            ? "已经听到你的闽食想法啦，可以点“继续故事”或“按这句话画图”。"
-            : "已经听到你的想法啦，可以点“播放绘本”或继续故事。",
-        );
-      }
-    };
-
-    recognition.onerror = () => {
-      setStatus("刚才没有听清楚，你可以再说一次。");
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
-    setStatus(themeId === "food" ? "正在听你说想听或想画的闽食内容..." : "正在听你说想听的绘本或故事内容...");
+        void applyStoryRecommendation(nextText, "voice");
+      },
+    });
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
-      <section className="hidden">
-        <ChildIdentityPanel
-          childRoster={childRoster}
-          selectedChildId={selectedChildId}
-        />
-      </section>
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
+      <div
+        className={`grid gap-6 ${
+          selectedChild ? "lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start" : ""
+        }`}
+      >
+        <div className="flex min-w-0 flex-col gap-8">
+          <section className="hidden">
+            <ChildIdentityPanel
+              childRoster={childRoster}
+              selectedChildId={selectedChildId}
+            />
+          </section>
 
-      <section>
+      {selectedChild && activeChildPanel !== "home" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] bg-white/82 px-4 py-3 shadow-sm">
+          <p className="text-sm font-semibold text-slate-700">
+            现在玩：{childPanelLabels[activeChildPanel]}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {Object.values(themes).map((theme) => (
+              <button
+                key={`switch-${theme.id}`}
+                onClick={() => switchTheme(theme.id)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                  theme.id === themeId
+                    ? "bg-orange-300 text-orange-950 shadow-sm"
+                    : "bg-white text-slate-700 shadow-sm"
+                }`}
+                type="button"
+              >
+                {theme.emoji} {theme.label}
+              </button>
+            ))}
+            <button
+              onClick={() => openChildPanel("home")}
+              className="rounded-full bg-orange-200 px-4 py-2 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5 hover:bg-orange-100"
+              type="button"
+            >
+              🏠 回到我的小首页
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedChild && latestCompletion ? (
+        <GameCompletionPanel
+          completion={latestCompletion}
+          onReplay={() => {
+            if (latestCompletion.gameKey === "foodPreference") {
+              setPreferredFoodRequest((current) => ({
+                label: "",
+                nonce: current.nonce + 1,
+              }));
+              setPrioritizeTodayMenuInObservation(false);
+              setStatus("美食观察重新开始啦。这次不把今日食谱排在最前面，换一种食物看看。");
+            } else {
+              setStatus(`可以再玩一次：${childPanelLabels[latestCompletion.panelKey]}。`);
+            }
+            setLatestCompletion(null);
+          }}
+          onBackToDirectory={() => {
+            setLatestCompletion(null);
+            setActiveChildPanel("home");
+            setStatus("已回到儿童首页，可以从右侧目录再选一个游戏。");
+          }}
+          onSpeak={(text) => {
+            void startSpeechPlayback(text);
+          }}
+        />
+      ) : null}
+
+      <section
+        id="child-status"
+        hidden={
+          Boolean(selectedChild) && activeChildPanel !== "home" && activeChildPanel !== "child-status"
+        }
+      >
         <div className="overflow-hidden rounded-[2rem] bg-[linear-gradient(135deg,#fff6d6_0%,#ffffff_52%,#dff8f7_100%)] p-5 shadow-[0_20px_60px_rgba(49,93,104,0.14)] md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -6450,7 +9913,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                   onClick={() => switchTheme(theme.id)}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                     theme.id === themeId
-                      ? "bg-slate-900 text-white shadow-md"
+                      ? "bg-orange-300 text-orange-950 shadow-md"
                       : "bg-white/80 text-slate-700 hover:-translate-y-0.5"
                   }`}
                   type="button"
@@ -6463,23 +9926,34 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
               href="/children"
               className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
             >
-              回到儿童入口重新识别
+              🏠 回到儿童入口重新识别
             </Link>
           </div>
 
           <div className="mt-5 rounded-[1.6rem] bg-white/88 p-5 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-teal-700">我的小名牌 · 今日AI成长状态</p>
+                <p className="text-sm font-semibold text-teal-700">我的小名牌 · 今天玩什么</p>
                 <h1 className="mt-2 text-2xl font-semibold text-slate-900">
                   {selectedChild ? formatChildLabel(selectedChild) : "还没拿到小名牌"}
                 </h1>
                 <p className="mt-2 text-sm font-semibold text-slate-600">
                   当前主题：{activeTheme.label}
                 </p>
+                {themeId === "food" ? (
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-teal-900">
+                    <span className="rounded-full bg-teal-50 px-3 py-1.5">
+                      今日食谱：{todayMenuEntries.length > 0 ? `${todayMenuEntries.length} 道菜` : "等老师放好"}
+                    </span>
+                    <span className="rounded-full bg-amber-50 px-3 py-1.5">
+                      今日闽食任务：看图、靠近、小播报
+                    </span>
+                  </div>
+                ) : null}
                 <p className="mt-3 max-w-3xl text-base leading-7 font-semibold text-slate-900">
                   {latestBadgeFeedback || status}
                 </p>
+                {!selectedChild ? (
                 <div className="mt-4 grid max-w-3xl gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
                   <input
                     value={childIdentityInput}
@@ -6509,6 +9983,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                     {isChildIdentityListening ? "停止识别" : "语音识别"}
                   </button>
                 </div>
+                ) : null}
                 {childIdentitySuggestions.length > 1 ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {childIdentitySuggestions.map((child) => (
@@ -6524,23 +9999,23 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                   </div>
                 ) : null}
               </div>
-              <div className="grid w-full max-w-sm grid-cols-2 gap-3 sm:w-auto sm:grid-cols-3">
-                <div className="rounded-[1.2rem] bg-teal-50 px-3 py-3 text-center">
-                  <p className="text-xs font-semibold text-teal-700">AI记录</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">{todayAiRecordCount}</p>
-                </div>
-                <div className="rounded-[1.2rem] bg-emerald-50 px-3 py-3 text-center">
-                  <p className="text-xs font-semibold text-emerald-700">已点亮章</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">
-                    {activeThemeBadges.length}
-                  </p>
-                </div>
-                <div className="rounded-[1.2rem] bg-amber-50 px-3 py-3 text-center">
-                  <p className="text-xs font-semibold text-amber-700">播报</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">
-                    {autoSpeak ? "开" : "关"}
-                  </p>
-                </div>
+              <div className="grid w-full max-w-md grid-cols-3 gap-3 sm:w-auto">
+                {[
+                  { label: "今天玩了", value: `${todayAiRecordCount}次`, icon: "📝", tone: "bg-teal-50 text-teal-900" },
+                  { label: "已点亮章", value: `${activeThemeBadges.length}个`, icon: "🏅", tone: "bg-emerald-50 text-emerald-900" },
+                  { label: "播报", value: autoSpeak ? "开" : "关", icon: "🔊", tone: "bg-amber-50 text-amber-900" },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`min-h-[112px] rounded-[1.2rem] px-3 py-3 text-center shadow-sm ${item.tone}`}
+                  >
+                    <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-[0.9rem] bg-white text-xl shadow-sm">
+                      {item.icon}
+                    </span>
+                    <p className="mt-2 text-xs font-semibold">{item.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-950">{item.value}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -6561,14 +10036,22 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                   ))
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="w-full">
+                <p className="mb-3 text-sm font-semibold text-slate-700">最近游戏贴纸</p>
+                <GameRewardTrail records={activeThemeMiniGameRecords} />
+              </div>
+              <details className="w-full rounded-[1.1rem] bg-white/72 px-3 py-2 sm:w-auto">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-700">
+                  播报设置
+                </summary>
+                <div className="mt-3 flex flex-wrap gap-2">
                 {imageFeatureEnabled ? (
                   <button
                     onClick={() => void generateImage(storyDraft)}
                     className="hidden"
                     type="button"
                   >
-                    {isPainting ? "插图生成中..." : "生成绘本插图"}
+                    {isPainting ? "正在画图..." : "画绘本图"}
                   </button>
                 ) : null}
                 <button
@@ -6626,356 +10109,124 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 >
                   重新开始本轮
                 </button>
-              </div>
+                </div>
+              </details>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="order-1">
+      <section
+        id="child-play"
+        hidden={activeChildPanel !== "home" && activeChildPanel !== "child-play"}
+      >
         <div className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-amber-700">{storyPanelCopy.eyebrow}</p>
               <h2 className="mt-1 text-2xl font-semibold text-slate-900">{storyPanelCopy.title}</h2>
             </div>
-            <div className="flex rounded-full bg-slate-100 p-1">
-              {[
-                { id: "pictureBook", label: storyPanelCopy.pictureBookLabel },
-                { id: "adventure", label: storyPanelCopy.adventureLabel },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setStoryInteractionMode(item.id as StoryInteractionMode)}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    storyInteractionMode === item.id
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-white"
-                  }`}
-                  type="button"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+            <span className="rounded-full bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-900">
+              先说想法，再选任务
+            </span>
           </div>
 
           <div className="mt-5 rounded-[1.8rem] bg-amber-50 p-4">
             <p className="text-sm font-semibold text-amber-900">
               {storyPanelCopy.prompt}
             </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-amber-900">
+              <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">🎙️ 语音输入：说一说想玩什么</span>
+              <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">✍️ 文字输入：我想玩……</span>
+            </div>
             <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
               <input
                 value={storyDraft}
                 onChange={(event) => setStoryDraft(event.target.value.slice(0, storyInputMaxLength))}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
-                    if (storyInteractionMode === "pictureBook") {
-                      void generatePictureBookStory();
-                      return;
-                    }
-
                     void submitStoryDraft();
                   }
                 }}
-                placeholder={
-                  storyInteractionMode === "pictureBook"
-                    ? storyPanelCopy.picturePlaceholder
-                    : storyPanelCopy.adventurePlaceholder
-                }
+                placeholder={storyPanelCopy.adventurePlaceholder}
                 className="rounded-[1.4rem] border border-amber-100 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-300"
               />
               <button
                 onClick={toggleVoiceInput}
                 className={`rounded-full px-5 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
-                  isListening ? "bg-rose-500 text-white" : "bg-slate-900 text-white"
+                  isListening ? "bg-rose-100 text-rose-800" : "bg-sky-100 text-sky-900"
                 }`}
                 type="button"
               >
-                {isListening ? "停止听写" : "语音输入"}
+                {isListening ? "我说完啦" : "🎤 说一说"}
               </button>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              {storyInteractionMode === "pictureBook" ? (
-                <>
-                  <button
-                    onClick={() => void generatePictureBookStory()}
-                    disabled={isLoading}
-                    className="rounded-full bg-amber-300 px-5 py-3 text-sm font-semibold text-amber-950 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-                    type="button"
-                  >
-                    {isLoading ? "正在翻绘本..." : storyPanelCopy.pictureBookLabel}
-                  </button>
-                  <button
-                    onClick={() => void startSpeechPlayback(latestPictureBookText || lastAssistantMessage)}
-                    disabled={!latestPictureBookText && !lastAssistantMessage}
-                    className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-                    type="button"
-                  >
-                    播放绘本
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => void submitStoryDraft()}
-                  disabled={!storyDraft.trim() || isLoading}
-                  className="rounded-full bg-teal-700 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-                  type="button"
-                >
-                  {isLoading ? "故事生成中..." : "继续故事"}
-                </button>
-              )}
-              {imageFeatureEnabled ? (
-                <button
-                  onClick={() => void generateImage(storyDraft)}
-                  disabled={isPainting || !storyDraft.trim()}
-                  className="rounded-full bg-cyan-100 px-5 py-3 text-sm font-semibold text-cyan-900 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-                  type="button"
-                >
-                  {isPainting ? "插图生成中..." : "按这句话画图"}
-                </button>
-              ) : null}
+              <button
+                onClick={() => void submitStoryDraft()}
+                disabled={isLoading}
+                className="rounded-full bg-orange-300 px-5 py-3 text-sm font-semibold text-orange-950 transition hover:-translate-y-0.5 hover:bg-orange-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                type="button"
+              >
+                {isLoading ? "正在想..." : "帮我找玩法"}
+              </button>
               <span className="text-xs font-semibold text-slate-500">
                 还可输入 {storyInputMaxLength - storyDraft.length} 字
               </span>
             </div>
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-[1.8rem] bg-[linear-gradient(180deg,#e6fbfa_0%,#fff7dc_100%)] p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-cyan-700">故事画面</p>
-                <h3 className="mt-1 text-xl font-semibold text-slate-900">{storyPanelCopy.imageTitle}</h3>
-              </div>
-              <span className="rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-800">
-                绘本贴纸
-              </span>
-            </div>
-            <div className="mt-4 overflow-hidden rounded-[1.5rem]">
-              {imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={imageUrl}
-                  alt="故事插图"
-                  className="h-[280px] w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-[280px] flex-col items-center justify-center border border-dashed border-teal-200 bg-white/70 text-center">
-                  {imageFeatureEnabled ? (
-                    <>
-                      <p className="text-lg font-semibold text-slate-700">说一句想画什么</p>
-                      <p className="mt-2 max-w-sm text-sm leading-7 text-slate-500">
-                        我会结合当前故事和孩子说的话，画一张绘本风插图，漂亮的画面会多等一小会儿。
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-lg font-semibold text-slate-700">先听故事和做成长任务</p>
-                      <p className="mt-2 max-w-sm text-sm leading-7 text-slate-500">
-                        今天先用声音、故事和成长任务完成练习，贴纸会在成长册里点亮。
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-5 max-h-[420px] space-y-4 overflow-y-auto pr-2">
-            {messages.map((message, index) => (
-              <div
-                key={`${message.role}-${index}`}
-                className={`flex ${message.role === "assistant" ? "justify-start" : "justify-end"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-[2rem] px-5 py-4 text-sm leading-7 shadow-sm md:text-base ${
-                    message.role === "assistant"
-                      ? "bg-teal-50 text-slate-800"
-                      : "bg-slate-900 text-white"
-                  }`}
-                >
-                  {message.content}
-                </div>
-              </div>
-            ))}
-            {isLoading ? (
-              <div className="flex justify-start">
-                <div className="rounded-[2rem] bg-teal-50 px-5 py-4 text-sm text-slate-500">
-                  故事伙伴正在想下一段...
-                </div>
-              </div>
-            ) : null}
-            <div ref={messageEndRef} />
-          </div>
-
-          {storyInteractionMode === "pictureBook" ? (
-            <div className="mt-5 rounded-[1.8rem] bg-violet-50 p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-violet-700">阅读打卡</p>
-                  <h3 className="mt-1 text-xl font-semibold text-slate-900">
-                    听完故事，选一张答案卡
-                  </h3>
-                  <p className="mt-2 text-sm leading-7 text-slate-700">
-                    答案卡会根据刚才 AI 绘本里的后续选项生成，再加上“图书归位”习惯卡；幼儿只要选择角色、画面、喜欢点或归位动作中的一项，就能完成阅读打卡。
-                  </p>
-                </div>
-                <SpeechCueButton
-                  text={`听完故事后，选一张答案卡。${pictureBookCheckinOptions
-                    .map((option) => option.label)
-                    .join("。")}。`}
-                  onSpeak={(text) => {
-                    void startSpeechPlayback(text);
-                  }}
-                  label="听问题"
-                  tone="violet"
-                />
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {pictureBookCheckinOptions.map((option) => (
-                  <button
-                    key={option.label}
-                    onClick={() => completePictureBookCheckin(option)}
-                    className={`rounded-[1.4rem] px-4 py-4 text-left text-sm font-semibold transition hover:-translate-y-0.5 ${
-                      pictureBookCheckinDone
-                        ? "bg-emerald-100 text-emerald-900"
-                        : "bg-white text-violet-950 shadow-sm"
-                    }`}
-                    type="button"
-                  >
-                    {option.label}
-                    <span className="mt-1 block text-xs leading-5 opacity-75">{option.source}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-4 rounded-[1.2rem] bg-white/80 px-4 py-3">
-                <p className="text-sm font-semibold text-violet-900">{pictureBookCheckinFeedback}</p>
-              </div>
-            </div>
-          ) : null}
-
-          {latestBadgeFeedback ? (
-            <div
-              aria-live="polite"
-              className="mt-5 rounded-[1.8rem] bg-emerald-50 px-5 py-4 shadow-sm"
-            >
-              <p className="text-sm font-semibold text-emerald-800">成长勋章点亮</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{latestBadgeFeedback}</p>
-              <p className="mt-2 text-sm leading-7 text-slate-700">
-                这是你认真尝试的小小成长印记，可以继续下一步啦。
-              </p>
-            </div>
-          ) : null}
-
-          {latestExperienceStickerFeedback ? (
-            <div
-              aria-live="polite"
-              className="mt-5 rounded-[1.8rem] bg-amber-50 px-5 py-4 shadow-sm"
-            >
-              <p className="text-sm font-semibold text-amber-900">体验贴纸</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">
-                {latestExperienceStickerFeedback}
-              </p>
-              <p className="mt-2 text-sm leading-7 text-slate-700">
-                这是本次体验进度，不会当作真实成长勋章写入成长册。
-              </p>
-            </div>
-          ) : null}
-
           <div className="mt-5 rounded-[1.8rem] bg-white/80 p-4">
-            <p className="text-sm font-semibold text-teal-700">点一个成长任务</p>
+            <p className="text-sm font-semibold text-teal-700">
+              {recommendationRequested ? "我帮你找到啦" : "猜你想试试"}
+            </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {quickChoices.map((choice) => {
-                const visual = getStoryOptionVisual(choice, themeId);
+              {(recommendationRequested ? quickChoices : recommendStoryOptionsFromInput("", themeId))
+                .slice(0, 2)
+                .map((choice, index) => {
+                  const visual = getStoryOptionVisual(choice, themeId);
 
-                return (
-                  <div
-                    key={choice}
-                    className="rounded-[1.5rem] bg-slate-50 px-4 py-4 shadow-sm"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] bg-white text-3xl shadow-sm">
-                        {visual.icon}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{visual.title}</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-600">
-                          {visual.description}
-                        </p>
+                  return (
+                    <div
+                      key={`${themeId}-${choice}-${index}`}
+                      className="rounded-[1.5rem] bg-slate-50 px-4 py-4 shadow-sm"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] bg-white text-3xl shadow-sm">
+                          {visual.icon}
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{visual.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-600">
+                            {visual.description}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void chooseStoryOption(choice)}
+                          aria-label={`开始玩：${visual.title}`}
+                          disabled={isLoading}
+                          className="rounded-full bg-orange-300 px-4 py-2 text-xs font-semibold text-orange-950 transition hover:-translate-y-0.5 hover:bg-orange-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                          type="button"
+                        >
+                          ▶ 开始玩
+                        </button>
+                        <SpeechCueButton
+                          text={`${visual.title}。${visual.description}`}
+                          onSpeak={(text) => {
+                            void startSpeechPlayback(text);
+                          }}
+                          label="听介绍"
+                          tone="teal"
+                        />
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        onClick={() => void chooseStoryOption(choice)}
-                        disabled={isLoading}
-                        className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-                        type="button"
-                      >
-                        选择
-                      </button>
-                      <SpeechCueButton
-                        text={`${visual.title}。${visual.description}`}
-                        onSpeak={(text) => {
-                          void startSpeechPlayback(text);
-                        }}
-                        label="听介绍"
-                        tone="teal"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
 
-        </div>
-
-        <div className="rounded-[2.5rem] bg-[linear-gradient(180deg,#fff7dc_0%,#ffffff_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
-          <p className="text-sm font-semibold text-rose-700">本轮任务</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">{activeTheme.label}</h2>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {(themeId === "food"
-              ? ["闽食探索", "表达练习", "带回家玩"]
-              : ["习惯养成", "生活练习", "带回家玩"]
-            ).map((item) => (
-              <span
-                key={item}
-                className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800"
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-          <div className="mt-5 space-y-3">
-            {activeMissions.map((mission) => {
-              const visual = getMissionOptionVisual(mission, themeId);
-
-              return (
-                <div
-                  key={mission}
-                  className="rounded-[1.3rem] bg-white/85 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] bg-teal-50 text-2xl">
-                      {visual.icon}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-slate-900">{mission}</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">{visual.description}</p>
-                    </div>
-                    <SpeechCueButton
-                      text={`${mission}。${visual.description}`}
-                      onSpeak={(text) => {
-                        void startSpeechPlayback(text);
-                      }}
-                      label="听"
-                      tone="teal"
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </div>
       </section>
 
@@ -6986,8 +10237,8 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
               onSpeak={(text) => {
                 void startSpeechPlayback(text);
               }}
-              onTaskComplete={(gameKey, badgeName, pickedItems) =>
-                logMiniGameCompletion(gameKey, badgeName, pickedItems)
+              onTaskComplete={(gameKey, badgeName, pickedItems, detail) =>
+                logMiniGameCompletion(gameKey, badgeName, pickedItems, detail)
               }
             />
             <HabitMissionPoster badges={badges} missions={activeMissions} />
@@ -7024,10 +10275,10 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                 aria-live="polite"
                 className="rounded-[2rem] bg-emerald-50 p-5 shadow-sm"
               >
-                <p className="text-sm font-semibold text-emerald-800">拍图打卡成长反馈</p>
+                <p className="text-sm font-semibold text-emerald-800">拍图小反馈</p>
                 <p className="mt-2 text-xl font-semibold text-slate-900">{latestBadgeFeedback}</p>
                 <p className="mt-2 text-sm leading-7 text-slate-700">
-                  你愿意观察餐盘和闽食，这个小尝试已经被记录下来啦。
+                  你愿意观察餐盘和闽食，这个小尝试老师看得到。
                 </p>
               </div>
             ) : null}
@@ -7060,52 +10311,38 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
         <GrowthArchivePanel archive={growthArchive} childId={selectedChild?.id} />
       </section>
 
-      <section className="order-1 grid gap-6 xl:grid-cols-2">
+      <section
+        className="grid gap-6 xl:grid-cols-2"
+        hidden={
+          !selectedChild ||
+          activeChildPanel === "home" ||
+          activeChildPanel === "child-status" ||
+          activeChildPanel === "child-play"
+        }
+      >
         {!growthArchiveHydrated ? (
           <div className="rounded-[2rem] bg-white/85 p-6 shadow-sm xl:col-span-2">
-            <p className="text-sm font-semibold text-teal-700">正在同步本机成长数据</p>
-            <h3 className="mt-1 text-xl font-semibold text-slate-900">稍等一下，正在准备今日任务</h3>
+            <p className="text-sm font-semibold text-teal-700">正在准备今天的小任务</p>
+            <h3 className="mt-1 text-xl font-semibold text-slate-900">稍等一下，卡片马上来</h3>
             <p className="mt-2 text-sm leading-7 text-slate-600">
-              系统正在读取小名牌、教师发布内容和今日食谱，准备好后会显示对应任务卡。
+              正在读取小名牌、老师放好的内容和今日食谱，准备好后会出现好玩的卡片。
             </p>
           </div>
         ) : themeId === "habit" ? (
           <>
-            <div className="xl:col-span-2">
-              <HabitVisualBoard
-                onSpeak={(text) => {
-                  void startSpeechPlayback(text);
-                }}
-                onTaskComplete={(gameKey, badgeName, pickedItems) =>
-                  logMiniGameCompletion(gameKey, badgeName, pickedItems)
-                }
-              />
-            </div>
-            <MealMannersGame
-              contentConfig={getConfiguredGameContent("mealManners")}
-              onSpeak={(text) => {
-                void startSpeechPlayback(text);
-              }}
-              onComplete={(pickedItems) =>
-                logMiniGameCompletion("mealManners", "文明进餐章", pickedItems)
-              }
-            />
-            <HabitTrafficLightGame
-              contentConfig={getConfiguredGameContent("habitTrafficLight")}
-              onSpeak={(text) => {
-                void startSpeechPlayback(text);
-              }}
-              onComplete={(pickedItems) =>
-                logMiniGameCompletion("habitTrafficLight", "好习惯判断章", pickedItems)
-              }
-            />
-            <details open className="rounded-[2rem] bg-white/80 p-5 shadow-sm xl:col-span-2">
+            {activeChildPanel === "habit-story" ? (
+            <details
+              id="habit-story"
+              open
+              className="rounded-[2rem] bg-white/80 p-5 shadow-sm xl:col-span-2"
+            >
               <summary className="cursor-pointer list-none text-sm font-semibold text-slate-700">
-                习惯故事小剧场：听短故事、做小任务
+                习惯故事小剧场
               </summary>
-              <div className="mt-4">
+              <div className="mt-4 grid gap-4">
                 <ReadingCheckinGame
                   contentConfig={getConfiguredGameContent("readingCheckin")}
+                  teacherBooks={teacherPictureBooks}
                   onSpeak={(text) => {
                     void startSpeechPlayback(text);
                   }}
@@ -7113,116 +10350,240 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                     logMiniGameCompletion("readingCheckin", "故事小耳朵", pickedItems, detail)
                   }
                 />
-                <div className="mt-5 grid gap-4">
-                  <TeacherPictureBookShelf
-                    books={teacherPictureBooks}
-                    themeId={themeId}
-                    onSpeak={(text) => {
-                      void startSpeechPlayback(text);
-                    }}
-                    onComplete={(pickedItems, detail) =>
-                      logMiniGameCompletion("readingCheckin", "教师绘本阅读章", pickedItems, detail)
-                    }
-                  />
-                  <HabitTemplateCheckinPanel
-                    templates={habitTemplates}
-                    onSpeak={(text) => {
-                      void startSpeechPlayback(text);
-                    }}
-                    onComplete={(pickedItems, detail) =>
-                      logMiniGameCompletion("readingCheckin", "待定习惯表达章", pickedItems, detail)
-                    }
-                  />
-                </div>
               </div>
             </details>
-          </>
-        ) : (
-          <>
-            <TodayMenuBroadcast
-              entries={todayMenuEntries}
-              onSpeak={(text) => {
-                void startSpeechPlayback(text);
-              }}
-              onPickFood={(foodLabel) => {
-                setPreferredFoodRequest((current) => ({
-                  label: foodLabel,
-                  nonce: current.nonce + 1,
-                }));
-                const message = `已把${foodLabel}带到美食认识观察卡。可以先选原因，再选一个靠近小步。`;
-                setStatus(message);
-                void startSpeechPlayback(message);
-              }}
-            />
-            <FoodPreferenceGame
-              key={`food-preference-${preferredFoodRequest.nonce}`}
-              contentConfig={getConfiguredGameContent("foodPreference")}
-              todayMenuEntries={todayMenuEntries}
-              preferredFoodLabel={preferredFoodRequest.label}
-              onSpeak={(text) => {
-                void startSpeechPlayback(text);
-              }}
-              onComplete={logFoodPreferenceObservation}
-            />
-            {teacherPictureBooks.some((book) => book.themeId === "food") ? (
-              <TeacherPictureBookShelf
-                books={teacherPictureBooks}
-                themeId={themeId}
+            ) : null}
+            {activeChildPanel === "habit-talk" ? (
+            <div id="habit-talk" className="xl:col-span-2">
+              <HabitTemplateCheckinPanel
+                mode="talk"
+                templates={[]}
+                onBackToHome={() => openChildPanel("home")}
                 onSpeak={(text) => {
                   void startSpeechPlayback(text);
                 }}
                 onComplete={(pickedItems, detail) =>
-                  logMiniGameCompletion("readingCheckin", "闽食绘本阅读章", pickedItems, detail)
+                  logMiniGameCompletion("childTalk", "幼儿表达小章", pickedItems, {
+                    ...detail,
+                    source: "child-to-teacher",
+                  })
                 }
               />
+            </div>
             ) : null}
-            <FoodTrainGame
-              contentConfig={getConfiguredGameContent("foodTrain")}
-              onSpeak={(text) => {
-                void startSpeechPlayback(text);
-              }}
-              onComplete={(pickedItems) =>
-                logMiniGameCompletion("foodTrain", "闽食小勇士章", pickedItems)
-              }
-            />
-            <FoodTreasureQuestGame
-              contentConfig={getConfiguredGameContent("foodObserve")}
-              onSpeak={(text) => {
-                void startSpeechPlayback(text);
-              }}
-              onComplete={(pickedItems = []) =>
-                logMiniGameCompletion("foodObserve", "美食摊位寻宝章", pickedItems)
-              }
-            />
-            <FoodKitchenGame
-              contentConfig={getConfiguredGameContent("foodKitchen")}
-              onSpeak={(text) => {
-                void startSpeechPlayback(text);
-              }}
-              onComplete={(pickedItems, detail) =>
-                logMiniGameCompletion("foodKitchen", "泉州小厨师章", pickedItems, detail)
-              }
-            />
-            <details className="hidden">
-              <summary className="cursor-pointer list-none text-sm font-semibold text-slate-700">
-                可选延伸：美食猜猜乐
-              </summary>
-              <div className="mt-4">
-                <FoodGuessGame
-                  contentConfig={getConfiguredGameContent("foodGuess")}
+            {activeChildPanel === "habit-template" ? (
+            <div id="habit-template" className="xl:col-span-2">
+              <HabitTemplateCheckinPanel
+                mode="task"
+                templates={habitTemplates}
+                onBackToHome={() => openChildPanel("home")}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={(pickedItems, detail) =>
+                  logMiniGameCompletion("teacherTask", "老师小任务章", pickedItems, {
+                    ...detail,
+                    source: "teacher-assigned-task",
+                  })
+                }
+              />
+            </div>
+            ) : null}
+            {activeChildPanel === "habit-challenge" ? (
+            <div id="habit-challenge" className="xl:col-span-2">
+              <HabitVisualBoard
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onTaskComplete={(gameKey, badgeName, pickedItems, detail) =>
+                  logMiniGameCompletion(gameKey, badgeName, pickedItems, detail)
+                }
+              />
+            </div>
+            ) : null}
+            {activeChildPanel === "habit-meal-manners" ? (
+            <div id="habit-meal-manners" className="xl:col-span-2">
+              <MealMannersGame
+                contentConfig={getConfiguredGameContent("mealManners")}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={(pickedItems) =>
+                  logMiniGameCompletion("mealManners", "文明进餐章", pickedItems)
+                }
+              />
+            </div>
+            ) : null}
+            {activeChildPanel === "habit-traffic-light" ? (
+            <div id="habit-traffic-light" className="xl:col-span-2">
+              <HabitTrafficLightGame
+                contentConfig={getConfiguredGameContent("habitTrafficLight")}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={(pickedItems) =>
+                  logMiniGameCompletion("habitTrafficLight", "好习惯判断章", pickedItems)
+                }
+              />
+            </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            {activeChildPanel === "food-menu" ? (
+            <div id="food-menu" className="xl:col-span-2">
+              <TodayMenuBroadcast
+                entries={todayMenuEntries}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onPickFood={(foodLabel, ingredients = [], entry, nutritionPlayed = false) => {
+                  setPreferredFoodRequest((current) => ({
+                    label: foodLabel,
+                    nonce: current.nonce + 1,
+                  }));
+                  setPrioritizeTodayMenuInObservation(true);
+                  const foodOption = buildFoodPreferenceOption(foodLabel);
+                  const nutritionText = getFoodCardNutritionText(
+                    foodLabel,
+                    ingredients.length > 0 ? ingredients : foodOption.ingredients,
+                  );
+                  logMiniGameCompletion(
+                    "todayMenu",
+                    nutritionPlayed ? "今日食谱营养章" : "今日食谱观察章",
+                    ["点击菜品", foodLabel, nutritionPlayed ? "听营养小发现" : "听菜品介绍"],
+                    {
+                    activityType: "today-menu",
+                    gameInstanceId: "todayMenuPlate",
+                    gameInstanceMechanic: "todayMenu",
+                    gameInstanceTitle: "今日食谱认识",
+                    gameRuleName: nutritionPlayed ? "菜品营养点听" : "菜品看图点听",
+                    menuDate: entry?.date ?? getLocalDateKey(),
+                    mealType: entry?.mealType ?? "今日食谱",
+                    foodId: foodLabel,
+                    foodLabel,
+                    dishId: entry?.dishName ?? foodLabel,
+                    clicked: true,
+                    nutritionPlayed,
+                    answerContent: nutritionPlayed ? nutritionText : `${foodLabel}看图观察`,
+                    result: "success",
+                    attempts: 1,
+                    status: "completed",
+                    },
+                  );
+                  const message = nutritionPlayed
+                    ? `${nutritionText} 已把${foodLabel}带到美食观察与靠近一点点。可以先认名字，再选一个靠近小步。`
+                    : `${foodLabel}已经带到美食观察与靠近一点点。可以先看图，再听营养小发现。`;
+                  setStatus(message);
+                  void startSpeechPlayback(message);
+                }}
+              />
+            </div>
+            ) : null}
+            {activeChildPanel === "food-observation-card" ? (
+            <div id="food-observation-card" className="xl:col-span-2">
+              <FoodPreferenceGame
+                key={`food-preference-${preferredFoodRequest.nonce}-${prioritizeTodayMenuInObservation ? "menu-first" : "replay-free"}`}
+                contentConfig={getConfiguredGameContent("foodPreference")}
+                todayMenuEntries={todayMenuEntries}
+                preferredFoodLabel={preferredFoodRequest.label}
+                prioritizeTodayMenuFoods={prioritizeTodayMenuInObservation}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={logFoodPreferenceObservation}
+              />
+            </div>
+            ) : null}
+            {activeChildPanel === "food-stall" ? (
+            <div id="food-stall" className="xl:col-span-2">
+              <FoodTreasureQuestGame
+                contentConfig={getConfiguredGameContent("foodObserve")}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={(pickedItems = []) =>
+                  logMiniGameCompletion("foodObserve", "美食摊位寻宝章", pickedItems)
+                }
+              />
+            </div>
+            ) : null}
+            {activeChildPanel === "food-kitchen" ? (
+            <div id="food-kitchen" className="xl:col-span-2">
+              <FoodKitchenGame
+                mode="kitchen"
+                contentConfig={getConfiguredGameContent("foodKitchen")}
+                todayMenuEntries={todayMenuEntries}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={(pickedItems, detail) =>
+                  logMiniGameCompletion("foodKitchen", "泉州小厨师章", pickedItems, detail)
+                }
+              />
+            </div>
+            ) : null}
+            {activeChildPanel === "food-broadcast" ? (
+            <div id="food-broadcast" className="xl:col-span-2">
+              <FoodKitchenGame
+                mode="broadcast"
+                contentConfig={getConfiguredGameContent("foodReporter")}
+                todayMenuEntries={todayMenuEntries}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={(pickedItems, detail) =>
+                  logMiniGameCompletion("foodReporter", "小小闽食播报章", pickedItems, detail)
+                }
+              />
+            </div>
+            ) : null}
+            {activeChildPanel === "food-train" ? (
+            <div id="food-train" className="xl:col-span-2">
+              <div>
+                <FoodTrainGame
+                  contentConfig={getConfiguredGameContent("foodTrain")}
                   onSpeak={(text) => {
                     void startSpeechPlayback(text);
                   }}
                   onComplete={(pickedItems) =>
-                    logMiniGameCompletion("foodGuess", "食材发现章", pickedItems)
+                    logMiniGameCompletion("foodTrain", "闽食小勇士章", pickedItems)
                   }
                 />
               </div>
-            </details>
+            </div>
+            ) : null}
+            {activeChildPanel === "food-guess" ? (
+            <div id="food-guess" className="xl:col-span-2">
+              <FoodGuessGame
+                contentConfig={getConfiguredGameContent("foodGuess")}
+                onSpeak={(text) => {
+                  void startSpeechPlayback(text);
+                }}
+                onComplete={(pickedItems) =>
+                  logMiniGameCompletion("foodGuess", "食材发现章", pickedItems)
+                }
+              />
+            </div>
+            ) : null}
           </>
         )}
       </section>
 
+        </div>
+        {selectedChild ? (
+        <aside className="order-first lg:order-last lg:sticky lg:top-6 lg:w-[300px]">
+          <SectionDirectory
+            eyebrow="幼儿端目录"
+            title={themeId === "food" ? "闽食成长岛" : "幼习宝"}
+            items={activeChildDirectoryItems}
+            variant="sidebar"
+            activeHref={activeChildPanelHref}
+            onItemClick={openChildDirectoryItem}
+          />
+        </aside>
+        ) : null}
+      </div>
     </div>
   );
 }

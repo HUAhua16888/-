@@ -1,0 +1,317 @@
+{
+  "honglai-jizhua": {
+    "foodName": "洪濑鸡爪",
+    "ingredientIds": [
+      "da-suan",
+      "suan-miao",
+      "sheng-chou",
+      "lao-chou",
+      "wu-xiang-fen"
+    ]
+  },
+  "shishan-powan": {
+    "foodName": "诗山粕丸",
+    "ingredientIds": [
+      "di-gua-fen"
+    ]
+  },
+  "shuitou-zicai": {
+    "foodName": "水头紫菜",
+    "ingredientIds": [
+      "zi-cai"
+    ]
+  },
+  "jiucengguo": {
+    "foodName": "九层粿",
+    "ingredientIds": [
+      "da-mi",
+      "mi-jiang"
+    ]
+  },
+  "jianguo": {
+    "foodName": "碱粿",
+    "ingredientIds": [
+      "mi-jiang"
+    ]
+  },
+  "shiting-lvcha": {
+    "foodName": "石亭绿茶",
+    "ingredientIds": []
+  },
+  "xiangyun-zhujiao": {
+    "foodName": "翔云猪脚",
+    "ingredientIds": [
+      "hua-sheng",
+      "lao-chou"
+    ]
+  },
+  "shijing-haolijian": {
+    "foodName": "石井海蛎煎",
+    "ingredientIds": [
+      "jiu-cai",
+      "di-gua-fen",
+      "hai-li",
+      "ji-dan",
+      "shi-yong-you"
+    ]
+  },
+  "mianxianhu": {
+    "foodName": "面线糊",
+    "ingredientIds": [
+      "xiao-cong",
+      "qing-cai",
+      "mian-xian",
+      "hai-li"
+    ]
+  },
+  "rouzong": {
+    "foodName": "肉粽",
+    "ingredientIds": [
+      "xiang-gu",
+      "nuo-mi",
+      "zong-ye"
+    ]
+  },
+  "digua-fentuan": {
+    "foodName": "地瓜粉团",
+    "ingredientIds": [
+      "di-gua-fen",
+      "hua-sheng",
+      "hua-sheng-sui"
+    ]
+  },
+  "yingdu-maci": {
+    "foodName": "英都麻糍",
+    "ingredientIds": [
+      "nuo-mi",
+      "hua-sheng",
+      "hua-sheng-sui",
+      "hei-zhi-ma"
+    ]
+  },
+  "shihuagao": {
+    "foodName": "石花膏",
+    "ingredientIds": [
+      "bai-tang"
+    ]
+  },
+  "lvdoubing": {
+    "foodName": "绿豆饼",
+    "ingredientIds": [
+      "hei-zhi-ma",
+      "lv-dou"
+    ]
+  },
+  "niurougeng": {
+    "foodName": "牛肉羹",
+    "ingredientIds": [
+      "xiang-cai",
+      "di-gua-fen",
+      "xiang-you"
+    ]
+  },
+  "yuwan": {
+    "foodName": "鱼丸",
+    "ingredientIds": [
+      "xiao-cong",
+      "yu-rou-jiang"
+    ]
+  },
+  "shuiwan": {
+    "foodName": "水丸",
+    "ingredientIds": [
+      "yu-rou-jiang"
+    ]
+  },
+  "shufen-tuan": {
+    "foodName": "薯粉团",
+    "ingredientIds": [
+      "shu-fen"
+    ]
+  },
+  "tusundong": {
+    "foodName": "土笋冻",
+    "ingredientIds": [
+      "tu-sun",
+      "la-jiao-you"
+    ]
+  },
+  "shaorouzong": {
+    "foodName": "烧肉粽",
+    "ingredientIds": [
+      "xiang-gu",
+      "nuo-mi",
+      "zong-ye"
+    ]
+  },
+  "yujuan": {
+    "foodName": "鱼卷",
+    "ingredientIds": [
+      "yu-rou-jiang"
+    ]
+  },
+  "babao-yurong": {
+    "foodName": "八宝芋茸",
+    "ingredientIds": [
+      "yu-tou",
+      "hong-zao",
+      "lian-zi"
+    ]
+  },
+  "jiangmuya": {
+    "foodName": "姜母鸭",
+    "ingredientIds": [
+      "sheng-jiang",
+      "lao-jiang",
+      "ya-rou",
+      "liao-jiu"
+    ]
+  },
+  "quanzhou-curou": {
+    "foodName": "泉州醋肉",
+    "ingredientIds": [
+      "da-suan",
+      "xiang-cai",
+      "sheng-cai",
+      "qing-la-jiao",
+      "di-gua-fen",
+      "shi-yong-you",
+      "la-jiao-you",
+      "wu-xiang-fen"
+    ]
+  },
+  "bailuobo-fan": {
+    "foodName": "白萝卜饭",
+    "ingredientIds": [
+      "bao-cai",
+      "hu-luo-bo",
+      "bai-luo-bo",
+      "xiang-gu",
+      "mu-er",
+      "da-mi"
+    ]
+  },
+  "haoli-geng": {
+    "foodName": "海蛎羹",
+    "ingredientIds": [
+      "xiao-cong",
+      "xiang-cai",
+      "qin-cai",
+      "di-gua-fen",
+      "hai-li",
+      "ji-dan",
+      "hao-you"
+    ]
+  },
+  "yongchun-laocu-heman": {
+    "foodName": "永春老醋烧河鳗",
+    "ingredientIds": [
+      "suan-miao",
+      "hong-la-jiao",
+      "he-man",
+      "yongchun-laocu"
+    ]
+  },
+  "zaocai-laoya-tang": {
+    "foodName": "糟菜炖老鸭汤",
+    "ingredientIds": [
+      "bai-cai",
+      "ya-rou"
+    ]
+  },
+  "huajiao-huangyu-geng": {
+    "foodName": "花胶黄鱼羹",
+    "ingredientIds": [
+      "huang-hua-yu",
+      "hua-jiao"
+    ]
+  },
+  "minnan-shacha-gaoxie": {
+    "foodName": "闽南沙茶膏蟹",
+    "ingredientIds": [
+      "da-suan",
+      "qing-la-jiao",
+      "hong-la-jiao",
+      "gao-xie",
+      "sha-cha-jiang",
+      "hao-you",
+      "liao-jiu"
+    ]
+  },
+  "fanya-luotou-tang": {
+    "foodName": "番鸭螺头汤",
+    "ingredientIds": [
+      "sheng-jiang",
+      "qin-cai",
+      "ya-rou",
+      "gou-qi"
+    ]
+  },
+  "yangshao-huanghuayu": {
+    "foodName": "洋烧黄花鱼",
+    "ingredientIds": [
+      "sheng-jiang",
+      "huang-hua-yu",
+      "sheng-chou",
+      "liao-jiu"
+    ]
+  },
+  "zaoxiang-zha-heman": {
+    "foodName": "糟香炸河鳗",
+    "ingredientIds": [
+      "he-man"
+    ]
+  },
+  "shuiwan-tang": {
+    "foodName": "水丸汤",
+    "ingredientIds": [
+      "xiao-cong",
+      "bo-cai"
+    ]
+  },
+  "jijuan": {
+    "foodName": "鸡卷",
+    "ingredientIds": []
+  },
+  "huasheng-tang": {
+    "foodName": "花生汤",
+    "ingredientIds": [
+      "hua-sheng",
+      "gou-qi",
+      "bai-tang"
+    ]
+  },
+  "zha-zao": {
+    "foodName": "炸枣",
+    "ingredientIds": [
+      "sheng-cai",
+      "nuo-mi",
+      "hua-sheng",
+      "bai-zhi-ma"
+    ]
+  },
+  "runbing": {
+    "foodName": "润饼",
+    "ingredientIds": [
+      "bao-cai",
+      "hu-luo-bo",
+      "mu-er",
+      "bao-bing-pi",
+      "hua-sheng"
+    ]
+  },
+  "guabao": {
+    "foodName": "刈包",
+    "ingredientIds": [
+      "hua-sheng",
+      "hua-sheng-sui"
+    ]
+  },
+  "juhonggao": {
+    "foodName": "桔红糕",
+    "ingredientIds": [
+      "nuo-mi",
+      "bai-tang"
+    ]
+  }
+}

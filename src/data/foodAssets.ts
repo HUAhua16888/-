@@ -1,0 +1,650 @@
+export const foodAssets = [
+  {
+    "id": "honglai-jizhua",
+    "name": "洪濑鸡爪",
+    "category": "南安闽食",
+    "image": "/assets/foods/single/honglai-jizhua.png",
+    "materials": [
+      "鸡爪",
+      "卤汁",
+      "香料",
+      "酱油"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shishan-powan",
+    "name": "诗山粕丸",
+    "category": "南安闽食",
+    "image": "/assets/foods/single/shishan-powan.png",
+    "materials": [
+      "猪肉",
+      "地瓜粉",
+      "葱",
+      "调味料"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shuitou-zicai",
+    "name": "水头紫菜",
+    "category": "南安闽食",
+    "image": "/assets/foods/single/shuitou-zicai.png",
+    "materials": [
+      "紫菜",
+      "清汤",
+      "葱花"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "jiucengguo",
+    "name": "九层粿",
+    "category": "南安闽食",
+    "image": "/assets/foods/single/jiucengguo.png",
+    "materials": [
+      "米浆",
+      "糖",
+      "水"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "jianguo",
+    "name": "碱粿",
+    "category": "南安闽食",
+    "image": "/assets/foods/single/jianguo.png",
+    "materials": [
+      "米浆",
+      "食用碱",
+      "蘸料"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shiting-lvcha",
+    "name": "石亭绿茶",
+    "category": "南安闽食",
+    "image": "/assets/foods/single/shiting-lvcha.png",
+    "materials": [
+      "绿茶叶",
+      "水"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "xiangyun-zhujiao",
+    "name": "翔云猪脚",
+    "category": "南安闽食",
+    "image": "/assets/foods/single/xiangyun-zhujiao.png",
+    "materials": [
+      "猪脚",
+      "卤汁",
+      "黄豆/花生",
+      "香料"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shijing-haolijian",
+    "name": "石井海蛎煎",
+    "aliases": [
+      "泉州海蛎煎",
+      "海蛎煎",
+      "蚵仔煎"
+    ],
+    "category": "南安闽食",
+    "image": "/assets/foods/single/shijing-haolijian.png",
+    "materials": [
+      "海蛎",
+      "鸡蛋",
+      "地瓜粉",
+      "葱"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "mianxianhu",
+    "name": "面线糊",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/mianxianhu.png",
+    "materials": [
+      "面线",
+      "高汤",
+      "海蛎/肉丁",
+      "葱花"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "rouzong",
+    "name": "肉粽",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/rouzong.png",
+    "materials": [
+      "糯米",
+      "五花肉",
+      "香菇",
+      "粽叶"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "digua-fentuan",
+    "name": "地瓜粉团",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/digua-fentuan.png",
+    "materials": [
+      "地瓜粉",
+      "馅料",
+      "花生碎"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "yingdu-maci",
+    "name": "英都麻糍",
+    "category": "南安闽食",
+    "image": "/assets/foods/single/yingdu-maci.png",
+    "materials": [
+      "糯米",
+      "花生粉",
+      "芝麻",
+      "糖"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shihuagao",
+    "name": "石花膏",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/shihuagao.png",
+    "materials": [
+      "石花草凝胶",
+      "糖水/蜂蜜水"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "siguotang",
+    "name": "四果汤",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/siguotang.svg",
+    "materials": [
+      "水果丁",
+      "石花膏",
+      "蜂蜜水",
+      "清凉配料"
+    ],
+    "style": "项目补充单菜品图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "项目现有菜品补图，使用统一 foodAssets 数据入口；正式上线前建议替换为实拍或授权图。"
+  },
+  {
+    "id": "lvdoubing",
+    "name": "绿豆饼",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/lvdoubing.png",
+    "materials": [
+      "绿豆馅",
+      "酥皮",
+      "芝麻"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "niurougeng",
+    "name": "牛肉羹",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/niurougeng.png",
+    "materials": [
+      "牛肉",
+      "地瓜粉",
+      "高汤",
+      "香菜"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "yuwan",
+    "name": "鱼丸",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/yuwan.png",
+    "materials": [
+      "鱼肉浆",
+      "淀粉",
+      "清汤"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shuiwan",
+    "name": "水丸",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/shuiwan.png",
+    "materials": [
+      "鱼肉/肉浆",
+      "淀粉",
+      "清汤"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shufen-tuan",
+    "name": "薯粉团",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/shufen-tuan.png",
+    "materials": [
+      "薯粉",
+      "肉馅/菜馅",
+      "葱"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "tusundong",
+    "name": "土笋冻",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/tusundong.png",
+    "materials": [
+      "土笋",
+      "胶冻",
+      "蘸料"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shaorouzong",
+    "name": "烧肉粽",
+    "aliases": [
+      "闽南肉粽",
+      "肉粽",
+      "泉州肉粽"
+    ],
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/shaorouzong.png",
+    "materials": [
+      "糯米",
+      "烧肉",
+      "香菇",
+      "粽叶"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "yujuan",
+    "name": "鱼卷",
+    "aliases": [
+      "崇武鱼卷",
+      "泉州鱼卷"
+    ],
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/yujuan.png",
+    "materials": [
+      "鱼浆",
+      "肉馅/葱",
+      "豆皮/蛋皮"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "babao-yurong",
+    "name": "八宝芋茸",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/babao-yurong.png",
+    "materials": [
+      "芋头",
+      "莲子",
+      "红枣",
+      "坚果"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "yutoubing",
+    "name": "芋头饼",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/yutoubing.svg",
+    "materials": [
+      "芋头",
+      "糯米粉",
+      "芝麻"
+    ],
+    "style": "项目补充单菜品图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "项目现有菜品补图，使用统一 foodAssets 数据入口；正式上线前建议替换为实拍或授权图。"
+  },
+  {
+    "id": "jiangmuya",
+    "name": "姜母鸭",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/jiangmuya.png",
+    "materials": [
+      "鸭肉",
+      "老姜",
+      "米酒/麻油",
+      "香料"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "quanzhou-curou",
+    "name": "泉州醋肉",
+    "aliases": [
+      "炸醋肉",
+      "醋肉"
+    ],
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/quanzhou-curou.png",
+    "materials": [
+      "猪肉",
+      "醋",
+      "地瓜粉",
+      "香料"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "bailuobo-fan",
+    "name": "白萝卜饭",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/bailuobo-fan.png",
+    "materials": [
+      "米饭",
+      "白萝卜",
+      "虾米/肉丁",
+      "葱"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "xianfan",
+    "name": "咸饭",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/xianfan.svg",
+    "materials": [
+      "米饭",
+      "香菇",
+      "青菜",
+      "家常配料"
+    ],
+    "style": "项目补充单菜品图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "项目现有菜品补图，使用统一 foodAssets 数据入口；正式上线前建议替换为实拍或授权图。"
+  },
+  {
+    "id": "haoli-geng",
+    "name": "海蛎羹",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/haoli-geng.png",
+    "materials": [
+      "海蛎",
+      "蛋花",
+      "地瓜粉",
+      "葱"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "yongchun-laocu-heman",
+    "name": "永春老醋烧河鳗",
+    "category": "泉州名菜",
+    "image": "/assets/foods/single/yongchun-laocu-heman.png",
+    "materials": [
+      "河鳗",
+      "永春老醋",
+      "姜葱",
+      "酱汁"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "zaocai-laoya-tang",
+    "name": "糟菜炖老鸭汤",
+    "category": "泉州名菜",
+    "image": "/assets/foods/single/zaocai-laoya-tang.png",
+    "materials": [
+      "老鸭",
+      "糟菜",
+      "姜",
+      "清汤"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "huajiao-huangyu-geng",
+    "name": "花胶黄鱼羹",
+    "category": "泉州名菜",
+    "image": "/assets/foods/single/huajiao-huangyu-geng.png",
+    "materials": [
+      "花胶",
+      "黄鱼",
+      "高汤",
+      "蛋花"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "minnan-shacha-gaoxie",
+    "name": "闽南沙茶膏蟹",
+    "category": "泉州名菜",
+    "image": "/assets/foods/single/minnan-shacha-gaoxie.png",
+    "materials": [
+      "膏蟹",
+      "沙茶酱",
+      "葱姜",
+      "辣椒"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "fanya-luotou-tang",
+    "name": "番鸭螺头汤",
+    "category": "泉州名菜",
+    "image": "/assets/foods/single/fanya-luotou-tang.png",
+    "materials": [
+      "番鸭",
+      "螺头",
+      "姜片",
+      "清汤"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "yangshao-huanghuayu",
+    "name": "洋烧黄花鱼",
+    "category": "泉州名菜",
+    "image": "/assets/foods/single/yangshao-huanghuayu.png",
+    "materials": [
+      "黄花鱼",
+      "酱汁",
+      "葱姜",
+      "辣椒"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "zaoxiang-zha-heman",
+    "name": "糟香炸河鳗",
+    "category": "泉州名菜",
+    "image": "/assets/foods/single/zaoxiang-zha-heman.png",
+    "materials": [
+      "河鳗",
+      "糟香料",
+      "炸粉"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "shuiwan-tang",
+    "name": "水丸汤",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/shuiwan-tang.png",
+    "materials": [
+      "水丸",
+      "清汤",
+      "葱花"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "jijuan",
+    "name": "鸡卷",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/jijuan.png",
+    "materials": [
+      "鸡肉/猪肉",
+      "豆皮/蛋皮",
+      "葱"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "huasheng-tang",
+    "name": "花生汤",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/huasheng-tang.png",
+    "materials": [
+      "花生",
+      "糖水",
+      "清水"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "zha-zao",
+    "name": "炸枣",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/zha-zao.png",
+    "materials": [
+      "糯米粉",
+      "芝麻",
+      "豆沙/花生馅"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "runbing",
+    "name": "润饼",
+    "aliases": [
+      "润饼菜",
+      "薄饼卷"
+    ],
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/runbing.png",
+    "materials": [
+      "薄饼皮",
+      "蔬菜丝",
+      "肉丝",
+      "花生粉"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "guabao",
+    "name": "刈包",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/guabao.png",
+    "materials": [
+      "面饼",
+      "卤肉",
+      "酸菜",
+      "花生粉"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  },
+  {
+    "id": "juhonggao",
+    "name": "桔红糕",
+    "category": "泉州闽食",
+    "image": "/assets/foods/single/juhonggao.png",
+    "materials": [
+      "糯米粉",
+      "糖",
+      "桔红色糕体"
+    ],
+    "style": "单菜品纯图，图片内不写菜名，菜名由网站显示",
+    "status": "ready-for-demo",
+    "reviewNote": "AI生成/整理素材，适合比赛演示与网站占位；正式上线前建议人工复核地方菜形态。"
+  }
+] as const;
+
+export type FoodAsset = typeof foodAssets[number];

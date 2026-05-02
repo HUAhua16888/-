@@ -8,6 +8,7 @@ export type TeacherPictureBook = {
   themeId: ThemeId;
   title: string;
   storyText: string;
+  pageImagePrompts: string[];
   question: string;
   options: string[];
   habitTask: string;
@@ -58,6 +59,16 @@ function cleanOptions(value: unknown, fallback: string[]) {
   return options.length >= 2 ? options : fallback;
 }
 
+function cleanTextList(value: unknown, fallback: string[], maxLength = 120, maxItems = 6) {
+  const source = Array.isArray(value) ? value : [];
+  const items = source
+    .map((item) => cleanText(item, maxLength))
+    .filter(Boolean)
+    .slice(0, maxItems);
+
+  return items.length > 0 ? items : fallback;
+}
+
 export function parseTeacherPictureBooks(raw: string | null): TeacherPictureBook[] {
   if (!raw) {
     return [];
@@ -90,6 +101,10 @@ export function parseTeacherPictureBooks(raw: string | null): TeacherPictureBook
           themeId: item.themeId === "food" ? "food" : "habit",
           title,
           storyText,
+          pageImagePrompts: cleanTextList(item.pageImagePrompts, [
+            `${title}第一页，幼儿园绘本风，干净背景，角色清楚`,
+            `${title}第二页，生活习惯动作清楚，适合3-6岁幼儿`,
+          ]),
           question: cleanText(item.question, 80) || "听完故事后，你想选择哪一张卡？",
           options: cleanOptions(item.options, ["我听到了一个角色", "我看到了一个画面", "我愿意试一个小任务"]),
           habitTask: cleanText(item.habitTask, 60) || "把图书送回原位",
@@ -179,6 +194,10 @@ export function buildTeacherPictureBook(
   themeId: ThemeId,
   title: string,
   storyText: string,
+  pageImagePrompts: string[] = [],
+  question?: string,
+  options?: string[],
+  habitTask?: string,
 ): TeacherPictureBook {
   const cleanTitle = cleanText(title, 30) || (themeId === "food" ? "闽食自主绘本" : "好习惯自主绘本");
   const cleanStory = cleanLongText(storyText, 900) || "老师还没有填写故事正文。";
@@ -189,12 +208,20 @@ export function buildTeacherPictureBook(
     themeId,
     title: cleanTitle,
     storyText: cleanStory,
-    question: themeId === "food" ? "听完闽食绘本，你发现了什么？" : "听完好习惯绘本，你想做哪一小步？",
-    options:
+    pageImagePrompts: cleanTextList(pageImagePrompts, [
+      `${cleanTitle}第一页，幼儿园原创绘本风，画面干净，动作清楚`,
+      `${cleanTitle}第二页，孩子完成生活习惯小任务，温柔明亮`,
+    ]),
+    question:
+      cleanText(question, 80) ||
+      (themeId === "food" ? "听完闽食绘本，你发现了什么？" : "听完好习惯绘本，你想做哪一小步？"),
+    options: cleanOptions(
+      options,
       themeId === "food"
         ? ["我认识一种食物", "我看到一种食材", "我想闻一闻"]
         : ["我听到一个角色", "我愿意练一小步", "我把图书送回家"],
-    habitTask: themeId === "food" ? "说出一种食物或食材" : "完成一个好习惯小动作",
+    ),
+    habitTask: cleanText(habitTask, 60) || (themeId === "food" ? "说出一种食物或食材" : "完成一个好习惯小动作"),
     publishedAt: now,
   };
 }

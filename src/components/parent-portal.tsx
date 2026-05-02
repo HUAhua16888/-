@@ -1,13 +1,20 @@
 "use client";
 
 import type { ChangeEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { SectionDirectory, type SectionDirectoryItem } from "@/components/section-directory";
+import { getAccountSyncDeviceInfo } from "@/lib/account-sync-client";
 import { findChildIdentitySuggestions, formatChildLabel } from "@/lib/child-identity";
 import {
   childRosterStorageKey,
+  createEmptyGrowthArchive,
+  growthArchiveStorageKey,
+  mergeGrowthArchives,
   parseChildRoster,
+  parseGrowthArchive,
   type ChildProfile,
+  type GrowthArchive,
 } from "@/lib/growth-archive";
 import { parentHomeTaskCards } from "@/lib/site-data";
 import {
@@ -22,6 +29,22 @@ import {
   type ParentFeedbackRecord,
   type ParentSyncRecord,
 } from "@/lib/parent-sync";
+import {
+  parseTeacherPictureBooks,
+  teacherPictureBooksStorageKey,
+  type TeacherPictureBook,
+} from "@/lib/teacher-published-content";
+import {
+  dailyMenuOverrideStorageKey,
+  formatMenuDate,
+  getEffectiveMenuForDate,
+  getLocalDateKey,
+  getWeekdayLabel,
+  parseDailyMenuOverrides,
+  parseWeeklyMenuEntries,
+  weeklyMenuStorageKey,
+  type WeeklyMenuEntry,
+} from "@/lib/weekly-menu";
 
 type ParentPortalProps = {
   initialChildId?: string;
@@ -31,9 +54,77 @@ type ParentHomeTaskCard = (typeof parentHomeTaskCards)[number];
 type ParentAccessState = {
   childId: string;
   consentAt: string;
+  bindingCode?: string;
+};
+type FamilySyncResponse = {
+  ok?: boolean;
+  error?: string;
+  child?: ChildProfile;
+  payload?: Record<string, unknown>;
+  updatedAt?: string;
 };
 
 const parentAccessStorageKey = "tongqu-growth-web-parent-access";
+type ParentPanelKey =
+  | "home"
+  | "parent-suggestions"
+  | "parent-reading"
+  | "parent-home-task"
+  | "parent-feedback"
+  | "parent-growth";
+
+const parentPanelLabels: Record<ParentPanelKey, string> = {
+  home: "家长首页",
+  "parent-suggestions": "今日建议",
+  "parent-reading": "亲子阅读",
+  "parent-home-task": "居家任务",
+  "parent-feedback": "家庭反馈",
+  "parent-growth": "成长记录",
+};
+
+function getParentPanelFromHref(href: string): ParentPanelKey {
+  const panel = href.replace(/^#/, "") as ParentPanelKey;
+
+  return panel in parentPanelLabels ? panel : "home";
+}
+
+const parentDirectoryItems: SectionDirectoryItem[] = [
+  {
+    label: "今日建议",
+    description: "先看今天观察。",
+    href: "#parent-suggestions",
+    icon: "📝",
+    tone: "bg-emerald-50 text-emerald-950",
+  },
+  {
+    label: "亲子阅读",
+    description: "读教师确认绘本。",
+    href: "#parent-reading",
+    icon: "📖",
+    tone: "bg-violet-50 text-violet-950",
+  },
+  {
+    label: "居家任务",
+    description: "回家做一小步。",
+    href: "#parent-home-task",
+    icon: "🏠",
+    tone: "bg-cyan-50 text-cyan-950",
+  },
+  {
+    label: "家庭反馈",
+    description: "写一句观察。",
+    href: "#parent-feedback",
+    icon: "💬",
+    tone: "bg-rose-50 text-rose-950",
+  },
+  {
+    label: "成长记录",
+    description: "看个人小变化。",
+    href: "#parent-growth",
+    icon: "🌱",
+    tone: "bg-teal-50 text-teal-950",
+  },
+];
 const familyPlateActionSteps = [
   "愿意尝试一口",
   "今天吃完自己的饭菜",
@@ -77,13 +168,28 @@ function dedupeParentHomeTaskCards(cards: ParentHomeTaskCard[]) {
   });
 }
 
+function payloadText(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function mergeById<T extends { id: string }>(current: T[], incoming: T[]) {
+  const incomingIds = new Set(incoming.map((item) => item.id));
+
+  return [...incoming, ...current.filter((item) => !incomingIds.has(item.id))];
+}
+
 export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [childRoster, setChildRoster] = useState<ChildProfile[]>([]);
   const [selectedChildId, setSelectedChildId] = useState("");
+  const [activeParentPanel, setActiveParentPanel] = useState<ParentPanelKey>("home");
   const [parentSyncRecords, setParentSyncRecords] = useState<ParentSyncRecord[]>([]);
   const [parentFeedbackRecords, setParentFeedbackRecords] = useState<ParentFeedbackRecord[]>([]);
+  const [teacherPictureBooks, setTeacherPictureBooks] = useState<TeacherPictureBook[]>([]);
+  const [growthArchive, setGrowthArchive] = useState<GrowthArchive>(createEmptyGrowthArchive());
+  const [todayMenuEntries, setTodayMenuEntries] = useState<WeeklyMenuEntry[]>([]);
   const [accountText, setAccountText] = useState("");
   const [bindingCodeText, setBindingCodeText] = useState("");
+  const [activeBindingCode, setActiveBindingCode] = useState("");
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [feedbackCategory, setFeedbackCategory] = useState<ParentFeedbackCategory>("question");
   const [feedbackText, setFeedbackText] = useState("");
@@ -102,6 +208,12 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [homeTaskStatus, setHomeTaskStatus] = useState(
     "先选一张居家任务卡，再选一个今天真的完成的小步骤。",
   );
+  const [selectedReadingBookId, setSelectedReadingBookId] = useState("");
+  const [parentReadingNote, setParentReadingNote] = useState("");
+  const [parentReadingStatus, setParentReadingStatus] =
+    useState("选择一本老师确认发布的绘本，亲子共读后可同步给老师。");
+  const [parentReadingVoiceBookId, setParentReadingVoiceBookId] = useState("");
+  const parentReadingVoiceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [plateActionStep, setPlateActionStep] = useState(familyPlateActionSteps[0]);
   const [plateActionNote, setPlateActionNote] = useState("");
   const [plateActionPhoto, setPlateActionPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
@@ -155,23 +267,68 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     () => getChildParentFeedbacks(parentFeedbackRecords, selectedChild),
     [parentFeedbackRecords, selectedChild],
   );
-  const parentChangeLines = useMemo(
+  const childReadingBooks = useMemo(
+    () => teacherPictureBooks.filter((book) => book.themeId === "habit").slice(0, 6),
+    [teacherPictureBooks],
+  );
+  const selectedReadingBook = useMemo(
     () =>
-      childParentSyncs.slice(0, 5).map((record) =>
+      childReadingBooks.find((book) => book.id === selectedReadingBookId) ??
+      childReadingBooks[0] ??
+      null,
+    [childReadingBooks, selectedReadingBookId],
+  );
+  const parentChangeLines = useMemo(
+    () => {
+      const syncedLines = childParentSyncs.slice(0, 5).map((record) =>
         [
           `${record.childName}：${record.summary}`,
           record.homePractice ? `回家可以轻轻做一步：${record.homePractice}` : "",
         ]
           .filter(Boolean)
           .join(" "),
-      ),
-    [childParentSyncs],
+      );
+      const childGameLines = selectedChild
+        ? growthArchive.miniGameRecords
+            .filter((record) => record.childId === selectedChild.id)
+            .slice(0, 5)
+            .map((record) =>
+              [
+                `${record.childName ?? selectedChild.name}完成了${record.gameInstanceTitle ?? record.badgeName}`,
+                record.childUtterance ? `说了：${record.childUtterance}` : "",
+                record.foodLabel ? `认识：${record.foodLabel}` : "",
+              ]
+                .filter(Boolean)
+                .join(" "),
+            )
+        : [];
+
+      return [...childGameLines, ...syncedLines].slice(0, 6);
+    },
+    [childParentSyncs, growthArchive.miniGameRecords, selectedChild],
   );
+  const todayMenuDateKey = getLocalDateKey();
+  const parentTodayMenuText = useMemo(() => {
+    if (todayMenuEntries.length === 0) {
+      return "";
+    }
+
+    const dishText = todayMenuEntries.map((entry) => `${entry.mealType}：${entry.dishName}`).join("；");
+
+    return `今天 ${formatMenuDate(todayMenuDateKey)} ${getWeekdayLabel(todayMenuDateKey)}，${dishText}`;
+  }, [todayMenuDateKey, todayMenuEntries]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
+
+    const readTodayMenuEntries = () =>
+      getEffectiveMenuForDate(
+        parseWeeklyMenuEntries(window.localStorage.getItem(weeklyMenuStorageKey)),
+        parseDailyMenuOverrides(window.localStorage.getItem(dailyMenuOverrideStorageKey)),
+        getLocalDateKey(),
+      );
 
     const restoreHandle = window.setTimeout(() => {
       const roster = parseChildRoster(window.localStorage.getItem(childRosterStorageKey));
@@ -182,6 +339,11 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       setParentFeedbackRecords(
         parseParentFeedbackRecords(window.localStorage.getItem(parentFeedbackStorageKey)),
       );
+      setGrowthArchive(parseGrowthArchive(window.localStorage.getItem(growthArchiveStorageKey)));
+      setTeacherPictureBooks(
+        parseTeacherPictureBooks(window.localStorage.getItem(teacherPictureBooksStorageKey)),
+      );
+      setTodayMenuEntries(readTodayMenuEntries());
       window.localStorage.removeItem(parentAccessStorageKey);
       setStatus(
         roster.length > 0
@@ -192,6 +354,15 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
     return () => window.clearTimeout(restoreHandle);
   }, [initialChildId]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      parentReadingVoiceRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -218,6 +389,24 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       if (event.key === parentFeedbackStorageKey) {
         setParentFeedbackRecords(parseParentFeedbackRecords(event.newValue));
       }
+
+      if (event.key === growthArchiveStorageKey) {
+        setGrowthArchive(parseGrowthArchive(event.newValue));
+      }
+
+      if (event.key === teacherPictureBooksStorageKey) {
+        setTeacherPictureBooks(parseTeacherPictureBooks(event.newValue));
+      }
+
+      if (event.key === weeklyMenuStorageKey || event.key === dailyMenuOverrideStorageKey) {
+        setTodayMenuEntries(
+          getEffectiveMenuForDate(
+            parseWeeklyMenuEntries(window.localStorage.getItem(weeklyMenuStorageKey)),
+            parseDailyMenuOverrides(window.localStorage.getItem(dailyMenuOverrideStorageKey)),
+            getLocalDateKey(),
+          ),
+        );
+      }
     }
 
     window.addEventListener("storage", handleParentSharedDataStorage);
@@ -225,9 +414,169 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     return () => window.removeEventListener("storage", handleParentSharedDataStorage);
   }, []);
 
-  function authorizeChild(child: ChildProfile) {
+  function applyFamilySyncPayload(payload: Record<string, unknown> = {}) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const syncedRoster = parseChildRoster(payloadText(payload.childRoster));
+    const syncedParentSyncRecords = parseParentSyncRecords(payloadText(payload.parentSyncRecords));
+    const syncedParentFeedbackRecords = parseParentFeedbackRecords(payloadText(payload.parentFeedbackRecords));
+    const syncedBooks = parseTeacherPictureBooks(payloadText(payload.teacherPictureBooks));
+    const growthRaw = payloadText(payload.growthArchive);
+    const weeklyRaw = payloadText(payload.weeklyMenuEntries);
+    const dailyRaw = payloadText(payload.dailyMenuOverrides);
+
+    if (syncedRoster.length > 0) {
+      setChildRoster((current) => {
+        const nextRoster = mergeById(current, syncedRoster);
+        window.localStorage.setItem(childRosterStorageKey, JSON.stringify(nextRoster));
+
+        return nextRoster;
+      });
+    }
+
+    if (syncedParentSyncRecords.length > 0) {
+      setParentSyncRecords((current) => {
+        const nextRecords = parseParentSyncRecords(
+          JSON.stringify(mergeById(current, syncedParentSyncRecords)),
+        );
+        window.localStorage.setItem(parentSyncStorageKey, JSON.stringify(nextRecords));
+
+        return nextRecords;
+      });
+    }
+
+    if (syncedParentFeedbackRecords.length > 0) {
+      setParentFeedbackRecords((current) => {
+        const nextRecords = parseParentFeedbackRecords(
+          JSON.stringify(mergeById(current, syncedParentFeedbackRecords)),
+        );
+        window.localStorage.setItem(parentFeedbackStorageKey, JSON.stringify(nextRecords));
+
+        return nextRecords;
+      });
+    }
+
+    if (syncedBooks.length > 0) {
+      setTeacherPictureBooks((current) => {
+        const nextBooks = mergeById(current, syncedBooks);
+        window.localStorage.setItem(teacherPictureBooksStorageKey, JSON.stringify(nextBooks));
+
+        return nextBooks;
+      });
+    }
+
+    if (growthRaw) {
+      const nextArchive = mergeGrowthArchives(
+        parseGrowthArchive(window.localStorage.getItem(growthArchiveStorageKey)),
+        parseGrowthArchive(growthRaw),
+      );
+
+      window.localStorage.setItem(growthArchiveStorageKey, JSON.stringify(nextArchive));
+      setGrowthArchive(nextArchive);
+    }
+
+    if (weeklyRaw || dailyRaw) {
+      if (weeklyRaw) {
+        window.localStorage.setItem(weeklyMenuStorageKey, weeklyRaw);
+      }
+
+      if (dailyRaw) {
+        window.localStorage.setItem(dailyMenuOverrideStorageKey, dailyRaw);
+      }
+
+      setTodayMenuEntries(
+        getEffectiveMenuForDate(
+          parseWeeklyMenuEntries(weeklyRaw || window.localStorage.getItem(weeklyMenuStorageKey)),
+          parseDailyMenuOverrides(dailyRaw || window.localStorage.getItem(dailyMenuOverrideStorageKey)),
+          getLocalDateKey(),
+        ),
+      );
+    }
+  }
+
+  async function pullFamilySyncFromAccount(childQuery: string, bindingCode: string, fallbackChild?: ChildProfile) {
+    setStatus("正在通过家庭绑定码同步账号数据...");
+
+    const response = await fetch("/api/family-sync", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "pull",
+        childQuery,
+        childId: fallbackChild?.id,
+        bindingCode,
+        ...getAccountSyncDeviceInfo(),
+      }),
+    });
+    const data = (await response.json().catch(() => ({}))) as FamilySyncResponse;
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "家庭账号同步暂时不可用。");
+    }
+
+    const child = data.child ?? fallbackChild;
+
+    if (!child) {
+      throw new Error("家庭账号同步没有返回幼儿身份。");
+    }
+
+    applyFamilySyncPayload(data.payload ?? {});
+    setActiveBindingCode(bindingCode);
+    setBindingCodeText(bindingCode);
+    authorizeChild(child, bindingCode);
+    setStatus(`${formatChildLabel(child)} 的家庭延续页已打开，并已同步老师发布的家庭内容。`);
+  }
+
+  async function syncParentFeedbackRecord(
+    record: ParentFeedbackRecord,
+    setStatusMessage: (message: string) => void,
+    successMessage: string,
+  ) {
+    const bindingCode =
+      (activeBindingCode || bindingCodeText || selectedChild?.familyBindingCode || "").trim().toUpperCase();
+
+    if (!selectedChild || !bindingCode) {
+      setStatusMessage(`${successMessage}（当前没有家庭绑定码，已先保存在本机。）`);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/family-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "feedback",
+          childId: selectedChild.id,
+          childQuery: selectedChild.rosterNumber ? `${selectedChild.rosterNumber}号` : selectedChild.name,
+          bindingCode,
+          feedback: record,
+          ...getAccountSyncDeviceInfo(),
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as FamilySyncResponse;
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "家庭反馈账号同步失败。");
+      }
+
+      applyFamilySyncPayload(data.payload ?? {});
+      setStatusMessage(successMessage);
+    } catch {
+      setStatusMessage(`${successMessage}（本机已保存，账号同步稍后可重试。）`);
+    }
+  }
+
+  function authorizeChild(child: ChildProfile, bindingCode?: string) {
     setSelectedChildId(child.id);
+    setActiveParentPanel("home");
     setStatus(`${formatChildLabel(child)} 的家庭延续页已打开。`);
+    setActiveBindingCode(bindingCode ?? child.familyBindingCode ?? "");
 
     if (typeof window !== "undefined") {
       window.localStorage.setItem(
@@ -235,6 +584,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         JSON.stringify({
           childId: child.id,
           consentAt: new Date().toISOString(),
+          bindingCode: bindingCode ?? child.familyBindingCode,
         } satisfies ParentAccessState),
       );
     }
@@ -242,7 +592,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
   function logoutParentAccess() {
     setSelectedChildId("");
+    setActiveParentPanel("home");
     setBindingCodeText("");
+    setActiveBindingCode("");
     setPrivacyConsent(false);
     setStatus("已退出家庭延续页。再次查看时，请重新输入家庭绑定码。");
 
@@ -251,7 +603,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     }
   }
 
-  function loginByAccount() {
+  async function loginByAccount() {
     const text = accountText.trim();
     const code = bindingCodeText.trim().toUpperCase();
 
@@ -268,6 +620,13 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     if (!privacyConsent) {
       setStatus("请先勾选同意本班家园共育反馈用途，再进入家庭延续页。");
       return;
+    }
+
+    try {
+      await pullFamilySyncFromAccount(text, code);
+      return;
+    } catch {
+      // If the class has not uploaded a cloud account yet, keep the original same-device flow.
     }
 
     const suggestions = findChildIdentitySuggestions(text, childRoster);
@@ -295,7 +654,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       return;
     }
 
-    authorizeChild(child);
+    authorizeChild(child, code);
   }
 
   function submitParentFeedback() {
@@ -340,6 +699,105 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     setFeedbackPhoto(null);
     setFeedbackPhotoStatus("可选上传一张家庭观察照片，仅保存在这台设备上。");
     setFeedbackStatus("已保存到教师工作台反馈列表，老师查看后可以回复和给出家庭建议。");
+    void syncParentFeedbackRecord(
+      record,
+      setFeedbackStatus,
+      "已同步到账号云端，老师拉取班级同步后可查看。",
+    );
+  }
+
+  function submitParentReading() {
+    if (!selectedChild || !selectedReadingBook) {
+      setParentReadingStatus("请先选择一本老师确认发布的绘本。");
+      return;
+    }
+
+    const note = parentReadingNote.trim().slice(0, 180);
+    const record: ParentFeedbackRecord = {
+      id: `parent-reading-${Date.now()}-${selectedChild.id}`,
+      childId: selectedChild.id,
+      childName: selectedChild.name,
+      category: "home-observation",
+      content: [
+        `亲子阅读打卡：《${selectedReadingBook.title}》`,
+        selectedReadingBook.question ? `阅读后问题：${selectedReadingBook.question}` : "",
+        selectedReadingBook.habitTask ? `阅读后小任务：${selectedReadingBook.habitTask}` : "",
+        note ? `家长观察：${note}` : "家长观察：已完成一次亲子共读。",
+      ]
+        .filter(Boolean)
+        .join("。"),
+      createdAt: new Date().toISOString(),
+      status: "new",
+    };
+
+    setParentFeedbackRecords((current) => {
+      const nextRecords = addParentFeedbackRecord(current, record);
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(parentFeedbackStorageKey, JSON.stringify(nextRecords));
+      }
+
+      return nextRecords;
+    });
+    setParentReadingNote("");
+    setParentReadingStatus(`《${selectedReadingBook.title}》亲子阅读打卡已同步教师端。`);
+    void syncParentFeedbackRecord(
+      record,
+      setParentReadingStatus,
+      `《${selectedReadingBook.title}》亲子阅读打卡已同步账号云端。`,
+    );
+  }
+
+  function buildParentReadingSpeech(book: TeacherPictureBook) {
+    return [
+      `我们一起听《${book.title}》。`,
+      book.storyText,
+      book.question ? `听完可以聊一聊：${book.question}` : "",
+      book.habitTask ? `也可以轻轻做一小步：${book.habitTask}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function stopParentReadingVoice() {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    parentReadingVoiceRef.current = null;
+    setParentReadingVoiceBookId("");
+  }
+
+  function toggleParentReadingVoice(book: TeacherPictureBook) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setParentReadingStatus("当前浏览器暂时不能播放语音，可以先亲子共读文字。");
+      return;
+    }
+
+    if (parentReadingVoiceBookId === book.id) {
+      stopParentReadingVoice();
+      setParentReadingStatus(`已暂停《${book.title}》。`);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(buildParentReadingSpeech(book));
+    utterance.lang = "zh-CN";
+    utterance.rate = 0.92;
+    utterance.pitch = 1;
+    utterance.onend = () => {
+      parentReadingVoiceRef.current = null;
+      setParentReadingVoiceBookId("");
+      setParentReadingStatus(`《${book.title}》听完啦，可以完成亲子阅读打卡。`);
+    };
+    utterance.onerror = () => {
+      parentReadingVoiceRef.current = null;
+      setParentReadingVoiceBookId("");
+      setParentReadingStatus("语音播放中断了，可以再点一次听一听。");
+    };
+    parentReadingVoiceRef.current = utterance;
+    setParentReadingVoiceBookId(book.id);
+    setParentReadingStatus(`正在听《${book.title}》。`);
+    window.speechSynthesis.speak(utterance);
   }
 
   function chooseFeedbackPhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -423,6 +881,11 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     setFeedbackCategory("home-observation");
     setFeedbackStatus("居家任务已同步到教师工作台反馈列表。");
     setHomeTaskStatus("已提交给老师。老师可以在工作台里看到这次居家延续记录。");
+    void syncParentFeedbackRecord(
+      record,
+      setHomeTaskStatus,
+      "居家任务已同步到账号云端，老师拉取班级同步后可查看。",
+    );
   }
 
   function choosePlateActionPhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -501,23 +964,30 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     setFeedbackCategory("home-observation");
     setFeedbackStatus("家庭光盘行动已同步到教师工作台反馈列表。");
     setPlateActionStatus("已提交给老师。这里只记录个人成长小步骤，不做排名。");
+    void syncParentFeedbackRecord(
+      record,
+      setPlateActionStatus,
+      "家庭光盘行动已同步到账号云端，老师拉取班级同步后可查看。",
+    );
+  }
+
+  function openParentDirectoryItem(item: SectionDirectoryItem) {
+    setActiveParentPanel(getParentPanelFromHref(item.href));
   }
 
   if (!selectedChild) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 md:px-8">
-        <section className="w-full rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
+        <section className="mx-auto min-h-screen w-full max-w-4xl rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
           <p className="text-sm font-semibold text-amber-700">班级试用模式</p>
           <h1 className="mt-3 text-4xl leading-tight font-semibold text-slate-900 md:text-5xl">
             查看孩子成长记录
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            本平台仅用于班级常规养成与家园共育记录。家长仅能通过幼儿姓名或号数和家庭绑定码查看自己孩子的信息，照片/视频需经家长同意后使用。
-            儿童端不设账号，只用小名牌/号数互动；语音只保存识别后的文字，不保存原始语音；照片/视频默认本机预览，不上传云端。
-            当前为班级试用模式，正式使用时需升级为后端账号、加密存储、角色权限和审计机制。
+            输入孩子姓名或号数和家庭绑定码，只查看自己孩子的老师建议与家庭任务。
           </p>
 
-          <div className="mt-7 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
+          <div id="parent-binding" className="mt-7 scroll-mt-24 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
             <p className="text-sm font-semibold text-slate-600">家庭绑定</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <input
@@ -525,7 +995,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 onChange={(event) => setAccountText(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
-                    loginByAccount();
+                    void loginByAccount();
                   }
                 }}
                 placeholder="输入姓名或号数，如 小安 / 3号"
@@ -536,7 +1006,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 onChange={(event) => setBindingCodeText(event.target.value.toUpperCase())}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
-                    loginByAccount();
+                    void loginByAccount();
                   }
                 }}
                 placeholder="输入家庭绑定码，如 K7A3Q9"
@@ -554,7 +1024,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             </label>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
-                onClick={loginByAccount}
+                onClick={() => void loginByAccount()}
                 className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
                 type="button"
               >
@@ -574,7 +1044,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
+    <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-8">
       <section className="grid gap-6">
         <div className="rounded-[2rem] bg-[linear-gradient(135deg,#ffffff_0%,#fff6dd_48%,#e6fbfa_100%)] p-6 shadow-[0_22px_70px_rgba(49,93,104,0.14)] md:p-8">
           <p className="text-sm font-semibold text-amber-700">班级试用模式</p>
@@ -583,11 +1055,8 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             <span className="block text-2xl text-slate-700 md:text-3xl">看老师建议，回家做一小步</span>
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-            家庭延续页只显示当前已绑定幼儿的信息。家长先看老师今天观察到了什么，再完成一个小步骤并反馈观察。记录、反馈和回复保存在这台设备上。
-            儿童端不设账号，家长端通过家庭绑定码查看自己孩子；语音只保存识别后的文字，照片/视频默认本机预览，不上传云端。
-            当前为班级试用模式，正式使用时需升级为后端账号、加密存储、角色权限和审计机制。
+            先看老师今天观察到了什么，再完成一个小步骤并反馈一句观察。
           </p>
-
           <div className="mt-7 rounded-[1.5rem] bg-white/85 p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -613,7 +1082,26 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
       </section>
 
-      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f5fffe_0%,#ffffff_55%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+      {activeParentPanel !== "home" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] bg-white/82 px-4 py-3 shadow-sm">
+          <p className="text-sm font-semibold text-slate-700">
+            当前模板：{parentPanelLabels[activeParentPanel]}
+          </p>
+          <button
+            onClick={() => setActiveParentPanel("home")}
+            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            type="button"
+          >
+            返回家长首页
+          </button>
+        </div>
+      ) : null}
+
+      <section
+        id="parent-suggestions"
+        hidden={activeParentPanel !== "home" && activeParentPanel !== "parent-suggestions"}
+        className="order-1 scroll-mt-24 rounded-[2.5rem] bg-[linear-gradient(135deg,#f5fffe_0%,#ffffff_55%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
+      >
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-emerald-700">老师今天观察到什么</p>
@@ -623,6 +1111,22 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             {childParentSyncs.length} 条
           </span>
         </div>
+
+        {parentTodayMenuText ? (
+          <div className="mt-4 rounded-[1.5rem] bg-white/86 px-4 py-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-emerald-700">今日食谱参考</p>
+                <p className="mt-1 text-sm leading-7 font-semibold text-slate-800">{parentTodayMenuText}</p>
+              </div>
+              <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+                {todayMenuEntries.some((entry) => "publishSource" in entry && entry.publishSource === "dailyOverride")
+                  ? "含临时改餐"
+                  : "每周食谱自动发布"}
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           {childParentSyncs.length > 0 ? (
@@ -656,7 +1160,117 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         </div>
       </section>
 
-      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_54%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+      <section
+        id="parent-reading"
+        hidden={activeParentPanel !== "parent-reading"}
+        className="order-3 scroll-mt-24 rounded-[2.5rem] bg-[linear-gradient(135deg,#f7f0ff_0%,#ffffff_54%,#eefdfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-violet-700">亲子阅读</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">教师确认发布的原创绘本</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              家长端只显示教师确认发布后的绘本，阅读打卡会回流教师端。
+            </p>
+          </div>
+          <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-violet-900 shadow-sm">
+            绘本 {childReadingBooks.length}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="grid gap-3">
+            {childReadingBooks.length > 0 ? (
+              childReadingBooks.map((book) => (
+                <button
+                  key={book.id}
+                  onClick={() => {
+                    setSelectedReadingBookId(book.id);
+                    setParentReadingStatus(`已选择《${book.title}》，共读后写一句观察即可打卡。`);
+                  }}
+                  className={`rounded-[1.5rem] px-4 py-4 text-left shadow-sm transition hover:-translate-y-0.5 ${
+                    selectedReadingBook?.id === book.id
+                      ? "bg-violet-100 ring-2 ring-violet-300"
+                      : "bg-white/88 hover:bg-violet-50"
+                  }`}
+                  type="button"
+                >
+                  <p className="text-base font-semibold text-slate-900">{book.title}</p>
+                  <p className="mt-2 text-xs font-semibold text-violet-800">
+                    教师确认 · {formatParentSyncTime(book.publishedAt)}
+                  </p>
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{book.storyText}</p>
+                </button>
+              ))
+            ) : (
+              <p className="rounded-[1.5rem] bg-white/78 px-4 py-5 text-sm leading-7 text-slate-600">
+                老师还没有确认发布绘本。发布后这里会出现亲子共读入口。
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-[1.8rem] bg-white/88 p-5 shadow-sm">
+            {selectedReadingBook ? (
+              <>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-violet-700">当前绘本</p>
+                    <h3 className="mt-1 text-xl font-semibold text-slate-900">{selectedReadingBook.title}</h3>
+                  </div>
+                  <button
+                    onClick={() => toggleParentReadingVoice(selectedReadingBook)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${
+                      parentReadingVoiceBookId === selectedReadingBook.id
+                        ? "bg-rose-100 text-rose-800"
+                        : "bg-sky-100 text-sky-900"
+                    }`}
+                    type="button"
+                  >
+                    {parentReadingVoiceBookId === selectedReadingBook.id ? "正在听 · 停止" : "听一听"}
+                  </button>
+                </div>
+                <p className="mt-3 max-h-40 overflow-y-auto rounded-[1.2rem] bg-violet-50 px-4 py-3 text-sm leading-7 text-slate-700">
+                  {selectedReadingBook.storyText}
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <p className="rounded-[1.1rem] bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700">
+                    问题：{selectedReadingBook.question}
+                  </p>
+                  <p className="rounded-[1.1rem] bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700">
+                    小任务：{selectedReadingBook.habitTask}
+                  </p>
+                </div>
+                <textarea
+                  value={parentReadingNote}
+                  onChange={(event) => setParentReadingNote(event.target.value.slice(0, 180))}
+                  placeholder="家长一句观察：孩子最喜欢哪一页？愿意做哪一个小动作？"
+                  className="mt-4 min-h-24 w-full rounded-[1.3rem] border border-violet-100 bg-violet-50/50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition focus:border-violet-300 focus:bg-white"
+                />
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-violet-900">{parentReadingStatus}</p>
+                  <button
+                    onClick={submitParentReading}
+                    className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                    type="button"
+                  >
+                    完成亲子阅读打卡
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="rounded-[1.4rem] bg-violet-50 px-4 py-5 text-sm leading-7 text-slate-600">
+                选择一本绘本后，可以看到阅读后问题和小任务。
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="parent-home-task"
+        hidden={activeParentPanel !== "parent-home-task"}
+        className="order-4 scroll-mt-24 rounded-[2.5rem] bg-[linear-gradient(135deg,#fff7dc_0%,#ffffff_54%,#e6fbfa_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
+      >
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-amber-700">AI 生成的居家小任务</p>
@@ -764,7 +1378,10 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         ) : null}
       </section>
 
-      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#fff9ed_0%,#ffffff_54%,#f0fdf4_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+      <section
+        hidden={activeParentPanel !== "parent-home-task"}
+        className="order-5 rounded-[2.5rem] bg-[linear-gradient(135deg,#fff9ed_0%,#ffffff_54%,#f0fdf4_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
+      >
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-emerald-700">家庭光盘行动</p>
@@ -863,7 +1480,11 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         </div>
       </section>
 
-      <section className="rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fff9_0%,#ffffff_52%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+      <section
+        id="parent-growth"
+        hidden={activeParentPanel !== "home" && activeParentPanel !== "parent-growth"}
+        className="order-2 scroll-mt-24 rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fff9_0%,#ffffff_52%,#fff7dc_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
+      >
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-emerald-700">最近变化记录</p>
@@ -894,7 +1515,11 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         </div>
       </section>
 
-      <section className="rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]">
+      <section
+        id="parent-feedback"
+        hidden={activeParentPanel !== "parent-feedback"}
+        className="order-6 scroll-mt-24 rounded-[2.5rem] bg-white/90 p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
+      >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-rose-700">反馈给老师</p>
@@ -1051,6 +1676,18 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
         </div>
       </section>
 
+        </div>
+        <aside className="order-first lg:order-last lg:sticky lg:top-6 lg:w-[300px]">
+          <SectionDirectory
+            eyebrow="家长端目录"
+            title="只看当前孩子"
+            items={parentDirectoryItems}
+            variant="sidebar"
+            activeHref={activeParentPanel === "home" ? "#parent-suggestions" : `#${activeParentPanel}`}
+            onItemClick={openParentDirectoryItem}
+          />
+        </aside>
+      </div>
     </main>
   );
 }

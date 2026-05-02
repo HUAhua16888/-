@@ -100,8 +100,8 @@ function speakIntroWithBrowser(text: string) {
 
 export function SiteSoundIntro() {
   const pathname = usePathname();
-  const [needsGesture, setNeedsGesture] = useState(true);
-  const [status, setStatus] = useState("开启声音介绍");
+  const [, setNeedsGesture] = useState(true);
+  const [, setStatus] = useState("开启声音介绍");
   const startedRef = useRef(false);
   const contextRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
@@ -278,16 +278,5 @@ export function SiteSoundIntro() {
     };
   }, []);
 
-  if (!needsGesture) {
-    return null;
-  }
-
-  return (
-    <button
-      onClick={() => void startIntro("gesture")}
-      className="fixed right-4 bottom-24 z-[60] rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(35,88,95,0.26)] transition hover:-translate-y-0.5 md:bottom-6"
-    >
-      {status}
-    </button>
-  );
+  return null;
 }

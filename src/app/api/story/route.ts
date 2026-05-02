@@ -135,7 +135,7 @@ function withAiMeta<T extends Record<string, unknown>>(payload: T) {
 
 function buildChildFallback(theme: ThemeId, userInput: string) {
   const currentTheme = themes[theme];
-  const wantsFood = /海蛎|面线|土笋冻|肉粽|润饼|石花|醋肉|鱼卷|食物|午餐|尝|吃|闽食|泉州|食材|摊位|播报|厨房|小厨师/.test(userInput);
+  const wantsFood = /海蛎|面线|土笋冻|肉粽|烧肉粽|姜母鸭|芋头饼|牛肉羹|洪濑鸡爪|四果汤|咸饭|润饼|石花|醋肉|鱼卷|食物|午餐|尝|吃|闽食|泉州|食材|摊位|播报|厨房|小厨师/.test(userInput);
   const wantsQueue = /排队|队长|不挤|站好|慢慢走/.test(userInput);
   const wantsWash = /洗手|泡泡|小手|七步/.test(userInput);
   const wantsDrink = /喝水|水杯|口渴/.test(userInput);
@@ -150,7 +150,7 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
         : wantsDrink
           ? `✨ 喝水提醒来啦：“${userInput}”。我们坐好，双手拿杯，慢慢喝一口，再把水杯放回去。`
         : wantsToilet
-          ? `✨ 如厕小提醒来啦：“${userInput}”。想上厕所可以轻轻告诉老师，整理好衣物，再洗小手。`
+          ? `✨ 如厕小任务来啦：“${userInput}”。想上厕所可以轻轻告诉老师，整理好衣物，再洗小手。`
         : wantsQueue
           ? `✨ 小队长准备好啦：“${userInput}”。我们一个跟着一个站好，慢慢走，不着急也不拥挤。`
           : wantsTidy
@@ -182,7 +182,7 @@ function buildChildFallback(theme: ThemeId, userInput: string) {
         : wantsDrink
           ? "喝水小勇士章"
         : wantsToilet
-          ? "如厕小提醒章"
+          ? "如厕小任务章"
         : wantsQueue
           ? "排队小队长"
           : wantsTidy
@@ -205,9 +205,9 @@ function buildPictureBookFallback(theme: ThemeId, userInput: string) {
     .replace(/^我想听/, "")
     .replace(/的故事$/, "")
     .trim();
-  const wantsFood = theme === "food" || /海蛎|面线|土笋冻|肉粽|润饼|石花|醋肉|鱼卷|食物|午餐|闽食|泉州|播报|厨房|小厨师/.test(topic);
+  const wantsFood = theme === "food" || /海蛎|面线|土笋冻|肉粽|烧肉粽|姜母鸭|芋头饼|牛肉羹|洪濑鸡爪|四果汤|咸饭|润饼|石花|醋肉|鱼卷|食物|午餐|闽食|泉州|播报|厨房|小厨师/.test(topic);
   const reply = wantsFood
-    ? "绘本故事开始啦。海蛎小勇士开着闽食小列车来到泉州古城小吃摊，先看见金黄的海蛎煎，又发现细细软软的面线糊和卷着蔬菜的润饼菜。小朋友打开美食宝箱，找到了海蛎、面线和胡萝卜，还听见摊主阿姨说：“认识名字和食材，就是靠近家乡味的第一步。”最后，大家把今天看到的颜色画进成长小书里。"
+    ? "绘本故事开始啦。海蛎小勇士开着闽食小列车来到泉州古城小吃摊，先看见金黄的海蛎煎，又闻到姜母鸭的姜片香，还发现烧肉粽、土笋冻、芋头饼和四果汤。小朋友打开美食宝箱，找到了海蛎、老姜、糯米和芋头，还听见摊主阿姨说：“认识名字和食材，就是靠近家乡味的第一步。”最后，大家把今天看到的颜色画进成长小书里。"
     : "绘本故事开始啦。幼习宝小星在图书角发现一本会发光的小书，它邀请小朋友先坐稳、听故事，再说一句“我看到了……”。故事里，小手遇到清水和泡泡，图书排队回到书架，小朋友慢慢喝水、轻轻说话。小星笑着说：“每做好一个小动作，成长任务就会亮一点。”故事讲完啦，我们也试一个阅读或好习惯小任务吧。";
 
   return {
@@ -262,7 +262,7 @@ function buildTeacherFallback(task: string, userInput = "") {
   const isHabitTask = /幼习宝|喝水|洗手|如厕|排队|整理|红绿牌|文明进餐|坐姿|图书|小书虫|成长任务|生活习惯|一日常规/.test(target);
   const isFood =
     !isHabitTask &&
-    /闽|泉州美食|海蛎|紫菜|土笋|面线|润饼|石花|醋肉|鱼卷|食材|美食|尝新|播报|厨房|小厨师/.test(target);
+    /闽|泉州美食|海蛎|紫菜|土笋|面线|润饼|石花|醋肉|鱼卷|姜母鸭|烧肉粽|肉粽|芋头饼|牛肉羹|洪濑鸡爪|四果汤|咸饭|食材|美食|尝新|播报|厨房|小厨师/.test(target);
   const isPraise = /鼓励|表扬|挑食|不愿意|情绪|安抚|紧张/.test(target);
   const ageGroup = resolveTeacherAgeGroup(target);
   const ageFocus = buildTeacherAgeFocus(ageGroup);
@@ -401,7 +401,7 @@ export async function POST(request: Request) {
             "面向 3-6 岁儿童，遵循生活化、游戏化、正向支持和尊重个体差异的幼儿教育原则。",
             "请根据孩子想听的内容生成一段可以直接语音播放的中文绘本故事。",
             theme === "food"
-              ? "故事要融入泉州本地美食探索，可轮换海蛎煎、面线糊、土笋冻、闽南肉粽、润饼菜、石花膏、炸醋肉、崇武鱼卷；可出现闽食小列车、美食猜猜乐、美食宝箱、小小播报员和泉州小厨房；重点是认名字、找食材、听小故事、说颜色形状、播报介绍和参与制作小步骤。"
+              ? "故事要融入泉州本地美食探索，可轮换海蛎煎、面线糊、土笋冻、闽南肉粽/烧肉粽、润饼菜、石花膏、炸醋肉、崇武鱼卷、姜母鸭、芋头饼、牛肉羹、洪濑鸡爪、四果汤、咸饭；可出现闽食小列车、美食猜猜乐、美食宝箱、小小播报员和泉州小厨房；重点是认名字、找食材、听小故事、说颜色形状、播报介绍和参与制作小步骤。"
               : "故事要围绕一日生活常规和进餐习惯，可出现喝水、洗手、如厕表达、整理归位、排队等待、正确坐姿、轻声进餐、细嚼慢咽、按需取餐、珍惜粮食和餐后整理；阅读只作为习惯延伸，不要压过常规养成主线。",
             "故事结尾要自然引出一个听故事做任务问题，例如故事里做了什么好习惯、我也可以做哪一步、图书或物品放回哪里。",
             "语言要短句、温柔、有画面感，不批评、不吓唬、不小学化。",

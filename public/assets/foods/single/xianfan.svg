@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 440" role="img" aria-label="xianfan">
+  <rect width="640" height="440" rx="34" fill="#fefce8"/>
+  <ellipse cx="320" cy="326" rx="236" ry="72" fill="#d8b07a"/>
+  <path d="M146 188h348l-38 99c-17 43-58 72-105 72h-62c-47 0-88-29-105-72l-38-99Z" fill="#ffffff"/>
+  <ellipse cx="320" cy="188" rx="174" ry="57" fill="#f8fafc"/>
+  <ellipse cx="320" cy="179" rx="153" ry="45" fill="#fef3c7"/>
+  <g filter="url(#shadow)">
+    <g fill="#f5d083">
+      <ellipse cx="234" cy="164" rx="24" ry="13" transform="rotate(-18 234 164)"/>
+      <ellipse cx="285" cy="151" rx="25" ry="13" transform="rotate(10 285 151)"/>
+      <ellipse cx="335" cy="163" rx="25" ry="13" transform="rotate(-8 335 163)"/>
+      <ellipse cx="391" cy="150" rx="24" ry="13" transform="rotate(15 391 150)"/>
+      <ellipse cx="426" cy="184" rx="25" ry="13" transform="rotate(-11 426 184)"/>
+      <ellipse cx="218" cy="206" rx="26" ry="14" transform="rotate(13 218 206)"/>
+      <ellipse cx="307" cy="207" rx="26" ry="14" transform="rotate(-13 307 207)"/>
+      <ellipse cx="374" cy="215" rx="26" ry="14" transform="rotate(12 374 215)"/>
+    </g>
+    <g fill="#8b5e34">
+      <ellipse cx="267" cy="185" rx="26" ry="17" transform="rotate(-25 267 185)"/>
+      <ellipse cx="360" cy="185" rx="28" ry="18" transform="rotate(22 360 185)"/>
+      <ellipse cx="322" cy="236" rx="25" ry="16" transform="rotate(-12 322 236)"/>
+    </g>
+    <g fill="#22c55e">
+      <path d="M208 142c34 2 50 19 52 45-31-2-51-17-52-45Z"/>
+      <path d="M397 221c38 0 56 17 60 47-35-1-56-17-60-47Z"/>
+      <path d="M284 239c31 0 46 14 50 38-30-1-46-13-50-38Z"/>
+    </g>
+    <g fill="#f97316">
+      <rect x="410" y="220" width="35" height="21" rx="10" transform="rotate(-18 410 220)"/>
+      <rect x="226" y="236" width="36" height="21" rx="10" transform="rotate(16 226 236)"/>
+    </g>
+  </g>
+  <defs>
+    <filter id="shadow" x="170" y="120" width="310" height="190" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#92400e" flood-opacity=".13"/>
+    </filter>
+  </defs>
+</svg>
