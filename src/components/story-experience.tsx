@@ -3516,7 +3516,7 @@ function normalizeSpeechPlaybackError(error: unknown) {
 
   return {
     blocked: false,
-    message: message || "高质量播报暂时不可用，当前先用浏览器播报。",
+    message: message || "统一语音暂时不可用，请稍后再试。",
   };
 }
 
@@ -8932,7 +8932,6 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
   const [recommendationRequested, setRecommendationRequested] = useState(false);
   const [status, setStatus] = useState(getThemeReadyStatus(initialThemeId));
   const [autoSpeak, setAutoSpeak] = useState(false);
-  const [usePremiumVoice, setUsePremiumVoice] = useState(premiumTtsEnabled);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [badges, setBadges] = useState<string[]>([]);
@@ -9130,7 +9129,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
 
     stopSpeaking();
 
-    if (usePremiumVoice && premiumTtsEnabled) {
+    if (premiumTtsEnabled) {
       try {
         setStatus(`正在用 ${premiumVoiceLabel} 播报故事...`);
         await playPremiumSpeech(text);
@@ -9141,8 +9140,9 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
 
         if (playbackError.blocked) {
           setAutoSpeak(false);
-          return;
         }
+
+        return;
       }
     }
 
@@ -10199,20 +10199,9 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                   {autoSpeak ? "关闭播报" : "开启播报"}
                 </button>
                 {premiumTtsEnabled ? (
-                  <button
-                    onClick={() => {
-                      stopSpeaking();
-                      setUsePremiumVoice((current) => !current);
-                    }}
-                    className={`rounded-full px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${
-                      usePremiumVoice
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-slate-100 text-slate-700"
-                    }`}
-                    type="button"
-                  >
-                    {usePremiumVoice ? `${premiumVoiceLabel} 已启用` : "切回浏览器播报"}
-                  </button>
+                  <span className="rounded-full bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-800">
+                    {premiumVoiceLabel} 已启用
+                  </span>
                 ) : null}
                 <button
                   onClick={() => {

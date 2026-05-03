@@ -45,7 +45,7 @@ import {
   weeklyMenuStorageKey,
   type WeeklyMenuEntry,
 } from "@/lib/weekly-menu";
-import { speakWithBrowserVoice, stopAllVoicePlayback } from "@/lib/voice-client";
+import { fetchPremiumSpeechAudio, registerVoiceAudio, stopAllVoicePlayback } from "@/lib/voice-client";
 
 type ParentPortalProps = {
   initialChildId?: string;
@@ -214,7 +214,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [parentReadingStatus, setParentReadingStatus] =
     useState("选择一本老师确认发布的绘本，亲子共读后可同步给老师。");
   const [parentReadingVoiceBookId, setParentReadingVoiceBookId] = useState("");
-  const parentReadingVoiceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const parentReadingAudioReleaseRef = useRef<(() => void) | null>(null);
   const [plateActionStep, setPlateActionStep] = useState(familyPlateActionSteps[0]);
   const [plateActionNote, setPlateActionNote] = useState("");
   const [plateActionPhoto, setPlateActionPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
@@ -358,10 +358,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
 
   useEffect(() => {
     return () => {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
-      parentReadingVoiceRef.current = null;
+      parentReadingAudioReleaseRef.current?.();
+      parentReadingAudioReleaseRef.current = null;
+      stopAllVoicePlayback();
     };
   }, []);
 
@@ -761,14 +760,15 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   }
 
   function stopParentReadingVoice() {
+    parentReadingAudioReleaseRef.current?.();
+    parentReadingAudioReleaseRef.current = null;
     stopAllVoicePlayback();
-    parentReadingVoiceRef.current = null;
     setParentReadingVoiceBookId("");
   }
 
-  function toggleParentReadingVoice(book: TeacherPictureBook) {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      setParentReadingStatus("当前浏览器暂时不能播放语音，可以先亲子共读文字。");
+  async function toggleParentReadingVoice(book: TeacherPictureBook) {
+    if (typeof window === "undefined") {
+      setParentReadingStatus("当前暂时不能播放语音，可以先亲子共读文字。");
       return;
     }
 
@@ -778,27 +778,36 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       return;
     }
 
-    const played = speakWithBrowserVoice(buildParentReadingSpeech(book), "child", {
-      onend: () => {
-        parentReadingVoiceRef.current = null;
-        setParentReadingVoiceBookId("");
-        setParentReadingStatus(`《${book.title}》听完啦，可以完成亲子阅读打卡。`);
-      },
-      onerror: () => {
-        parentReadingVoiceRef.current = null;
-        setParentReadingVoiceBookId("");
-        setParentReadingStatus("语音播放中断了，可以再点一次听一听。");
-      },
-    });
-
-    if (!played) {
-      setParentReadingStatus("当前浏览器暂时不能播放语音，可以先亲子共读文字。");
-      return;
-    }
-
-    parentReadingVoiceRef.current = null;
+    stopParentReadingVoice();
     setParentReadingVoiceBookId(book.id);
     setParentReadingStatus(`正在听《${book.title}》。`);
+
+    try {
+      const blob = await fetchPremiumSpeechAudio(buildParentReadingSpeech(book), "child");
+      const nextUrl = URL.createObjectURL(blob);
+      const audio = new Audio(nextUrl);
+      const releaseManagedAudio = registerVoiceAudio(audio, nextUrl);
+
+      parentReadingAudioReleaseRef.current = releaseManagedAudio;
+      audio.volume = 0.86;
+      audio.onended = () => {
+        releaseManagedAudio();
+        parentReadingAudioReleaseRef.current = null;
+        setParentReadingVoiceBookId("");
+        setParentReadingStatus(`《${book.title}》听完啦，可以完成亲子阅读打卡。`);
+      };
+      audio.onerror = () => {
+        releaseManagedAudio();
+        parentReadingAudioReleaseRef.current = null;
+        setParentReadingVoiceBookId("");
+        setParentReadingStatus("语音播放中断了，可以再点一次听一听。");
+      };
+      await audio.play();
+    } catch {
+      parentReadingAudioReleaseRef.current = null;
+      setParentReadingVoiceBookId("");
+      setParentReadingStatus("统一语音暂时没有播放，可以先亲子共读文字。");
+    }
   }
 
   function chooseFeedbackPhoto(event: ChangeEvent<HTMLInputElement>) {

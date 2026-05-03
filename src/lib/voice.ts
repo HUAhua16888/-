@@ -17,26 +17,26 @@ export type PremiumVoiceTuning = {
 
 export const browserVoiceSettingsByScene: Record<VoiceScene, BrowserVoiceSettings> = {
   child: {
-    rate: 0.86,
-    pitch: 1.08,
+    rate: 0.84,
+    pitch: 1.1,
     volume: 0.88,
   },
   teacher: {
-    rate: 0.9,
-    pitch: 1.03,
-    volume: 0.9,
+    rate: 0.84,
+    pitch: 1.1,
+    volume: 0.88,
   },
 };
 
 export const premiumVoiceTuningByScene: Record<VoiceScene, PremiumVoiceTuning> = {
   child: {
-    speechRate: -6,
-    loudnessRate: -3,
-    speedRatio: 0.92,
+    speechRate: -8,
+    loudnessRate: -4,
+    speedRatio: 0.9,
   },
   teacher: {
-    speechRate: -2,
-    loudnessRate: -1,
-    speedRatio: 0.96,
+    speechRate: -8,
+    loudnessRate: -4,
+    speedRatio: 0.9,
   },
 };

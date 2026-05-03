@@ -83,8 +83,8 @@ export function SiteSoundIntro() {
           return;
         }
       } catch {
-        // The browser voice is only an emergency fallback; the global voice manager
-        // still guarantees that a second voice cannot play over the premium voice.
+        setStatus("统一语音暂时没有播放，可继续无声体验");
+        return;
       }
     }
 

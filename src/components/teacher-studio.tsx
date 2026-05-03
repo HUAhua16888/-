@@ -2882,7 +2882,7 @@ export function TeacherStudio() {
     if (premiumTtsEnabled) {
       try {
         setVoiceStatus(`正在用 ${premiumVoiceLabel} 试播老师引导语...`);
-        const blob = await fetchPremiumSpeechAudio(text, "teacher");
+        const blob = await fetchPremiumSpeechAudio(text, "child");
         const nextUrl = URL.createObjectURL(blob);
         const audio = new Audio(nextUrl);
         const releaseManagedAudio = registerVoiceAudio(audio, nextUrl);
@@ -2905,8 +2905,9 @@ export function TeacherStudio() {
         setVoiceStatus(
           error instanceof Error && error.message
             ? error.message
-            : "高质量播报暂时不可用，当前先用浏览器播报。",
+            : "统一语音暂时不可用，请稍后再试。",
         );
+        return;
       }
     }
 
