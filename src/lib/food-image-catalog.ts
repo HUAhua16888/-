@@ -893,16 +893,12 @@ function getFoodPhotoAssetUrl(asset: FoodAsset) {
   return asset.image.replace("/assets/foods/single/", "/assets/foods/photos/");
 }
 
-function getFoodAssetSourceLabel(asset: FoodAsset, label: string, kind: "image" | "photo" = "image") {
-  const sourceName = kind === "photo" ? "AI生成/整理菜品照片" : "AI生成/整理菜品图";
-
-  return asset.name === label ? `${sourceName}，教师审核后使用` : `${sourceName}：${asset.name}，教师审核后使用`;
+function getFoodAssetSourceLabel() {
+  return "AI生成，教师确认后使用";
 }
 
-function getIngredientAssetSourceLabel(ingredient: IngredientAsset, label: string) {
-  return ingredient.name === label
-    ? "AI生成/整理食材图，教师审核后使用"
-    : `AI生成/整理食材图：${ingredient.name}，教师审核后使用`;
+function getIngredientAssetSourceLabel() {
+  return "AI生成，教师确认后使用";
 }
 
 function uniqueImageCandidates(candidates: SafeFoodImageCandidate[]) {
@@ -1051,7 +1047,7 @@ export function resolveSafeFoodImage(foodName: string, context: FoodImageContext
   const asset = findFoodAsset(foodName || label);
 
   if (asset) {
-    const assetSourceLabel = getFoodAssetSourceLabel(asset, label);
+    const assetSourceLabel = getFoodAssetSourceLabel();
 
     candidates.push({
       url: asset.image,
@@ -1065,7 +1061,7 @@ export function resolveSafeFoodImage(foodName: string, context: FoodImageContext
     const photoUrl = getFoodPhotoAssetUrl(asset);
 
     if (photoUrl) {
-      const photoSourceLabel = getFoodAssetSourceLabel(asset, label, "photo");
+      const photoSourceLabel = getFoodAssetSourceLabel();
 
       candidates.push({
         url: photoUrl,
@@ -1089,8 +1085,8 @@ export function resolveSafeFoodImage(foodName: string, context: FoodImageContext
     candidates.push({
       url: ingredient.image,
       sourceType: "local_ingredient_asset",
-      sourceLabel: getIngredientAssetSourceLabel(ingredient, label),
-      fallbackSource: getIngredientAssetSourceLabel(ingredient, label),
+      sourceLabel: getIngredientAssetSourceLabel(),
+      fallbackSource: getIngredientAssetSourceLabel(),
       teacherConfirmed: true,
       aiGenerated: true,
     });
@@ -1205,7 +1201,7 @@ export function resolveFoodImage(foodName: string, context: FoodImageContext = {
   const asset = findFoodAsset(foodName || label);
 
   if (asset) {
-      const assetSourceLabel = getFoodAssetSourceLabel(asset, label);
+      const assetSourceLabel = getFoodAssetSourceLabel();
 
       return {
         label: asset.name,
@@ -1222,7 +1218,7 @@ export function resolveFoodImage(foodName: string, context: FoodImageContext = {
   const ingredientAsset = findIngredientAsset(foodName || label);
 
   if (ingredientAsset) {
-      const ingredientSourceLabel = getIngredientAssetSourceLabel(ingredientAsset, label);
+      const ingredientSourceLabel = getIngredientAssetSourceLabel();
 
       return {
         label: ingredientAsset.name,

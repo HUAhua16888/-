@@ -3,223 +3,61 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
-import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
+import {
+  fetchPremiumSpeechAudio,
+  registerVoiceAudio,
+  speakWithBrowserVoice,
+  stopAllVoicePlayback,
+} from "@/lib/voice-client";
 
-const introMusicNotes = [392, 523.25, 659.25];
-const introBass = 196;
 const premiumIntroEnabled = process.env.NEXT_PUBLIC_ENABLE_PREMIUM_TTS === "true";
 
 function getIntroText(pathname: string) {
   if (pathname.startsWith("/teachers")) {
-    return "欢迎来到闽食小当家，幼习宝和闽食成长岛教育智能体。这里是教师工作台，老师可以查看孩子的游戏和食育记录，审核 AI 建议，再同步家庭任务。";
+    return "老师好。这里可以看孩子今天玩了什么，也可以先修改确认 AI 小建议。";
   }
 
   if (pathname.startsWith("/adventure")) {
-    return "欢迎来到闽食小当家。今天可以跟着幼习宝练好习惯，也可以到闽食成长岛看一看、闻一闻，慢慢认识家乡美食。";
+    return "小朋友好。我们先听一听，再看一看，慢慢玩一个小任务。";
   }
 
   if (pathname.startsWith("/parents")) {
-    return "欢迎来到闽食小当家。这里是家庭延续，可以查看老师今天确认的建议，回家做一个小步骤，再提交家庭观察。";
+    return "家长好。这里可以看老师确认的小建议，也可以和孩子一起听一听故事。";
   }
 
   if (pathname.startsWith("/children")) {
-    return "欢迎来到闽食小当家。先找到自己的小名牌，再去幼习宝或闽食成长岛，玩一个短短的小任务。";
+    return "小朋友好。先找到自己的小名牌，再去玩一个短短的小任务。";
   }
 
-  return "欢迎来到闽食小当家，幼习宝和闽食成长岛教育智能体。请选择儿童互动、教师工作台、家庭延续或参赛说明。";
-}
-
-function getAudioContext() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const AudioContextApi =
-    window.AudioContext ||
-    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
-  return AudioContextApi ? new AudioContextApi() : null;
-}
-
-function playIntroTone(
-  context: AudioContext,
-  masterGain: GainNode,
-  frequency: number,
-  startAt: number,
-  duration: number,
-  gainValue: number,
-) {
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(frequency, startAt);
-  gain.gain.setValueAtTime(0.0001, startAt);
-  gain.gain.exponentialRampToValueAtTime(gainValue, startAt + 0.05);
-  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
-
-  oscillator.connect(gain);
-  gain.connect(masterGain);
-  oscillator.start(startAt);
-  oscillator.stop(startAt + duration + 0.05);
-}
-
-function pickMandarinVoice() {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    return null;
-  }
-
-  return (
-    window.speechSynthesis
-      .getVoices()
-      .find((voice) => voice.lang.toLowerCase().startsWith("zh")) ?? null
-  );
-}
-
-function speakIntroWithBrowser(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    return false;
-  }
-
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  const voice = pickMandarinVoice();
-
-  utterance.lang = "zh-CN";
-  utterance.rate = 0.92;
-  utterance.pitch = 1.05;
-
-  if (voice) {
-    utterance.voice = voice;
-  }
-
-  window.speechSynthesis.speak(utterance);
-  return true;
+  return "欢迎来到闽食小当家。请选择儿童端、教师端或家长端。";
 }
 
 export function SiteSoundIntro() {
   const pathname = usePathname();
-  const [, setNeedsGesture] = useState(true);
-  const [, setStatus] = useState("开启声音介绍");
+  const [, setStatus] = useState("准备声音介绍");
   const startedRef = useRef(false);
-  const contextRef = useRef<AudioContext | null>(null);
-  const masterGainRef = useRef<GainNode | null>(null);
-  const intervalRef = useRef<number | null>(null);
-  const fadeTimerRef = useRef<number | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
   const speechAbortRef = useRef<AbortController | null>(null);
+  const releaseAudioRef = useRef<(() => void) | null>(null);
 
   function cleanupIntroSpeech() {
     speechAbortRef.current?.abort();
     speechAbortRef.current = null;
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-      audioRef.current = null;
-    }
-
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = null;
-    }
-
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    releaseAudioRef.current?.();
+    releaseAudioRef.current = null;
+    stopAllVoicePlayback();
   }
 
-  function stopIntroMusic() {
-    if (intervalRef.current) {
-      window.clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-
-    const context = contextRef.current;
-    const masterGain = masterGainRef.current;
-
-    if (context && masterGain) {
-      masterGain.gain.cancelScheduledValues(context.currentTime);
-      masterGain.gain.setValueAtTime(masterGain.gain.value, context.currentTime);
-      masterGain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.8);
-    }
-
-    if (fadeTimerRef.current) {
-      window.clearTimeout(fadeTimerRef.current);
-    }
-
-    fadeTimerRef.current = window.setTimeout(() => {
-      contextRef.current?.close().catch(() => undefined);
-      contextRef.current = null;
-      masterGainRef.current = null;
-    }, 900);
-  }
-
-  async function startIntro(kind: "auto" | "gesture") {
+  async function startIntro() {
     if (startedRef.current || typeof window === "undefined") {
       return;
     }
 
-    const context = contextRef.current ?? getAudioContext();
-
-    if (!context) {
-      setStatus("声音不可用，可继续无声体验");
-      setNeedsGesture(true);
-      return;
-    }
-
-    if (!contextRef.current) {
-      const masterGain = context.createGain();
-      masterGain.gain.value = 0.045;
-      masterGain.connect(context.destination);
-      contextRef.current = context;
-      masterGainRef.current = masterGain;
-    }
-
-    try {
-      await context.resume();
-    } catch {
-      startedRef.current = false;
-      setStatus("声音未开启，可继续无声体验");
-      setNeedsGesture(true);
-      return;
-    }
-
-    if (context.state !== "running") {
-      startedRef.current = false;
-      setStatus("声音未开启，可继续无声体验");
-      setNeedsGesture(true);
-      return;
-    }
-
-    const masterGain = masterGainRef.current;
-
-    if (!masterGain) {
-      setStatus("声音初始化失败");
-      return;
-    }
-
     startedRef.current = true;
-    setNeedsGesture(false);
-    setStatus(kind === "auto" ? "入场声音播放中" : "已开启入场声音");
+    setStatus("正在播放声音介绍");
 
-    const playLoop = () => {
-      const baseTime = context.currentTime + 0.02;
-
-      introMusicNotes.forEach((note, index) => {
-        playIntroTone(context, masterGain, note, baseTime + index * 0.36, 1.15, 0.032);
-      });
-      playIntroTone(context, masterGain, introBass, baseTime, 1.8, 0.018);
-    };
-
-    playLoop();
-    intervalRef.current = window.setInterval(playLoop, 2400);
     const controller = new AbortController();
     speechAbortRef.current = controller;
     const introText = getIntroText(pathname);
-    let speechPlayed = false;
 
     if (premiumIntroEnabled) {
       try {
@@ -229,54 +67,52 @@ export function SiteSoundIntro() {
           const nextUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(nextUrl);
 
-          audio.volume = 0.92;
-          audioUrlRef.current = nextUrl;
-          audioRef.current = audio;
+          audio.volume = 0.86;
+          releaseAudioRef.current = registerVoiceAudio(audio, nextUrl);
+          audio.onended = () => {
+            releaseAudioRef.current?.();
+            releaseAudioRef.current = null;
+            setStatus("声音介绍已结束");
+          };
+          audio.onerror = () => {
+            releaseAudioRef.current?.();
+            releaseAudioRef.current = null;
+            setStatus("声音介绍暂时没有播放");
+          };
           await audio.play();
-          speechPlayed = true;
+          return;
         }
       } catch {
-        speechPlayed = speakIntroWithBrowser(introText);
+        // The browser voice is only an emergency fallback; the global voice manager
+        // still guarantees that a second voice cannot play over the premium voice.
       }
-    } else {
-      speechPlayed = speakIntroWithBrowser(introText);
     }
 
-    if (!speechPlayed) {
-      setStatus("语音介绍没有播放，背景音乐已开启。");
-    }
+    const browserPlayed = speakWithBrowserVoice(introText, "child", {
+      onend: () => setStatus("声音介绍已结束"),
+      onerror: () => setStatus("声音介绍暂时没有播放"),
+    });
 
-    fadeTimerRef.current = window.setTimeout(() => {
-      setStatus("入场声音已播放");
-      cleanupIntroSpeech();
-      stopIntroMusic();
-    }, 12000);
+    if (!browserPlayed) {
+      setStatus("声音不可用，可继续无声体验");
+    }
   }
 
-  const startIntroFromEffect = useEffectEvent((kind: "auto" | "gesture") => {
-    void startIntro(kind);
+  const startIntroFromEffect = useEffectEvent(() => {
+    void startIntro();
   });
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      startIntroFromEffect("auto");
+      startIntroFromEffect();
     }, 500);
 
     return () => {
       window.clearTimeout(timer);
     };
-    // The browser may block autoplay; the visible button remains as the fallback.
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (fadeTimerRef.current) {
-        window.clearTimeout(fadeTimerRef.current);
-      }
-      cleanupIntroSpeech();
-      stopIntroMusic();
-    };
-  }, []);
+  useEffect(() => cleanupIntroSpeech, []);
 
   return null;
 }

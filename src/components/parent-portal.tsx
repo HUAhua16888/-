@@ -45,6 +45,7 @@ import {
   weeklyMenuStorageKey,
   type WeeklyMenuEntry,
 } from "@/lib/weekly-menu";
+import { speakWithBrowserVoice, stopAllVoicePlayback } from "@/lib/voice-client";
 
 type ParentPortalProps = {
   initialChildId?: string;
@@ -195,7 +196,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackPhoto, setFeedbackPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
   const [feedbackPhotoStatus, setFeedbackPhotoStatus] =
-    useState("可选放一张家庭观察照片，请避开孩子正脸和敏感信息。");
+    useState("可选放一张家庭观察照片。不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。");
   const [feedbackStatus, setFeedbackStatus] =
     useState("班级试用模式：家长的疑惑、想法和在家观察会保存在这台设备上。");
   const [selectedHomeTaskTitle, setSelectedHomeTaskTitle] = useState(
@@ -218,7 +219,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   const [plateActionNote, setPlateActionNote] = useState("");
   const [plateActionPhoto, setPlateActionPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
   const [plateActionPhotoStatus, setPlateActionPhotoStatus] =
-    useState("可选放一张餐后整理或尝试小步骤照片，请只拍食物、餐盘或作品。");
+    useState("可选放一张餐后整理或尝试小步骤照片。不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。");
   const [plateActionStatus, setPlateActionStatus] =
     useState("选择一个今天真实发生的小步骤，提交后老师端会看到家庭光盘行动反馈。");
   const [status, setStatus] = useState("请输入幼儿姓名或号数、家庭绑定码，并勾选同意后查看。");
@@ -697,7 +698,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     });
     setFeedbackText("");
     setFeedbackPhoto(null);
-    setFeedbackPhotoStatus("可选放一张家庭观察照片，请避开孩子正脸和敏感信息。");
+    setFeedbackPhotoStatus("可选放一张家庭观察照片。不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。");
     setFeedbackStatus("已保存到教师工作台反馈列表，老师查看后可以回复和给出家庭建议。");
     void syncParentFeedbackRecord(
       record,
@@ -760,9 +761,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
   }
 
   function stopParentReadingVoice() {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopAllVoicePlayback();
     parentReadingVoiceRef.current = null;
     setParentReadingVoiceBookId("");
   }
@@ -779,25 +778,27 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
       return;
     }
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(buildParentReadingSpeech(book));
-    utterance.lang = "zh-CN";
-    utterance.rate = 0.92;
-    utterance.pitch = 1;
-    utterance.onend = () => {
-      parentReadingVoiceRef.current = null;
-      setParentReadingVoiceBookId("");
-      setParentReadingStatus(`《${book.title}》听完啦，可以完成亲子阅读打卡。`);
-    };
-    utterance.onerror = () => {
-      parentReadingVoiceRef.current = null;
-      setParentReadingVoiceBookId("");
-      setParentReadingStatus("语音播放中断了，可以再点一次听一听。");
-    };
-    parentReadingVoiceRef.current = utterance;
+    const played = speakWithBrowserVoice(buildParentReadingSpeech(book), "child", {
+      onend: () => {
+        parentReadingVoiceRef.current = null;
+        setParentReadingVoiceBookId("");
+        setParentReadingStatus(`《${book.title}》听完啦，可以完成亲子阅读打卡。`);
+      },
+      onerror: () => {
+        parentReadingVoiceRef.current = null;
+        setParentReadingVoiceBookId("");
+        setParentReadingStatus("语音播放中断了，可以再点一次听一听。");
+      },
+    });
+
+    if (!played) {
+      setParentReadingStatus("当前浏览器暂时不能播放语音，可以先亲子共读文字。");
+      return;
+    }
+
+    parentReadingVoiceRef.current = null;
     setParentReadingVoiceBookId(book.id);
     setParentReadingStatus(`正在听《${book.title}》。`);
-    window.speechSynthesis.speak(utterance);
   }
 
   function chooseFeedbackPhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -960,7 +961,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
     });
     setPlateActionNote("");
     setPlateActionPhoto(null);
-    setPlateActionPhotoStatus("可选放一张餐后整理或尝试小步骤照片，请只拍食物、餐盘或作品。");
+    setPlateActionPhotoStatus("可选放一张餐后整理或尝试小步骤照片。不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。");
     setFeedbackCategory("home-observation");
     setFeedbackStatus("家庭光盘行动已同步到教师工作台反馈列表。");
     setPlateActionStatus("已提交给老师。这里只记录个人成长小步骤，不做排名。");
@@ -1067,6 +1068,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                 <p className="mt-1 text-xs font-semibold text-slate-500">
                   家长端不显示班级汇总和其他幼儿姓名；照片/视频只在同意后用于本班反馈。
                 </p>
+                <p className="mt-2 max-w-2xl rounded-[1.1rem] bg-amber-50 px-3 py-2 text-xs leading-6 font-semibold text-amber-900">
+                  当前为班级测试版，家长端跨设备账号同步仍在研究中。正式部署需接入统一账号、权限控制、加密数据库和数据删除机制。
+                </p>
               </div>
               <button
                 onClick={logoutParentAccess}
@@ -1125,6 +1129,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                   : "每周食谱自动发布"}
               </span>
             </div>
+            <p className="mt-3 rounded-[1rem] bg-emerald-50 px-3 py-2 text-xs leading-6 font-semibold text-emerald-900">
+              今日食谱数据仅用于班级范围内食育观察和匿名化汇总，可为教师设计食育活动、家园任务和食堂后续菜谱安排提供参考，不作为自动配餐或医学判断依据。
+            </p>
           </div>
         ) : null}
 
@@ -1277,6 +1284,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">今天回家接着轻轻做</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
               优先根据老师确认后的同步建议生成。家长只选一个小步骤，记录孩子愿意认识、愿意靠近和愿意整理的过程。
+            </p>
+            <p className="mt-3 inline-flex rounded-full bg-white/85 px-4 py-2 text-xs font-semibold text-amber-900 shadow-sm">
+              AI生成，教师确认后使用
             </p>
           </div>
           <span className="rounded-full bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
@@ -1463,7 +1473,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                     className="mt-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
                     onClick={() => {
                       setPlateActionPhoto(null);
-                      setPlateActionPhotoStatus("可选放一张餐后整理或尝试小步骤照片，请只拍食物、餐盘或作品。");
+                      setPlateActionPhotoStatus("可选放一张餐后整理或尝试小步骤照片。不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。");
                     }}
                     type="button"
                   >
@@ -1473,7 +1483,7 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
               </div>
             ) : (
               <p className="mt-4 rounded-[1.2rem] bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-600">
-                照片不是必须。平台当前只保留本机图片预览，不默认上传云端。
+                照片不是必须。平台当前只保留本机图片预览，不默认上传云端。不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。
               </p>
             )}
           </div>
@@ -1526,6 +1536,9 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">提交一句家庭观察</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">
               这里提交后会汇总到教师工作台，老师可以结合幼儿互动记录继续跟进。
+            </p>
+            <p className="mt-3 max-w-2xl rounded-[1.1rem] bg-amber-50 px-4 py-3 text-xs leading-6 font-semibold text-amber-900">
+              当前为班级测试版，家长端跨设备账号同步仍在研究中。正式部署需接入统一账号、权限控制、加密数据库和数据删除机制。
             </p>
           </div>
           <span className="rounded-full bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800">
@@ -1594,10 +1607,10 @@ export function ParentPortal({ initialChildId }: ParentPortalProps) {
                     </p>
                     <button
                       className="mt-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
-                      onClick={() => {
-                        setFeedbackPhoto(null);
-                        setFeedbackPhotoStatus("可选放一张家庭观察照片，请避开孩子正脸和敏感信息。");
-                      }}
+                    onClick={() => {
+                      setFeedbackPhoto(null);
+                      setFeedbackPhotoStatus("可选放一张家庭观察照片。不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。");
+                    }}
                       type="button"
                     >
                       移除照片

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
-import { defaultPremiumVoiceType, type VoiceScene } from "@/lib/voice";
+import { defaultPremiumVoiceType, premiumVoiceTuningByScene, type VoiceScene } from "@/lib/voice";
 
 export const maxDuration = 60;
 
@@ -164,6 +164,7 @@ export async function POST(request: Request) {
   const voiceType = process.env.VOLCENGINE_TTS_VOICE_TYPE ?? defaultPremiumVoiceType;
   const audioFormat = process.env.VOLCENGINE_TTS_AUDIO_FORMAT ?? "mp3";
   const sampleRate = normalizeSampleRate(process.env.VOLCENGINE_TTS_SAMPLE_RATE);
+  const voiceTuning = premiumVoiceTuningByScene[scene];
 
   if (!text) {
     return NextResponse.json({ error: "缺少要播报的文本内容" }, { status: 400 });
@@ -213,8 +214,8 @@ export async function POST(request: Request) {
         audio_params: {
           format: audioFormat,
           sample_rate: sampleRate,
-          speech_rate: 0,
-          loudness_rate: 0,
+          speech_rate: voiceTuning.speechRate,
+          loudness_rate: voiceTuning.loudnessRate,
         },
       },
     };
@@ -229,7 +230,7 @@ export async function POST(request: Request) {
         voice_type: voiceType,
         encoding: audioFormat,
         rate: sampleRate,
-        speed_ratio: 1,
+        speed_ratio: voiceTuning.speedRatio,
       },
       request: {
         reqid: requestId,

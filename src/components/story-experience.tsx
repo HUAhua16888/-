@@ -61,7 +61,12 @@ import {
   type HabitCheckinTemplate,
   type TeacherPictureBook,
 } from "@/lib/teacher-published-content";
-import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
+import {
+  fetchPremiumSpeechAudio,
+  registerVoiceAudio,
+  speakWithBrowserVoice,
+  stopAllVoicePlayback,
+} from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
   buildTodayMenuSpeech,
@@ -1960,7 +1965,7 @@ function getMenuMediaSourceText(source?: MenuMediaSource) {
   }
 
   if (source === "ai_generated") {
-    return "AI生成，教师审核后使用";
+    return "AI生成，教师确认后使用";
   }
 
   return "食材小图卡";
@@ -2152,7 +2157,7 @@ function SafeFoodImage({
 
 function getSafeFoodImageBadge(candidate: SafeFoodImageCandidate) {
   if (candidate.aiGenerated || candidate.sourceType === "ai_generated_teacher_confirmed") {
-    return "AI生成，教师审核后使用";
+    return "AI生成，教师确认后使用";
   }
 
   if (candidate.sourceType === "local_food_asset" || candidate.sourceType === "local_ingredient_asset") {
@@ -2278,7 +2283,7 @@ function FoodMiniMaterialCard({
             resolvedImage.aiGenerated ? "bg-amber-100 text-amber-900" : "bg-white/80 text-slate-600"
           }`}
         >
-          {resolvedImage.aiGenerated ? "AI生成，教师审核后使用" : resolvedImage.sourceLabel}
+          {resolvedImage.aiGenerated ? "AI生成，教师确认后使用" : resolvedImage.sourceLabel}
         </span>
       ) : null}
     </span>
@@ -4535,10 +4540,10 @@ function MealPhotoBooth({
             <p className="mt-3 text-sm font-semibold text-slate-600">当前照片：{fileName}</p>
           ) : null}
           <p className="mt-3 text-xs leading-6 font-semibold text-slate-500">
-            请只选择餐盘或闽食作品照片，不拍孩子正脸。
+            不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。
           </p>
           <p className="mt-2 text-xs leading-6 font-semibold text-amber-800">
-            拍照时尽量避开孩子正脸、姓名牌和班级牌，只拍餐盘或作品。
+            餐盘观察只拍食物、餐盘或作品；这条记录用于老师温和观察，不做医学判断。
           </p>
         </div>
 
@@ -5572,6 +5577,9 @@ function HabitTemplateCheckinPanel({
                   </label>
                 </div>
               </div>
+              <p className="rounded-[1.1rem] bg-white/80 px-4 py-3 text-xs leading-6 font-semibold text-rose-800 md:col-span-2">
+                不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。
+              </p>
               {mediaName ? (
                 <p className="mt-3 rounded-[1rem] bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-900">
                   已选择：{mediaName}。点“送给老师”，老师就能看到。
@@ -6857,8 +6865,21 @@ function TodayMenuBroadcast({
           <p className="mt-2 text-sm leading-7 text-slate-600">
             老师录入的今日食谱会优先进入美食观察与靠近一点点，孩子可以先看一看、闻一闻，不着急入口。
           </p>
+          <p className="mt-3 max-w-3xl rounded-[1.1rem] bg-white/78 px-4 py-3 text-xs leading-6 font-semibold text-cyan-900">
+            今日食谱可以看菜品、说观察、选愿意靠近的小步，也可以拍餐盘或作品。班级里只做匿名汇总，帮老师准备食育活动和家园小任务。
+          </p>
         </div>
         <SpeechCueButton text={menuSpeech} onSpeak={onSpeak} label="听今日食谱" tone="cyan" />
+      </div>
+      <p className="mt-4 rounded-[1.2rem] bg-amber-50 px-4 py-3 text-xs leading-6 font-semibold text-amber-900">
+        今日食谱数据仅用于班级范围内食育观察和匿名化汇总，可为教师设计食育活动、家园任务和食堂后续菜谱安排提供参考，不作为自动配餐或医学判断依据。
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {["菜品展示", "观察表达", "尝试意愿", "餐盘/作品记录", "教师观察建议", "班级匿名汇总"].map((item) => (
+          <span key={item} className="rounded-full bg-white/86 px-3 py-1.5 text-xs font-semibold text-cyan-900 shadow-sm">
+            {item}
+          </span>
+        ))}
       </div>
       <div className="mt-4">
         <MenuPlateStage
@@ -8209,6 +8230,9 @@ function FoodKitchenGame({
                       onChange={(event) => handleWorkMediaSelect(event.target.files?.[0])}
                       className="mt-2 w-full rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
                     />
+                    <span className="mt-2 block text-xs leading-6 font-semibold text-rose-800">
+                      不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。
+                    </span>
                   </label>
                   <label className="text-sm font-semibold text-slate-700">
                     我想这样说
@@ -9046,10 +9070,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     speechAbortRef.current?.abort();
     speechAbortRef.current = null;
     cleanupAudioPlayback();
-
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopAllVoicePlayback();
 
     setIsSpeaking(false);
   }
@@ -9066,17 +9087,21 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
     cleanupAudioPlayback();
     const nextUrl = URL.createObjectURL(blob);
     const audio = new Audio(nextUrl);
+    const releaseManagedAudio = registerVoiceAudio(audio, nextUrl);
 
     audioUrlRef.current = nextUrl;
     audioRef.current = audio;
+    audio.volume = 0.86;
 
     audio.onended = () => {
+      releaseManagedAudio();
       speechAbortRef.current = null;
       cleanupAudioPlayback();
       setIsSpeaking(false);
     };
 
     audio.onerror = () => {
+      releaseManagedAudio();
       speechAbortRef.current = null;
       cleanupAudioPlayback();
       setIsSpeaking(false);
@@ -9091,15 +9116,11 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "zh-CN";
-    utterance.rate = 0.95;
-    utterance.pitch = 1.05;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    speakWithBrowserVoice(text, "child", {
+      onstart: () => setIsSpeaking(true),
+      onend: () => setIsSpeaking(false),
+      onerror: () => setIsSpeaking(false),
+    });
   }
 
   async function startSpeechPlayback(text: string) {
@@ -9154,10 +9175,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
       speechAbortRef.current?.abort();
       childIdentityRecognitionRef.current?.stop();
       cleanupAudioPlayback();
-
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopAllVoicePlayback();
     };
   }, []);
 
@@ -10059,7 +10077,7 @@ export function StoryExperience({ initialTheme, initialChildId }: StoryExperienc
                   {latestBadgeFeedback || status}
                 </p>
                 <p className="mt-3 max-w-3xl rounded-[1.1rem] bg-amber-50 px-4 py-3 text-sm leading-7 font-semibold text-amber-900">
-                  今天玩 5-10 分钟就好。看一看、说一说，再回到线下画一画、闻一闻、试一小步。照片只拍食物或作品，不拍小朋友正脸。
+                  今天玩 5-10 分钟就好。看一看、说一说，再回到线下画一画、闻一闻、试一小步。不上传幼儿正脸，不上传手机号、住址等敏感信息；建议使用昵称或编号。
                 </p>
                 {!selectedChild ? (
                 <div className="mt-4 grid max-w-3xl gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">

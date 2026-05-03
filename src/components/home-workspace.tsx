@@ -59,6 +59,9 @@ export function HomeWorkspace() {
           <p className="mt-3 inline-flex rounded-full bg-white/86 px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm">
             AI只做辅助；教师审核、修改、确认后再发布或同步。
           </p>
+          <p className="mt-3 max-w-3xl rounded-[1.2rem] bg-white/82 px-4 py-3 text-sm leading-7 font-semibold text-slate-700 shadow-sm">
+            当前平台仅用于班级范围内测试与展示，不作为全园正式数据系统，也不直接面向所有家长开放。
+          </p>
         </div>
 
         <div className="mt-7 grid gap-4 md:grid-cols-3">

@@ -33,7 +33,7 @@ import {
   type ParentFeedbackRecord,
   type ParentSyncRecord,
 } from "@/lib/parent-sync";
-import { fetchPremiumSpeechAudio } from "@/lib/voice-client";
+import { fetchPremiumSpeechAudio, registerVoiceAudio, speakWithBrowserVoice, stopAllVoicePlayback } from "@/lib/voice-client";
 import { defaultPremiumVoiceLabel } from "@/lib/voice";
 import {
   buildHabitTemplateFromFocus,
@@ -2202,9 +2202,7 @@ export function TeacherStudio() {
       audioUrlRef.current = null;
     }
 
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopAllVoicePlayback();
 
     setIsPreviewSpeaking(false);
   }
@@ -2887,11 +2885,19 @@ export function TeacherStudio() {
         const blob = await fetchPremiumSpeechAudio(text, "teacher");
         const nextUrl = URL.createObjectURL(blob);
         const audio = new Audio(nextUrl);
+        const releaseManagedAudio = registerVoiceAudio(audio, nextUrl);
 
         audioUrlRef.current = nextUrl;
         audioRef.current = audio;
-        audio.onended = cleanupAudio;
-        audio.onerror = cleanupAudio;
+        audio.volume = 0.9;
+        audio.onended = () => {
+          releaseManagedAudio();
+          cleanupAudio();
+        };
+        audio.onerror = () => {
+          releaseManagedAudio();
+          cleanupAudio();
+        };
         setIsPreviewSpeaking(true);
         await audio.play();
         return;
@@ -2909,15 +2915,11 @@ export function TeacherStudio() {
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "zh-CN";
-    utterance.rate = 0.95;
-    utterance.pitch = 1.03;
-    utterance.onstart = () => setIsPreviewSpeaking(true);
-    utterance.onend = () => setIsPreviewSpeaking(false);
-    utterance.onerror = () => setIsPreviewSpeaking(false);
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    speakWithBrowserVoice(text, "teacher", {
+      onstart: () => setIsPreviewSpeaking(true),
+      onend: () => setIsPreviewSpeaking(false),
+      onerror: () => setIsPreviewSpeaking(false),
+    });
     setVoiceStatus("当前正在用浏览器播报老师引导语。");
   }
 
@@ -5934,6 +5936,9 @@ ${worksheets.join("")}
             <p className="mt-2 text-sm leading-7 text-slate-600">
               提前录入本周食谱，系统按日期自动进入儿童端。
             </p>
+            <p className="mt-3 max-w-3xl rounded-[1.2rem] bg-white/80 px-4 py-3 text-sm leading-7 font-semibold text-cyan-900 shadow-sm">
+              今日食谱数据仅用于班级范围内食育观察和匿名化汇总，可为教师设计食育活动、家园任务和食堂后续菜谱安排提供参考，不作为自动配餐或医学判断依据。
+            </p>
           </div>
           <button
             onClick={publishTodayMenuToChildren}
@@ -6172,7 +6177,7 @@ ${worksheets.join("")}
             </div>
             <MenuMediaDraftPanel
               title="今日观察素材"
-              description="图片和视频共用一个入口；AI补图在这里作为备用，教师确认前儿童端不可见。"
+              description="图片和视频共用一个入口；不上传幼儿正脸，不上传手机号、住址等敏感信息；AI补图在这里作为备用，教师确认前儿童端不可见。"
               draft={activeMenuMediaDraft}
               date={menuMediaActiveDate}
               mealType={menuMediaActiveMealType}
@@ -6331,6 +6336,93 @@ ${worksheets.join("")}
           ) : (
             <p className="rounded-[1.8rem] bg-white/88 px-5 py-6 text-sm leading-7 text-slate-600 lg:col-span-3">
               今日食谱还没有关联观察。发布食谱后，儿童端完成美食认识观察卡，这里会显示菜品、食材、原因和靠近小步。
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section
+        hidden={activeTeacherPanel !== "teacher-weekly-menu"}
+        className="order-2 rounded-[2.5rem] bg-[linear-gradient(135deg,#f7fee7_0%,#ffffff_54%,#fff7ed_100%)] p-6 shadow-[0_24px_80px_rgba(35,88,95,0.12)]"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-lime-700">食堂参考 / 班级食谱反馈</p>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">班级匿名汇总给食堂参考</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              只展示班级聚合情况，不显示幼儿姓名；用于后续菜谱观察、切配方式和食育活动设计参考。
+            </p>
+          </div>
+          <span className="rounded-full bg-lime-100 px-4 py-2 text-sm font-semibold text-lime-900">
+            展示型区域
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          {todayMenuObservationRows.length > 0 ? (
+            todayMenuObservationRows.map((row) => {
+              const acceptanceText =
+                row.topStep === "尝一点点"
+                  ? "已有幼儿愿意尝一点点"
+                  : row.topStep === "碰一碰"
+                    ? "多处在触碰和认识阶段"
+                    : row.topStep === "闻一闻"
+                      ? "多处在闻一闻和熟悉气味阶段"
+                      : "多处在看一看和认名字阶段";
+              const continueObserve =
+                row.count >= 2 || row.topStep !== "尝一点点";
+              const teacherSuggestion =
+                /气味|味道|冲|重/.test(row.topReason)
+                  ? "可先做闻香、看颜色和少量搭配熟悉食材的活动。"
+                  : /硬|滑|口感/.test(row.topReason)
+                    ? "可调整切小、煮软或先用图片与材料卡观察。"
+                    : "可继续通过看图、讲故事和家园小任务温和引导。";
+
+              return (
+                <article key={`canteen-${row.dishName}`} className="rounded-[1.8rem] bg-white/90 p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-lime-700">菜名</p>
+                      <h3 className="mt-1 text-xl font-semibold text-slate-900">{row.dishName}</h3>
+                    </div>
+                    <span className="rounded-full bg-lime-100 px-3 py-1.5 text-xs font-semibold text-lime-900">
+                      匿名 {row.childCount} 名
+                    </span>
+                  </div>
+                  <dl className="mt-4 grid gap-3 text-sm leading-7 text-slate-700 sm:grid-cols-2">
+                    <div className="rounded-[1.1rem] bg-lime-50 px-3 py-2">
+                      <dt className="font-semibold text-lime-900">幼儿接受度</dt>
+                      <dd>{acceptanceText}</dd>
+                    </div>
+                    <div className="rounded-[1.1rem] bg-cyan-50 px-3 py-2">
+                      <dt className="font-semibold text-cyan-900">愿意尝试人数</dt>
+                      <dd>{row.childCount} 名幼儿已有靠近记录</dd>
+                    </div>
+                    <div className="rounded-[1.1rem] bg-amber-50 px-3 py-2">
+                      <dt className="font-semibold text-amber-900">明显排斥点</dt>
+                      <dd>{row.topReason || "暂无明显排斥点"}</dd>
+                    </div>
+                    <div className="rounded-[1.1rem] bg-emerald-50 px-3 py-2">
+                      <dt className="font-semibold text-emerald-900">是否建议继续观察</dt>
+                      <dd>{continueObserve ? "建议继续温和观察" : "可保持常规观察"}</dd>
+                    </div>
+                  </dl>
+                  <p className="mt-3 rounded-[1.2rem] bg-white px-4 py-3 text-sm leading-7 font-semibold text-slate-700 shadow-sm">
+                    教师建议：{teacherSuggestion}
+                  </p>
+                  <button
+                    onClick={() => bringDailyMenuSummaryToGeneration(row, "canteen")}
+                    className="mt-3 rounded-full bg-lime-700 px-4 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5"
+                    type="button"
+                  >
+                    生成食堂参考建议
+                  </button>
+                </article>
+              );
+            })
+          ) : (
+            <p className="rounded-[1.8rem] bg-white/88 px-5 py-6 text-sm leading-7 text-slate-600 lg:col-span-2">
+              还没有可汇总的今日食谱观察。幼儿完成“今日食谱”或“美食观察与靠近一点点”后，这里会出现班级匿名反馈。
             </p>
           )}
         </div>
@@ -7045,7 +7137,7 @@ ${worksheets.join("")}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-lime-700">AI内容审核</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">AI生成内容，教师审核后使用</h2>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">AI生成内容，教师确认后使用</h2>
             <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
               儿童端展示内容应以教师预设任务和知识库内容为主；AI生成内容默认进入教师审核，未经教师确认，不直接作为正式教学评价。
             </p>
@@ -7470,6 +7562,9 @@ ${worksheets.join("")}
             <p className="text-sm font-semibold text-cyan-700">班级账号同步</p>
             <h2 className="mt-1 text-2xl font-semibold text-slate-900">换设备不换账号</h2>
             <p className="mt-2 text-sm leading-7 text-slate-600">上传或拉取同一教师账号下的花名册、游戏记录、食谱、家园同步和家长反馈。</p>
+            <p className="mt-3 max-w-3xl rounded-[1.2rem] bg-white/85 px-4 py-3 text-sm leading-7 font-semibold text-cyan-900 shadow-sm">
+              当前为班级测试版，家长端跨设备账号同步仍在研究中。正式部署需接入统一账号、权限控制、加密数据库和数据删除机制。
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -7492,6 +7587,9 @@ ${worksheets.join("")}
         </div>
         <p className="mt-4 rounded-[1.4rem] bg-white/86 px-4 py-3 text-sm font-semibold text-cyan-900 shadow-sm">
           {cloudSyncStatus}
+        </p>
+        <p className="mt-3 rounded-[1.4rem] bg-amber-50 px-4 py-3 text-sm leading-7 font-semibold text-amber-900 shadow-sm">
+          当前平台仅用于班级范围内测试与展示，不作为全园正式数据系统，也不直接面向所有家长开放。
         </p>
       </section>
 
