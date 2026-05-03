@@ -35,8 +35,6 @@ const identityRoutes = [
 const supportRoutes = [
   { label: "政策合规说明", href: "/compliance", icon: "📘", description: "五大领域、保教结合、游戏化和防小学化说明。" },
   { label: "隐私与安全说明", href: "/privacy", icon: "🛡️", description: "不拍儿童正脸，不录入敏感信息，正式部署需加密存储。" },
-  { label: "参赛材料", href: "/contest", icon: "🏅", description: "案例摘要、教师流程、报告结构和8分钟演示脚本。" },
-  { label: "应用证据", href: "/evidence", icon: "📎", description: "真实使用记录占位区，参赛前由教师补充。" },
 ];
 
 export function HomeWorkspace() {
@@ -98,7 +96,7 @@ export function HomeWorkspace() {
           ))}
         </div>
 
-        <div className="mt-7 grid gap-3 md:grid-cols-4">
+        <div className="mt-7 grid gap-3 md:grid-cols-2">
           {supportRoutes.map((item) => (
             <Link
               key={item.href}

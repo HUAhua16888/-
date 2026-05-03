@@ -32,27 +32,21 @@ const navItems = [
     icon: "🧑‍🏫",
     shortLabel: "教师",
   },
-  {
-    href: "/contest",
-    label: "参赛说明",
-    icon: "🏅",
-    shortLabel: "参赛",
-  },
 ];
 
 export function SiteShell({ children }: SiteShellProps) {
   const pathname = usePathname();
   const visibleNavItems = (() => {
     if (pathname.startsWith("/teachers")) {
-      return navItems.filter((item) => item.href === "/" || item.href === "/teachers" || item.href === "/contest");
+      return navItems.filter((item) => item.href === "/" || item.href === "/teachers");
     }
 
     if (pathname.startsWith("/parents")) {
-      return navItems.filter((item) => item.href === "/" || item.href === "/parents" || item.href === "/contest");
+      return navItems.filter((item) => item.href === "/" || item.href === "/parents");
     }
 
     if (pathname.startsWith("/children") || pathname.startsWith("/adventure")) {
-      return navItems.filter((item) => item.href === "/" || item.href === "/children" || item.href === "/contest");
+      return navItems.filter((item) => item.href === "/" || item.href === "/children");
     }
 
     if (
@@ -61,7 +55,7 @@ export function SiteShell({ children }: SiteShellProps) {
       pathname.startsWith("/privacy") ||
       pathname.startsWith("/evidence")
     ) {
-      return navItems.filter((item) => item.href === "/" || item.href === "/contest");
+      return navItems.filter((item) => item.href === "/");
     }
 
     return navItems;

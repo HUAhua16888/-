@@ -32,13 +32,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${siteUrl}/privacy`,
       lastModified: new Date(),
     },
-    {
-      url: `${siteUrl}/contest`,
-      lastModified: new Date(),
-    },
-    {
-      url: `${siteUrl}/evidence`,
-      lastModified: new Date(),
-    },
   ];
 }

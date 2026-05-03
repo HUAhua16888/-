@@ -7,8 +7,6 @@ const projectSubtitle = "幼习宝·闽食成长岛教育智能体";
 const pageLinks = [
   { href: "/compliance", label: "政策合规说明", icon: "📘" },
   { href: "/privacy", label: "隐私与安全说明", icon: "🛡️" },
-  { href: "/contest", label: "参赛材料", icon: "🏅" },
-  { href: "/evidence", label: "应用证据", icon: "📎" },
 ];
 
 type InfoSectionProps = {
