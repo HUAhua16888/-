@@ -1,6 +1,6 @@
 # 上传 GitHub 和连接 Vercel 步骤
 
-这份说明按当前项目目录 `E:\幼儿ai项目\tongqu-growth-web` 编写。
+这份说明按当前项目目录 `F:\幼儿ai项目\tongqu-growth-web` 编写。
 
 ## 一、先在 GitHub 网页创建仓库
 
